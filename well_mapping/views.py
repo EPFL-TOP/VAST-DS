@@ -81,6 +81,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     #___________________________________________________________________________________________
     def select_image_96_well_plate(attr, old, new):
         current_path="/Users/helsens/Software/github/EPFL-TOP/VAST-DS/inputData"
+        if os.path.isdir("/data/VAST/outtest"):
+            current_path="/data/VAST/outtest"
 
         print('attr=',attr,'  old=',old,'  new=',new)
         print('labels ',x_labels[new['index'][0]], y_labels[new['index'][0]])

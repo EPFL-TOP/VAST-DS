@@ -28,7 +28,7 @@ SECRET_KEY = 'django-insecure-95(dkg@8@7i#ar45)jctudjfdi=k%58ul1+$&)=53_8-mmh45$
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['svvm0003.xaas.epfl.ch:8002']
 
 GRAPH_MODELS = {
   'all_applications': True,
