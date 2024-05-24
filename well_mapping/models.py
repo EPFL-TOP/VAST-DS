@@ -44,13 +44,37 @@ class SlimsDrugDerivation(models.Model):
         """String for representing the Model object (in Admin site etc.)"""
         return "{0}, {1}, {2}".format(self.drug.name, self.batch_number, self.stock_concentration)
 
+
 #___________________________________________________________________________________________
 class DrugDerivationWellPlate(models.Model):
+
+    experiment      = models.ForeignKey(Experiment, default='', on_delete=models.SET_DEFAULT)
+
+    def __str__(self):
+        """String for representing the Model object (in Admin site etc.)"""
+        return "id={0}, name={1}".format(self.id, self.experiment.name)
+
+
+#___________________________________________________________________________________________
+class DrugDerivationWellCluster(models.Model):
+
+    slims_id        = models.CharField(max_length=200, help_text="slims ID of the drug derivation.")
+    concentration   = models.CharField(max_length=200, help_text="Concentration of the drug derivation (mMol/L).")
+    clusters        = models.ForeignKey(DrugDerivationWellPlate, default='', on_delete=models.SET_DEFAULT)
+
+    def __str__(self):
+        """String for representing the Model object (in Admin site etc.)"""
+        return "id={0}, concentration={1}".format(self.slims_id, self.concentration)
+    
+#___________________________________________________________________________________________
+class DrugDerivationWellPosition(models.Model):
     ROW = (
         ('A', 'A'), 
         ('B', 'B'),
         ('C', 'C'),
         ('D', 'D'),
+        ('E', 'E'),
+        ('F', 'F'),
     )
     COL = (
         ('1', '1'),
@@ -59,24 +83,33 @@ class DrugDerivationWellPlate(models.Model):
         ('4', '4'),
         ('5', '5'),
         ('6', '6'),
+        ('7', '7'),
+        ('8', '8'),
     )
-    slims_id        = models.CharField(max_length=200, help_text="slims ID of the drug derivation.")
-    concentration   = models.CharField(max_length=200, help_text="Concentration of the drug derivation (mMol/L).")
-    #24 well plate
+    #24 well plate  48 position_col    = #1->8 position_row    = #A->F
+
     position_col    = models.CharField(max_length=10, choices=ROW, help_text="Column position on the small well plate", default='A')
     position_row    = models.CharField(max_length=10, choices=ROW, help_text="Row position in the small well plate", default='1')
-    #48 position_col    = #1->8 position_row    = #A->F
     drug_derivation = models.ForeignKey(SlimsDrugDerivation,  default='', on_delete=models.SET_DEFAULT)
-    experiment      = models.ForeignKey(Experiment, default='', on_delete=models.SET_DEFAULT)
+    #experiment      = models.ForeignKey(Experiment, default='', on_delete=models.SET_DEFAULT)
+    cluster         = models.ForeignKey(DrugDerivationWellCluster, default='', on_delete=models.SET_DEFAULT)
 
     def __str__(self):
         """String for representing the Model object (in Admin site etc.)"""
-        return "{0}, {1}, {2}".format(self.experiment.name, self.drug_derivation.drug, self.drug_derivation)
-
+        return "exp name={0}, drug={1}, pos col={2}, pos row={3}".format(self.experiment.name, self.drug_derivation.drug, self.position_col, self.position_row)
 
 
 #___________________________________________________________________________________________
 class VASTWellPlate(models.Model):
+    experiment  = models.ForeignKey(Experiment, default='', on_delete=models.SET_DEFAULT)
+
+
+#___________________________________________________________________________________________
+class VASTWellCluster(models.Model):
+    plate  = models.ForeignKey(VASTWellPlate, default='', on_delete=models.SET_DEFAULT)
+
+#___________________________________________________________________________________________
+class VASTWellPosition(models.Model):
     ROW = (
         ('A', 'A'), 
         ('B', 'B'),
@@ -103,17 +136,20 @@ class VASTWellPlate(models.Model):
     )
     position_col    = models.CharField(max_length=10, choices=ROW, help_text="Column position on VAST the well plate", default='A')
     position_row    = models.CharField(max_length=10, choices=COL, help_text="Row position on VAST the well plate", default='1')
-    drug_derivation = models.ForeignKey(DrugDerivationWellPlate,  default='', on_delete=models.SET_DEFAULT)
+    drug_derivation = models.ForeignKey(DrugDerivationWellPosition,  default='', on_delete=models.SET_DEFAULT)
+    cluster         = models.ForeignKey(VASTWellCluster,  default='', on_delete=models.SET_DEFAULT)
+
 
     def __str__(self):
         """String for representing the Model object (in Admin site etc.)"""
-        return "{0}, {1}, {2}".format(self.experiment.name, self.drug_derivation.drug, self.drug_derivation)
+        return "col={0}, row={1}, {2}".format(self.position_col, self.position_row, self.drug_derivation)
 
 
 #___________________________________________________________________________________________
 class Images(models.Model):
-    vast_wellplate = models.ForeignKey(VASTWellPlate,  default='', on_delete=models.SET_DEFAULT)
+    vast_wellplate = models.ForeignKey(VASTWellPosition,  default='', on_delete=models.SET_DEFAULT)
     files          = models.JSONField(help_text="images associated to a VAST well", default=dict)
+    cluster        = models.ForeignKey(VASTWellCluster,  default='', on_delete=models.SET_DEFAULT)
 
 
 #___________________________________________________________________________________________

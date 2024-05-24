@@ -17,6 +17,27 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
+from django.urls import include
+from django.views.generic import RedirectView
+from django.conf import settings
+from django.conf.urls.static import static
+
+from django.contrib.staticfiles.storage import staticfiles_storage
+
+from well_mapping import views
+from bokeh_django import autoload, directory, document, static_extensions
+
+
+
 urlpatterns = [
+    path(r"well_mapping/", views.index, name="index"),
+    path(r"well_mapping/bokeh_dashboard", views.bokeh_dashboard, name="bokeh_dashboard"),
     path('admin/', admin.site.urls),
+]
+
+
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+bokeh_apps = [
+    autoload("well_mapping/bokeh_dashboard", views.vast_handler),
 ]

@@ -11,6 +11,9 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+import os#, sys
+#from bokeh.settings import bokehjs_path, settings as bokeh_settings
+from bokeh.settings import bokehjsdir, settings as bokeh_settings
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -43,9 +46,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-        'django_extensions',
+    'django_extensions',
     'well_mapping.apps.WellMappingConfig', 
-
+    'channels',
+    'bokeh_django',
 ]
 
 MIDDLEWARE = [
@@ -63,7 +67,7 @@ ROOT_URLCONF = 'VAST_DS.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -76,7 +80,10 @@ TEMPLATES = [
     },
 ]
 
+ASGI_APPLICATION = 'VAST_DS.asgi.application'
 WSGI_APPLICATION = 'VAST_DS.wsgi.application'
+
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10240 # higher than the count of fields
 
 
 # Database
@@ -130,3 +137,17 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+STATICFILES_DIRS = [
+   os.path.join(BASE_DIR, "static"),
+   #bokehjs_path()
+   bokehjsdir()
+]
+
+STATICFILES_FINDERS = (
+    "django.contrib.staticfiles.finders.FileSystemFinder",
+    "django.contrib.staticfiles.finders.AppDirectoriesFinder",
+    'bokeh_django.static.BokehExtensionFinder',
+)
+
+bokeh_settings.resources = 'server'
