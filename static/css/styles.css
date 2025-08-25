@@ -149,3 +149,7 @@
     }
   
   }
+
+  .custom-input .bk-input {
+    font-size: 30px !important; /* Ensure the font size is applied */
+}

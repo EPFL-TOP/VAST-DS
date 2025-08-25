@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from pathlib import Path
 import os#, sys
 #from bokeh.settings import bokehjs_path, settings as bokeh_settings
-from bokeh.settings import bokehjsdir, settings as bokeh_settings
+from bokeh.settings import settings as bokeh_settings
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -28,7 +28,7 @@ SECRET_KEY = 'django-insecure-95(dkg@8@7i#ar45)jctudjfdi=k%58ul1+$&)=53_8-mmh45$
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['svvm0003.xaas.epfl.ch:8002', 'localhost:8002', '0.0.0.0:8002', 'sv-upoates.epfl.ch']
+ALLOWED_HOSTS = ['svvm0003.xaas.epfl.ch:8002','127.0.0.1', 'localhost:8002', '0.0.0.0:8002', 'sv-upoates.epfl.ch', 'localhost']
 
 GRAPH_MODELS = {
   'all_applications': True,
@@ -138,10 +138,16 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+try:
+    bokeh_js_dir = bokeh_settings.bokehjs_path()
+except AttributeError:
+    # support bokeh versions < 3.4
+    bokeh_js_dir = bokeh_settings.bokehjsdir()
+
 STATICFILES_DIRS = [
    os.path.join(BASE_DIR, "static"),
-   #bokehjs_path()
-   bokehjsdir()
+
+   bokeh_js_dir,
 ]
 
 STATICFILES_FINDERS = (

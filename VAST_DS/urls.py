@@ -24,14 +24,18 @@ from django.conf.urls.static import static
 
 from django.contrib.staticfiles.storage import staticfiles_storage
 
-from well_mapping import views
+from well_mapping import views as views_wm
+from well_explorer import views as views_we
 from bokeh_django import autoload, directory, document, static_extensions
 
 
 
 urlpatterns = [
-    path(r"well_mapping/", views.index, name="index"),
-    path(r"well_mapping/bokeh_dashboard", views.bokeh_dashboard, name="bokeh_dashboard"),
+    path(r"well_mapping/", views_wm.index, name="index"),
+    path(r"well_mapping/bokeh_dashboard", views_wm.bokeh_dashboard, name="bokeh_dashboard"),
+    
+    path(r"well_explorer/", views_we.index, name="index"),
+    path(r"well_explorer/bokeh_dashboard", views_we.bokeh_dashboard, name="bokeh_dashboard"),
     path('admin/', admin.site.urls),
 ]
 
@@ -39,5 +43,6 @@ urlpatterns = [
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 bokeh_apps = [
-    autoload("well_mapping/bokeh_dashboard", views.vast_handler),
+    autoload("well_mapping/bokeh_dashboard", views_wm.vast_handler),
+    autoload("well_explorer/bokeh_dashboard", views_we.vast_handler),
 ]
