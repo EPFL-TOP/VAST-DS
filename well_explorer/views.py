@@ -28,8 +28,12 @@ from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, Sour
 
 import vast_leica_mapping as vlm
 
+LOCALPATH_CH = "/Users/helsens/Software/github/EPFL-TOP/VAST-DS/data"
+LOCALPATH_HIVE= r'Y:\raw_data\microscopy\vast'
 
-LOCALPATH = "/Users/helsens/Software/github/EPFL-TOP/VAST-DS/data"
+LOCALPATH = LOCALPATH_HIVE
+if os.path.exists(LOCALPATH_CH):
+    LOCALPATH = LOCALPATH_CH
 
 #___________________________________________________________________________________________
 def vast_handler(doc: bokeh.document.Document) -> None:
