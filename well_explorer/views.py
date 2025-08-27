@@ -26,6 +26,9 @@ import bokeh.layouts
 
 from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug
 
+import vast_leica_mapping as vlm
+
+
 LOCALPATH = "/Users/helsens/Software/github/EPFL-TOP/VAST-DS/data"
 
 #___________________________________________________________________________________________
@@ -79,6 +82,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     cds_labels_dest_2_present = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
 
     drug_message    = bokeh.models.Div(visible=False)
+    image_message    = bokeh.models.Div(visible=False)
 
     plot_wellplate_dest   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title='',width=900, height=600, tools="box_select,box_zoom,reset,undo")
     plot_wellplate_dest.xaxis.major_label_text_font_size = "15pt"
@@ -144,15 +148,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
 
-
-
-
-
-
-
-
-
-
     im_size = 2048
     x_range = bokeh.models.Range1d(start=0, end=im_size)
     y_range = bokeh.models.Range1d(start=0, end=im_size)
@@ -168,7 +163,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             x_labels.append(xi)
             y_labels.append(yi)
 
-    source_labels = bokeh.models.ColumnDataSource(data=dict(x=x_labels, y=y_labels))
 
 
     #___________________________________________________________________________________________
@@ -248,7 +242,12 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             source_img_vast.data = {'img':[]}
             drug_message.text = ""
             drug_message.visible = False
+            image_message.text = "<b style='color:red; font-size:18px;'>No images found for selected well {}</b>".format(position[0][1] + position[0][0])
+            image_message.visible = True
             return
+
+        image_message.text = ""
+        image_message.visible = False
 
         image_bf  = imread(file_BF)
         source_img_bf.data  = {'img':[np.flip(image_bf,0)]}
@@ -301,7 +300,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     cds_labels_dest.selected.on_change('indices', lambda attr, old, new: dest_plate_visu(attr, old, new))
 
- #___________________________________________________________________________________________
+    #___________________________________________________________________________________________
     def dest_plate_2_visu(attr, old, new):
         if len(cds_labels_dest_2.selected.indices) == 0:
             return
@@ -328,6 +327,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             source_img_vast.data = {'img':[]}
             drug_message.text = ""
             drug_message.visible = False
+            image_message.text = "<b style='color:red; font-size:18px;'>No images found for selected well {}</b>".format(position[0][1] + position[0][0])
+            image_message.visible = True
             return
 
 
@@ -453,6 +454,21 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         wells_plate_1_vast = [os.path.split(f)[-1] for f in glob.glob(path_plate_1_vast)]
         wells_plate_2_vast = [os.path.split(f)[-1] for f in glob.glob(path_plate_2_vast)]
 
+        if len(wells_plate_1_leica)==0 and len(wells_plate_2_leica)==0:
+            print('No wells found for experiment:', new)
+            cds_labels_dest.data = dict(x=[], y=[], size=[])
+            cds_labels_dest_2.data = dict(x=[], y=[], size=[])
+            cds_labels_dest_present.data = dict(x=[], y=[], size=[])
+            cds_labels_dest_2_present.data = dict(x=[], y=[], size=[])
+            source_img_bf.data  = {'img':[]}
+            source_img_yfp.data = {'img':[]}
+            source_img_vast.data = {'img':[]}
+            drug_message.text = ""
+            drug_message.visible = False
+            image_message.text = "<b style='color:red; font-size:18px;'>No Leica images found for experiment {} need to run mapping</b>".format(new)
+            image_message.visible = True
+            return
+
         x_dest_1=[]
         y_dest_1=[]
         size_dest_1=[]
@@ -480,13 +496,31 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             size_dest_2.append(cds_labels_dest_2.data['size'][0])
             cds_labels_dest_2_present.data = {'x':x_dest_2, 'y':y_dest_2, 'size':size_dest_2}
 
-
-
     dropdown_exp.on_change("value", load_experiment)
 
 
+    #___________________________________________________________________________________________
+    def mapping_callback():
+        print('------------------->>>>>>>>> mapping_callback')
+        if dropdown_exp.value == 'Select experiment':
+            print('Please select an experiment first')
+            image_message.text = "<b style='color:red; font-size:18px;'>Please select an experiment first</b>"
+            image_message.visible = True
+            return
+        print('Mapping for experiment:', dropdown_exp.value, ' in path:', LOCALPATH)
+        vlm.map_well_to_vast(LOCALPATH, dropdown_exp.value)
+        load_experiment(None, None, dropdown_exp.value)
+        well_mapping_button.label = "Well mapping"
+        well_mapping_button.button_type = "success"
+    well_mapping_button = bokeh.models.Button(label="Well mapping", button_type="success", width=150)
 
 
+    #___________________________________________________________________________________________
+    def mapping_callback_short():
+        well_mapping_button.label = "Processing"
+        well_mapping_button.button_type = "danger"
+        bokeh.io.curdoc().add_next_tick_callback(mapping_callback)
+    well_mapping_button.on_click(mapping_callback_short)
 
     #___________________________________________________________________________________________
 
@@ -519,7 +553,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     indent = bokeh.models.Spacer(width=30)
 
-    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,dropdown_exp, bokeh.models.Spacer(width=20),    drug_message ),
+    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button), bokeh.models.Spacer(width=20),    bokeh.layouts.column(image_message,drug_message) ),
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
                                                          bokeh.layouts.column(bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
