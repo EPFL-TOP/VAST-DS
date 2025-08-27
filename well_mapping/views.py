@@ -554,7 +554,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 pyrat_message.text  += f"<li style='color:navy; font-size:14px; margin-bottom:4px;'> number of male {p['number_of_male']}</li>"
                 pyrat_message.text  += f"<li style='color:navy; font-size:14px; margin-bottom:4px;'> number of female {p['number_of_female']}</li>"
                 pyrat_message.text  += f"<li style='color:navy; font-size:14px; margin-bottom:4px;'> number of unknown {p['number_of_unknown']}</li>"
-                pyrat_message.text  += f"<li style='color:navy; font-size:14px; margin-bottom:4px;'> date of birth {p["date_of_birth"].split('T')[0]}, {p['date_of_birth'].split('T')[-1]}</li>"
+                pyrat_message.text  += f"<li style='color:navy; font-size:14px; margin-bottom:4px;'> date of birth {p['date_of_birth'].split('T')[0]}, {p['date_of_birth'].split('T')[-1]}</li>"
                 pyrat_message.text  +="</ul>"
                 
             pyrat_message.text  +="</ul>"
