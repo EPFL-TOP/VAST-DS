@@ -1,0 +1,195 @@
+{% extends "base_generic.html" %}
+{% block content %}
+<style>
+  ul { margin-top: 0; }
+  ul { margin-bottom: 0; }
+</style>
+
+ 
+  <div class="result"></div>
+
+<br>
+  <!--form method="POST"-->
+  <form method="post" id="updateForm" action="{% url 'index' %}">
+    {% csrf_token %}
+    <select  id="select_experiment" name="select_experiment" class="select_experiment">
+        <option value="">--Choose an experiment--</option>
+        {% for experiment in select_dict.experiment_list %}
+            {% if selected_dict.experiment != experiment %}<option value="{{ experiment }}">{{ experiment }}</option>{% endif %}
+            {% if selected_dict.experiment == experiment %}<option selected="selected" value="{{ experiment }}">{{ experiment }}</option>{% endif %}
+        {% endfor %}
+    </select>
+
+    {% if select_dict.well_list  %}
+    <select id="select_well" name="select_well" class="select_well">
+        <option value="">--Choose a well--</option>
+        {% for well in select_dict.well_list %}
+            {% if selected_dict.well != well %}<option value="{{ well }}">{{ well }}</option>{% endif %}
+            {% if selected_dict.well == well %}<option selected="selected" value="{{ well }}">{{ well }}</option>{% endif %}
+        {% endfor %}
+    </select>
+    {% endif %}
+
+<!--    {% if select_dict.position_list  %}
+    <select id="select_position" name="select_position" class="select_position">
+        <option value="">--Choose a position--</option>
+        {% for position in select_dict.position_list %}
+            {% if selected_dict.position != position %}<option value="{{ position }}">{{ position }}</option>{% endif %}
+            {% if selected_dict.position == position %}<option selected="selected" value="{{ position }}">{{ position }}</option>{% endif %}
+        {% endfor %}
+    </select>
+    {% endif %}
+ -->
+ <br>
+ <br>
+ <input type="submit" name="prepare_data" value="Download data">
+ <!--a href="{% url 'index' %}?download" download>Download JSON File</a-->
+  </form>
+
+  <br>
+
+  <form method="POST">
+    {% csrf_token %}
+    <input type="submit" name="reset" value="Reset">
+  </form>
+
+  <br>
+  <br>
+
+  <form method="POST">
+    {% csrf_token %}
+    <input type="submit" name="prepare_data_laurel" value="Download data Laurel">
+  </form>
+
+<br>
+
+
+
+{% if experiment_dict %}
+  <strong>Experiment details:</strong> 
+  <div style="margin-left:60px;margin-top:0px">
+    <strong>Name:</strong>  {{experiment_dict.experiment_name}}</br>
+    <strong>Date:</strong> {{experiment_dict.experiment_date}}</br>
+    {% if experiment_dict.experiment_description %}<strong>Description:</strong> {{experiment_dict.experiment_description}}</br>{% endif %}
+  </div>
+  <hr>
+{% endif %}
+
+{% if contribution_dict  %}
+  <strong>Contributor(s):</strong>
+  {% for contrib in contribution_dict  %}
+      <div style="margin-left:60px;margin-top:0px">
+          <strong>{{ forloop.counter }}{{": "}}</strong>{{contrib.first_name}} {{contrib.last_name}};  {{contrib.description}} </br>
+      </div>
+  {% endfor %}
+  <hr>
+{% endif %}
+
+{% if treatment_dict %}
+  <strong>Treatment(s):</strong> 
+  {% for treat in treatment_dict  %}
+      <div style="margin-left:60px;margin-top:0px">
+        <strong>Name:</strong>{{treat.name}}  </br>
+        <strong>Type:</strong>{{treat.type}}  </br>
+        {% if treat.concentration %}<strong>Concentration:</strong>{{treat.concentration}}  </br>{% endif %}
+        {% if treat.developmental_stage %}<strong>Developmental Stage:</strong>{{treat.developmental_stage}}  </br>{% endif %}
+        {% if treat.duration %}<strong>Duration:</strong>{{treat.duration}}  </br>{% endif %}
+        {% if treat.solvent %}<strong>Solvent:</strong>{{treat.solvent}}  </br>{% endif %}
+        {% if treat.temperature %}<strong>Temperature:</strong>{{treat.temperature}}  </br>{% endif %}
+        {% if treat.description %}<strong>Description:</strong>{{treat.description}}  </br>{% endif %}
+        {% if forloop.counter != treatment_dict|length %}<hr style="width: 100px;margin-left: 0;">{% endif %}
+
+      </div>
+  {% endfor %}
+  <hr>
+{% endif %}
+
+{% if injection_dict %}
+  <strong>Injection(s):</strong> 
+  {% for injec in injection_dict  %}
+      <div style="margin-left:60px;margin-top:0px">
+        <strong>Name:</strong>{{injec.name}}  </br>
+        <strong>Type:</strong>{{injec.type}}  </br>
+        {% if injec.concentration %}<strong>Concentration:</strong>{{injec.concentration}}  </br>{% endif %}
+        {% if injec.developmental_stage %}<strong>Developmental Stage:</strong>{{injec.developmental_stage}}  </br>{% endif %}
+        {% if inject.slim_id %}<strong>Slim ID:</strong>{{injec.slim_id}}  </br>{% endif %}
+        {% if injec.description %}<strong>Description:</strong>{{injec.description}}  </br>{% endif %}
+        {% if forloop.counter != injection_dict|length %}<hr style="width: 100px;margin-left: 0;">{% endif %}
+
+      </div>
+  {% endfor %}
+  <hr>
+{% endif %}
+
+{% if instrumental_dict %}
+  <strong>Instrumental condition(s):</strong> 
+  {% for i in instrumental_dict  %}
+      <div style="margin-left:60px;margin-top:0px">
+        <strong>Name:</strong>{{i.name}}  </br>
+        <strong>Instrument:</strong>{{i.instrument_name}}  </br>
+        {% if i.laser_intensity %}<strong>Laser Intensity:</strong>{{i.laser_intensity}}  </br>{% endif %}
+        {% if i.laser_wavelength %}<strong>Laser WaveLength:</strong>{{i.laser_wavelength}}  </br>{% endif %}
+        {% if forloop.counter != instrumental_dict|length %}<hr style="width: 100px;margin-left: 0;">{% endif %}
+
+      </div>
+  {% endfor %}
+  <hr>
+{% endif %}
+
+{% if sample_dict %}
+  <strong>Sample(s):</strong> 
+  {% for i in sample_dict  %}
+      <div style="margin-left:60px;margin-top:0px">
+        <strong>Specie:</strong>{{i.specie}}  </br>
+        <strong>Date of crossing:</strong>{{i.date_of_crossing}}  </br>
+        <strong>Developmental Stage:</strong>{{i.developmental_stage}}  </br>
+        <strong>Pyrat XID:</strong>{{i.pyrat_crossing_id}}  </br>
+        <strong>Mutations:</strong> 
+        {% for j in i.mutations  %}
+          ({{j.name}}, {{j.grade}})
+        {% endfor %}</br>
+        <strong>Parent(s) Line:</strong> 
+        <div style="margin-left:20px;margin-top:0px">
+        {% for j in i.parents  %}
+          <strong>{{forloop.counter}}:</strong> Mutations: {{j.mutation_grade}}, Strain: {{j.strain_name}}, 
+          DoB: {{j.date_of_birth}}, Age at crossing: {{j.age_at_crossing}}, N Females: {{j.number_of_female}},
+           N Males: {{j.number_of_male}} N Unknown: {{j.number_of_unknown}}</br>
+        {% endfor %}
+        </div>
+
+        {% if forloop.counter != sample_dict|length %}<hr style="width: 100px;margin-left: 0;">{% endif %}
+
+      </div>
+  {% endfor %}
+{% endif %}
+
+
+<br><br><br><br>
+
+
+
+
+<br><br><br><br>
+
+
+<form method="POST">
+  {% csrf_token %}
+  <input type="submit" name="register_rawdataset" value="Register RAW datasets (build frames)">
+  <input type="submit" name="build_ROIs" value="Build ROIs (sample)">
+  <input type="submit" name="segment" value="Segment">
+  <input type="submit" name="build_cells" value="Build Cells">
+  <input type="submit" name="fix_tod" value="Fix TOD">
+  
+</form>
+
+<script>
+  document.getElementById("select_experiment").addEventListener("change", function() {
+      document.getElementById("updateForm").submit();
+  });
+</script>
+<script>
+  document.getElementById("select_well").addEventListener("change", function() {
+      document.getElementById("updateForm").submit();
+  });
+</script>
+{% endblock %}
