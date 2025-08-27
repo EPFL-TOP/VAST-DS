@@ -1,0 +1,21 @@
+name: VAST-DS
+channels:
+  - conda-forge
+  - numba
+  - defaults
+dependencies:
+
+  - openjdk=11
+  - python=3.10
+  
+  - pip:
+    - Django
+    - bokeh
+    - bokeh-django
+    - django-extensions
+    - legacy-cgi
+    - scikit-image
+    - matplotlib
+    - slims-python-api
+    - imagej
+    - openjdk=11
