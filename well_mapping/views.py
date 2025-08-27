@@ -542,7 +542,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
             pyrat_message.text  += "<ul style='margin-top:0;'>"
 
-            pyrat_message.text  += f"<li style='color:navy; font-size:14px; margin-bottom:4px;'> date of reccord: {response_json[0]['date_of_record'].split('T')[0]}, {response_json[0]['date_of_record'].split("T")[-1]}</li>"
+            pyrat_message.text  += f"<li style='color:navy; font-size:14px; margin-bottom:4px;'> date of reccord: {response_json[0]['date_of_record'].split('T')[0]}, {response_json[0]['date_of_record'].split('T')[-1]}</li>"
             pyrat_message.text  += f"<li style='color:navy; font-size:14px; margin-bottom:4px;'> strain name with id: {response_json[0]['strain_name_with_id']}</li>"
             for idx, p in enumerate(response_json[0]['tanks']['parents']):
                 pyrat_message.text  += f"<li style='color:navy; font-size:14px; margin-bottom:4px;'> parent {idx}</li>"
