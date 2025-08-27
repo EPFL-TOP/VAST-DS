@@ -89,12 +89,22 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10240 # higher than the count of fields
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
+# default (Linux/macOS path)
+DBPATH = Path('/Volumes/upoates/raw_data/microscopy/vast/vast_db')
+
+# override if Windows path exists
+win_path = Path(r'Y:\raw_data\microscopy\vast\vast_db')
+if win_path.exists():
+    DBPATH = win_path
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': str(DBPATH / 'db.sqlite3'),  # must be a string
     }
 }
+
+
 
 
 # Password validation
