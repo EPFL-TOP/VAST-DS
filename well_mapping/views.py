@@ -1636,13 +1636,23 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 else:
                     source_well_string_2 += ', {}{}'.format(well_position[i][1], well_position[i][0])
 
-            dest_well_positions_2=DestWellPosition.objects.filter(well_plate=dest_well_plate_2, position_col__in=[x[0] for x in dest_well_position_2], position_row__in=[y[1] for y in dest_well_position_2])
+            q = Q()
+            pairs = [(x[0], x[1]) for x in dest_well_position_2]
+            for col, row in pairs:
+                q |= Q(position_col=col, position_row=row)
+
+            dest_well_positions_2 = DestWellPosition.objects.filter(well_plate=dest_well_plate_2).filter(q)
+
             print('>>>>dest_well_positions_2=', dest_well_positions_2)
             for dest_well_p in dest_well_positions_2:
                 dest_well_p.source_well = source_well_positions[0]
                 dest_well_p.save()
         
-            mapping_message.text = f"<b style='color:green; ; font-size:18px;'> Mapped source well {source_well_string_2} to destination wells {dest_well_string_2} in plate {dest_well_plate_2.plate_number}.</b>"
+            if mapping_message.text != '':
+                mapping_message.text += '<br>'
+                mapping_message.text += f"<b style='color:green; ; font-size:18px;'> Mapped source well {source_well_string_2} to destination wells {dest_well_string_2} in plate {dest_well_plate_2.plate_number}.</b>"
+            else:
+                mapping_message.text = f"<b style='color:green; ; font-size:18px;'> Mapped source well {source_well_string_2} to destination wells {dest_well_string_2} in plate {dest_well_plate_2.plate_number}.</b>"
             mapping_message.visible = True
             map_drug_button.label = "Map drug"
             map_drug_button.button_type = "success"
