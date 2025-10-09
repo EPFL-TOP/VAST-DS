@@ -589,7 +589,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             dropdown_well_plate_source.value    = experiment.source_plate.plate_type + '-wells'
             print('experiment.dest_plate.all()=',experiment.dest_plate.all())
             print('exp ',exp)
-            for idx, plate in enumerate(exp.dest_plate.all()):
+            for idx, plate in enumerate(experiment.dest_plate.all()):
                 print(plate, idx)
                 if idx==0:dropdown_well_plate_dest.value      = plate.plate_type + '-wells'
                 if idx==1:dropdown_n_dest_wellplates.value='2'
