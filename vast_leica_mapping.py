@@ -103,8 +103,8 @@ def map_well_to_vast(data_path, experiment_name):
             print('Image name is empty, skipping this image.')
             continue
 
-        if 'Plate' not in imname:
-            print(f"Skipping image {iImage} with name {imname} as it does not contain 'Plate'.")
+        if 'Plate' not in imname and 'plate' not in imname:
+            print(f"Skipping image {iImage} with name {imname} as it does not contain 'Plate' or 'plate'.")
             continue
 
         print(' --->>> Processing Image name:', imname)
