@@ -1554,6 +1554,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             return 
         print('===============dest_well_plate=', dest_well_plate)  
         dest_well_plate_supp = DestWellPlate.objects.filter(experiment=experiment)
+        print('===============dest_well_plate_supp=', dest_well_plate_supp)
+        print('===============len(dest_well_plate_supp)=', len(dest_well_plate_supp))
         if len(dest_well_plate_supp) == 2:
             dest_well_plate_2 = dest_well_plate_supp.filter(plate_number=2).first()
 
