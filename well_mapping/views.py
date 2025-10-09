@@ -393,6 +393,22 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     dropdown_n_supp_sourcewell.on_change("value", add_source_well)
 
 
+    #___________________________________________________________________________________________
+    def modify_experiment():
+        print('------------------->>>>>>>>> modify_experiment')
+        exp_name = experiment_name.value
+        experiment = Experiment.objects.filter(name=exp_name)
+
+        print('experiment=',experiment)
+        print('experiment.dest_plate.count() ',experiment.dest_plate.count())
+        print('dropdown_n_dest_wellplates.value=',dropdown_n_dest_wellplates.value)
+        return
+        if dropdown_n_dest_wellplates.value == '2' and experiment.dest_plate.count() == 1:
+            print('create second dest well plate')
+            dest_well_plate_2 = DestWellPlate(plate_type=dropdown_well_plate_dest.value.replace('-wells', ''), experiment=experiment, plate_number=2)
+            dest_well_plate_2.save()
+    modify_experiment_button = bokeh.models.Button(label="Modify experiment", button_type="success")
+    modify_experiment_button.on_click(modify_experiment)
 
     #___________________________________________________________________________________________
     def create_experiment():
@@ -612,7 +628,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     #___________________________________________________________________________________________
     def delete_experiment():
-        print('------------------->>>>>>>>> modify_experiment')
+        print('------------------->>>>>>>>> delete_experiment')
         global _programmatic_change
         if dropdown_exp.value == 'Select experiment': 
             experiment_message.text    = f"<b style='color:red; ; font-size:18px;'> Error: No experiment selected.</b>"
@@ -1936,7 +1952,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     exp_layout = bokeh.layouts.column(bokeh.layouts.row(dropdown_exp, dropdown_well_plate_source,dropdown_n_supp_sourcewell, dropdown_well_plate_dest, dropdown_n_dest_wellplates),
                                       bokeh.layouts.row(experiment_name, experiment_date, pyrat_id),
                                       bokeh.layouts.row(experiment_description), 
-                                      bokeh.layouts.row(create_experiment_button, delete_experiment_button, check_pyrat_id_button))
+                                      bokeh.layouts.row(create_experiment_button, delete_experiment_button, check_pyrat_id_button, modify_experiment_button))
     
 
     drug_layout = bokeh.layouts.column(bokeh.layouts.row(slimsid_name, drug_concentration),
