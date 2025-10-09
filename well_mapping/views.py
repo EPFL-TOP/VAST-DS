@@ -402,11 +402,30 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         print('experiment=',experiment)
         print('experiment.dest_plate.count() ',experiment.dest_plate.count())
         print('dropdown_n_dest_wellplates.value=',dropdown_n_dest_wellplates.value)
-        return
+
         if dropdown_n_dest_wellplates.value == '2' and experiment.dest_plate.count() == 1:
             print('create second dest well plate')
             dest_well_plate_2 = DestWellPlate(plate_type=dropdown_well_plate_dest.value.replace('-wells', ''), experiment=experiment, plate_number=2)
             dest_well_plate_2.save()
+
+            #create dest well positions
+            if '96' in dropdown_well_plate_dest.value:
+                for xi in x_96:
+                    for yi in y_96:
+                        pos = DestWellPosition(well_plate=dest_well_plate_2, position_col=xi, position_row=yi)
+                        pos.save()
+            elif '48' in dropdown_well_plate_dest.value:
+                for xi in x_48:
+                    for yi in y_48:
+                        pos = DestWellPosition(well_plate=dest_well_plate_2, position_col=xi, position_row=yi)
+                        pos.save()
+            elif '24' in dropdown_well_plate_dest.value:
+                for xi in x_24:
+                    for yi in y_24:
+                        pos = DestWellPosition(well_plate=dest_well_plate_2, position_col=xi, position_row=yi)
+                        pos.save()
+
+
     modify_experiment_button = bokeh.models.Button(label="Modify experiment", button_type="success")
     modify_experiment_button.on_click(modify_experiment)
 
