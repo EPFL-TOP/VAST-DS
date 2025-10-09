@@ -397,7 +397,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     def modify_experiment():
         print('------------------->>>>>>>>> modify_experiment')
         exp_name = experiment_name.value
-        experiment = Experiment.objects.filter(name=exp_name)
+        experiment = Experiment.objects.filter(name=exp_name).first()
 
         print('experiment=',experiment)
         print('experiment.dest_plate.count() ',experiment.dest_plate.count())
