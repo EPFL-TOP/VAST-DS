@@ -1342,7 +1342,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 stock_id = element["displayValue"]
 
         slims_stock = slims.fetch("Content", slims_cr.equals("cntn_id", stock_id))
-        if len(slims_stock)==0:
+        if len(slims_stock)==0 and 'OA_CH' not in slimsid_name.value:
+
             drug_message.text = f"<b style='color:red; ; font-size:18px;'> Error: Enter a valid slims ID.</b>"
             drug_message.visible = True
             force_add_drug_button.label = "Force add drug"
