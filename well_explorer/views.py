@@ -531,18 +531,19 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     #___________________________________________________________________________________________
 
+    color_low=0
+    color_high=65535
 
    #___________________________________________________________________________________________
     def update_contrast(attr, old, new):
         low, high = new 
-        color_mapper.low = low
-        color_mapper.high = high
+        color_mapper.low = int(low*655.35)
+        color_mapper.high = int(high*655.35)
 
 
-    color_low=0
-    color_high=65535
 
-    contrast_slider = bokeh.models.RangeSlider(start=color_low, end=color_high, value=(color_low, color_high), step=1, title="Contrast", width=150)
+
+    contrast_slider = bokeh.models.RangeSlider(start=0, end=100, value=(0, 100), step=1, title="Contrast", width=150)
     contrast_slider.on_change('value', update_contrast)
 
 
