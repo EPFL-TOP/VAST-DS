@@ -30,6 +30,7 @@ import vast_leica_mapping as vlm
 
 LOCALPATH_CH = "/Users/helsens/Software/github/EPFL-TOP/VAST-DS/data"
 LOCALPATH_HIVE= r'Y:\raw_data\microscopy\vast'
+LOCALPATH_RAID5 =r'D:\vast'
 
 LOCALPATH = LOCALPATH_HIVE
 if os.path.exists(LOCALPATH_CH):
@@ -227,6 +228,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         cds_labels_dest_2_present.selected.indices = []
         cds_labels_dest_2.selected.indices = []
         position = get_well_mapping(cds_labels_dest.selected.indices)
+
+
 
         path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 1', 'Well_{}{}'.format(position[0][1], position[0][0]))
         if int(position[0][0]) < 10:
@@ -529,10 +532,24 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     #___________________________________________________________________________________________
 
 
+   #___________________________________________________________________________________________
+    def update_contrast(attr, old, new):
+        low, high = new 
+        color_mapper.low = low
+        color_mapper.high = high
+
+
+    color_low=0
+    color_high=65535
+
+    contrast_slider = bokeh.models.RangeSlider(start=color_low, end=color_high, value=(color_low, color_high), step=1, title="Contrast", width=150)
+    contrast_slider.on_change('value', update_contrast)
+
+
     plot_wellplate_dest.add_tools(tap_tool)
     plot_wellplate_dest_2.add_tools(tap_tool)
 
-    color_mapper = bokeh.models.LinearColorMapper(palette="Greys256", low=0, high=65535)
+    color_mapper = bokeh.models.LinearColorMapper(palette="Greys256", low=color_low, high=color_high)
 
     data_img_bf   = {'img':[]}
     source_img_bf = bokeh.models.ColumnDataSource(data=data_img_bf)
@@ -560,7 +577,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button), bokeh.models.Spacer(width=20),    bokeh.layouts.column(image_message,drug_message) ),
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
-                                                         bokeh.layouts.column(bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
+                                                         bokeh.layouts.column(bokeh.layouts.Spacer(width=40), bokeh.layouts.row(contrast_slider),
+                                                             bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
                                                                               bokeh.layouts.row(plot_img_vast))))
 
     plot_img_bf.axis.visible   = False
