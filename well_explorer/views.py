@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from well_mapping.models import Experiment
 import os, sys, json, glob, gc
 import time
-
+import shutil
 import numpy as np
 from skimage.io import imread
 
@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('agg')
 from PIL import Image
-
+import random
 
 import bokeh.models
 import bokeh.palettes
@@ -31,6 +31,7 @@ import vast_leica_mapping as vlm
 LOCALPATH_CH = "/Users/helsens/Software/github/EPFL-TOP/VAST-DS/data"
 LOCALPATH_HIVE= r'Y:\raw_data\microscopy\vast'
 LOCALPATH_RAID5 =r'D:\vast'
+LOCALPATH_TRAINING=r'D:\vast\training_data'
 
 LOCALPATH = LOCALPATH_HIVE
 if os.path.exists(LOCALPATH_CH):
@@ -748,8 +749,56 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     def create_training_callback():
         print('------------------->>>>>>>>> create_training_callback')
         experiments = Experiment.objects.all()
+
+        if os.dir.exists(LOCALPATH_TRAINING):
+            os.dir.rmdir(LOCALPATH_TRAINING)
+
+        if os.dir.exists(LOCALPATH_TRAINING) is False:
+            os.mkdir(LOCALPATH_TRAINING)
+        if os.dir.exists(os.path.join(LOCALPATH_TRAINING,'train')) is False:
+            os.mkdir(os.path.join(LOCALPATH_TRAINING,'train'))
+        if os.dir.exists(os.path.join(LOCALPATH_TRAINING,'valid')) is False:
+            os.mkdir(os.path.join(LOCALPATH_TRAINING,'valid'))
+        
+
         for experiment in experiments:
             print('Creating training set for experiment:', experiment.name)
+
+            rand=random.uniform(0,1)
+            if rand>0.2: outdir=os.path.join(LOCALPATH_TRAINING,'train')
+            else: outdir=os.path.join(LOCALPATH_TRAINING,'valid')
+
+            dest_well_plates   = DestWellPlate.objects.filter(experiment=experiment)
+            print('dest_well_plates=', dest_well_plates)
+            for dest_well_plate in dest_well_plates:
+                dest_well_positions = DestWellPosition.objects.filter(well_plate=dest_well_plate)
+                for dest in dest_well_positions:
+                    try:
+                        props = dest.dest_well_properties  # reverse OneToOne accessor
+                        if props.valid and props.n_good_somites>=0 and props.n_bad_somites >=0:
+                            position_col = dest.position_col
+                            position_row = dest.position_row
+                            path_leica = os.path.join(LOCALPATH, experiment.name,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}{}'.format(position_row, position_col))
+                            if int(position_col) < 10:
+                                path_leica = os.path.join(LOCALPATH, experiment.name,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}0{}'.format(position_row, position_col))  
+                            files = glob.glob(os.path.join(path_leica, '*YFP*.tiff'))
+                            for f in files:
+                                if 'norm' in f:
+                                    continue
+                                file_YFP = f
+
+                            if len(files) == 0:
+                                print('No files found in path:', path_leica)
+                                continue
+
+                            # Copy the files to the training set folder with a new name
+                            new_name_yfp = experiment.name + '_Plate' + str(dest_well_plate.plate_number) + '_' + position_row + position_col + '_YFP.tiff'
+                            shutil.copy(file_YFP, os.path.join(outdir, new_name_yfp))
+                            print('Copied files to training set:', new_name_yfp)
+
+                    except DestWellProperties.DoesNotExist:
+                        pass
+
         create_training_button.label = "Create Training Set"
         create_training_button.button_type = "success"
 
