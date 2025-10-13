@@ -352,7 +352,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             dropdown_good_image.value = 'Yes'
             images_comments.value = ''
 
-
+    update_filled_wells()
 
     cds_labels_dest.selected.on_change('indices', lambda attr, old, new: dest_plate_visu(attr, old, new))
 
@@ -465,6 +465,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             dropdown_bad_somites_err.value  = '0'
             dropdown_good_image.value = 'Yes'
             images_comments.value = ''
+
+        update_filled_wells()
 
     cds_labels_dest_2.selected.on_change('indices', lambda attr, old, new: dest_plate_2_visu(attr, old, new))
 
@@ -585,7 +587,11 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             size_dest_2.append(cds_labels_dest_2.data['size'][0])
             cds_labels_dest_2_present.data = {'x':x_dest_2, 'y':y_dest_2, 'size':size_dest_2}
 
+        update_filled_wells()
 
+
+    #___________________________________________________________________________________________
+    def update_filled_wells():
         well_plate_1 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=1).first()
         dest_1 = DestWellPosition.objects.filter(well_plate=well_plate_1)
 
