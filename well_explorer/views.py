@@ -667,7 +667,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         dest_well_properties.num_bad_somites  = int(dropdown_bad_somites.value)  if dropdown_bad_somites.value != 'Select a value' else None
         dest_well_properties.num_good_somites_err = int(dropdown_good_somites_err.value)
         dest_well_properties.num_bad_somites_err  = int(dropdown_bad_somites_err.value)
-        dest_well_properties.good_image = True if dropdown_good_image.value == 'Yes' else False
+        dest_well_properties.valid = True if dropdown_good_image.value == 'Yes' else False
         dest_well_properties.comments = images_comments.value
         dest_well_properties.save()
         print('Saved properties for dest well:', dest, ' properties:', dest_well_properties)
