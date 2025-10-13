@@ -304,6 +304,38 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         drug_message.visible = True
 
 
+        # Set the dropdowns if properties exist
+        try:
+            dest_well_properties = DestWellProperties.objects.get(dest_well=dest[0])
+            print('Found properties for dest well:', dest, ' properties:', dest_well_properties)
+            if dest_well_properties.num_good_somites is not None:
+                dropdown_good_somites.value = str(dest_well_properties.num_good_somites)
+            else:
+                dropdown_good_somites.value = 'Select a value'
+            if dest_well_properties.num_bad_somites is not None:
+                dropdown_bad_somites.value  = str(dest_well_properties.num_bad_somites)
+            else:
+                dropdown_bad_somites.value = 'Select a value'
+            dropdown_good_somites_err.value = str(dest_well_properties.num_good_somites_err)
+            dropdown_bad_somites_err.value  = str(dest_well_properties.num_bad_somites_err)
+            if dest_well_properties.good_image:
+                dropdown_good_image.value = 'Yes'
+            else:
+                dropdown_good_image.value = 'No'
+            if dest_well_properties.comments is not None:
+                images_comments.value = dest_well_properties.comments
+            else:
+                images_comments.value = ''
+        except DestWellProperties.DoesNotExist:
+            print('No properties found for dest well:', dest)
+            dropdown_good_somites.value = 'Select a value'
+            dropdown_bad_somites.value  = 'Select a value'
+            dropdown_good_somites_err.value = '0'
+            dropdown_bad_somites_err.value  = '0'
+            dropdown_good_image.value = 'Select a value'
+            images_comments.value = ''
+
+
 
     cds_labels_dest.selected.on_change('indices', lambda attr, old, new: dest_plate_visu(attr, old, new))
 
@@ -384,6 +416,37 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         </ul>
         """
         drug_message.visible = True
+
+        # Set the dropdowns if properties exist
+        try:
+            dest_well_properties = DestWellProperties.objects.get(dest_well=dest[0])
+            print('Found properties for dest well:', dest, ' properties:', dest_well_properties)
+            if dest_well_properties.num_good_somites is not None:
+                dropdown_good_somites.value = str(dest_well_properties.num_good_somites)
+            else:
+                dropdown_good_somites.value = 'Select a value'
+            if dest_well_properties.num_bad_somites is not None:
+                dropdown_bad_somites.value  = str(dest_well_properties.num_bad_somites)
+            else:
+                dropdown_bad_somites.value = 'Select a value'
+            dropdown_good_somites_err.value = str(dest_well_properties.num_good_somites_err)
+            dropdown_bad_somites_err.value  = str(dest_well_properties.num_bad_somites_err)
+            if dest_well_properties.good_image:
+                dropdown_good_image.value = 'Yes'
+            else:
+                dropdown_good_image.value = 'No'
+            if dest_well_properties.comments is not None:
+                images_comments.value = dest_well_properties.comments
+            else:
+                images_comments.value = ''
+        except DestWellProperties.DoesNotExist:
+            print('No properties found for dest well:', dest)
+            dropdown_good_somites.value = 'Select a value'
+            dropdown_bad_somites.value  = 'Select a value'
+            dropdown_good_somites_err.value = '0'
+            dropdown_bad_somites_err.value  = '0'
+            dropdown_good_image.value = 'Select a value'
+            images_comments.value = ''
 
     cds_labels_dest_2.selected.on_change('indices', lambda attr, old, new: dest_plate_2_visu(attr, old, new))
 
