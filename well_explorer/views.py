@@ -387,7 +387,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             dropdown_good_image.value = 'Yes'
             images_comments.value = ''
 
-        update_filled_wells()
 
     cds_labels_dest.selected.on_change('indices', lambda attr, old, new: dest_plate_visu(attr, old, new))
 
@@ -501,7 +500,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             dropdown_good_image.value = 'Yes'
             images_comments.value = ''
 
-        update_filled_wells()
 
     cds_labels_dest_2.selected.on_change('indices', lambda attr, old, new: dest_plate_2_visu(attr, old, new))
 
@@ -732,6 +730,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
         saveimages_button.label = "Save"
         saveimages_button.button_type = "success"
+        update_filled_wells()
+
     saveimages_button = bokeh.models.Button(label="Save", button_type="success", width=150)
 
 
@@ -744,6 +744,23 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
 
+    #___________________________________________________________________________________________
+    def create_training_callback():
+        print('------------------->>>>>>>>> create_training_callback')
+        experiments = Experiment.objects.all()
+        for experiment in experiments:
+            print('Creating training set for experiment:', experiment.name)
+        create_training_button.label = "Create Training Set"
+        create_training_button.button_type = "success"
+
+    create_training_button = bokeh.models.Button(label="Create Training Set", button_type="success", width=150)
+
+    #___________________________________________________________________________________________
+    def create_training_callback_short():
+        create_training_button.label = "Processing"
+        create_training_button.button_type = "danger"
+        bokeh.io.curdoc().add_next_tick_callback(create_training_callback)
+    create_training_button.on_click(create_training_callback_short)
 
 
 
@@ -776,7 +793,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     indent = bokeh.models.Spacer(width=30)
 
-    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button), bokeh.models.Spacer(width=20),    bokeh.layouts.column(image_message,drug_message)),
+    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button, create_training_button), bokeh.models.Spacer(width=20),    bokeh.layouts.column(image_message,drug_message)),
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
                                                          bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), contrast_slider, dropdown_good_somites, dropdown_good_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, saveimages_button,images_comments),
