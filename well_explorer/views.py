@@ -332,7 +332,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             dropdown_bad_somites.value  = 'Select a value'
             dropdown_good_somites_err.value = '0'
             dropdown_bad_somites_err.value  = '0'
-            dropdown_good_image.value = 'Select a value'
+            dropdown_good_image.value = 'Yes'
             images_comments.value = ''
 
 
@@ -445,7 +445,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             dropdown_bad_somites.value  = 'Select a value'
             dropdown_good_somites_err.value = '0'
             dropdown_bad_somites_err.value  = '0'
-            dropdown_good_image.value = 'Select a value'
+            dropdown_good_image.value = 'Yes'
             images_comments.value = ''
 
     cds_labels_dest_2.selected.on_change('indices', lambda attr, old, new: dest_plate_2_visu(attr, old, new))
@@ -607,7 +607,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     contrast_slider.on_change('value', update_contrast)
 
 
-    dropdown_good_somites      = bokeh.models.Select(value='Select a value', title='# good somites', options=['Select a value','15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35'])
+    dropdown_good_somites      = bokeh.models.Select(value='Select a value', title='# good somites', options=['Select a value', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35'])
     dropdown_bad_somites       = bokeh.models.Select(value='Select a value', title='# bad somites',  options=['Select a value','0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30'])
     dropdown_good_somites_err  = bokeh.models.Select(value='0', title='# good somites error', options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     dropdown_bad_somites_err   = bokeh.models.Select(value='0', title='# bad somites error',  options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
@@ -661,7 +661,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             dest = DestWellPosition.objects.filter(well_plate=well_plate, position_col=position[0][0], position_row=position[0][1]).first()
 
         dest = DestWellPosition.objects.filter(well_plate=well_plate, position_col=position[0][0], position_row=position[0][1]).first()
-        dest_well_properties = DestWellProperties(dest_well=dest)
+        #dest_well_properties = DestWellProperties(dest_well=dest)
+        dest_well_properties, created = DestWellProperties.objects.get_or_create(dest_well=dest)
         dest_well_properties.num_good_somites = int(dropdown_good_somites.value) if dropdown_good_somites.value != 'Select a value' else None
         dest_well_properties.num_bad_somites  = int(dropdown_bad_somites.value)  if dropdown_bad_somites.value != 'Select a value' else None
         dest_well_properties.num_good_somites_err = int(dropdown_good_somites_err.value)
