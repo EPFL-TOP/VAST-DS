@@ -308,16 +308,16 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         try:
             dest_well_properties = DestWellProperties.objects.get(dest_well=dest[0])
             print('Found properties for dest well:', dest, ' properties:', dest_well_properties)
-            if dest_well_properties.num_good_somites is not None:
-                dropdown_good_somites.value = str(dest_well_properties.num_good_somites)
+            if dest_well_properties.n_good_somites is not None:
+                dropdown_good_somites.value = str(dest_well_properties.n_good_somites)
             else:
                 dropdown_good_somites.value = 'Select a value'
-            if dest_well_properties.num_bad_somites is not None:
-                dropdown_bad_somites.value  = str(dest_well_properties.num_bad_somites)
+            if dest_well_properties.n_bad_somites is not None:
+                dropdown_bad_somites.value  = str(dest_well_properties.n_bad_somites)
             else:
                 dropdown_bad_somites.value = 'Select a value'
-            dropdown_good_somites_err.value = str(dest_well_properties.num_good_somites_err)
-            dropdown_bad_somites_err.value  = str(dest_well_properties.num_bad_somites_err)
+            dropdown_good_somites_err.value = str(dest_well_properties.n_good_somites_err)
+            dropdown_bad_somites_err.value  = str(dest_well_properties.n_bad_somites_err)
             if dest_well_properties.good_image:
                 dropdown_good_image.value = 'Yes'
             else:
@@ -421,16 +421,16 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         try:
             dest_well_properties = DestWellProperties.objects.get(dest_well=dest[0])
             print('Found properties for dest well:', dest, ' properties:', dest_well_properties)
-            if dest_well_properties.num_good_somites is not None:
-                dropdown_good_somites.value = str(dest_well_properties.num_good_somites)
+            if dest_well_properties.n_good_somites is not None:
+                dropdown_good_somites.value = str(dest_well_properties.n_good_somites)
             else:
                 dropdown_good_somites.value = 'Select a value'
-            if dest_well_properties.num_bad_somites is not None:
-                dropdown_bad_somites.value  = str(dest_well_properties.num_bad_somites)
+            if dest_well_properties.n_bad_somites is not None:
+                dropdown_bad_somites.value  = str(dest_well_properties.n_bad_somites)
             else:
                 dropdown_bad_somites.value = 'Select a value'
-            dropdown_good_somites_err.value = str(dest_well_properties.num_good_somites_err)
-            dropdown_bad_somites_err.value  = str(dest_well_properties.num_bad_somites_err)
+            dropdown_good_somites_err.value = str(dest_well_properties.n_good_somites_err)
+            dropdown_bad_somites_err.value  = str(dest_well_properties.n_bad_somites_err)
             if dest_well_properties.good_image:
                 dropdown_good_image.value = 'Yes'
             else:
