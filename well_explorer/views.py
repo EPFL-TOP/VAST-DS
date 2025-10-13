@@ -671,13 +671,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
 
-dropdown_good_somites      = bokeh.models.Select(value='Select a value', title='# good somites', options=['Select a value','15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35'])
-    dropdown_bad_somites       = bokeh.models.Select(value='Select a value', title='# bad somites',  options=['Select a value','0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30'])
-    dropdown_good_somites_err  = bokeh.models.Select(value='0', title='# good somites error', options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-    dropdown_bad_somites_err   = bokeh.models.Select(value='0', title='# bad somites error',  options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-    dropdown_good_image        = bokeh.models.Select(value='Yes', title='Good image', options=['Yes', 'No'])
-    images_comments            = bokeh.models.widgets.TextAreaInput(title="Comments if any:", value='', rows=7, width=200, css_classes=["font-size:18px"])
-
 
 #___________________________________________________________________________________________
 #@login_required
