@@ -86,6 +86,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     cds_labels_dest_present   = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
     cds_labels_dest_2_present = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
 
+    cds_labels_dest_filled    = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
+    cds_labels_dest_2_filled   = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
+
+
     drug_message    = bokeh.models.Div(visible=False)
     image_message    = bokeh.models.Div(visible=False)
 
@@ -128,7 +132,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                size='size', 
                                source=cds_labels_dest_present, 
                                line_color='blue', fill_color="black",
-                               fill_alpha=0.5,
+                               fill_alpha=0.3,
                                 selection_fill_color="orange",    # when selected
                                selection_line_color="firebrick",
                                selection_fill_alpha=0.9,
@@ -142,7 +146,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                size='size', 
                                source=cds_labels_dest_2_present, 
                                line_color='blue', fill_color="black",
-                               fill_alpha=0.5,
+                               fill_alpha=0.3,
                                 selection_fill_color="orange",    # when selected
                                selection_line_color="firebrick",
                                selection_fill_alpha=0.9,
@@ -151,8 +155,20 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                nonselection_fill_color="black",
                                nonselection_line_color="blue",)
 
+    plot_wellplate_dest.circle('x', 'y', 
+                               size='size', 
+                               source=cds_labels_dest_filled, 
+                               line_color='blue', fill_color="blue",
+                               fill_alpha=0.0,
+                               line_width=2)
 
-
+    plot_wellplate_dest_2.circle('x', 'y', 
+                                 size='size', 
+                                 source=cds_labels_dest_2_filled, 
+                                 line_color='blue', fill_color="blue",
+                                 fill_alpha=0.0,
+                                 line_width=2)
+    
     im_size = 2048
     x_range = bokeh.models.Range1d(start=0, end=im_size)
     y_range = bokeh.models.Range1d(start=0, end=im_size)
@@ -227,6 +243,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             return
         cds_labels_dest_2_present.selected.indices = []
         cds_labels_dest_2.selected.indices = []
+        cds_labels_dest_2_filled.selected.indices = []
         position = get_well_mapping(cds_labels_dest.selected.indices)
 
 
@@ -345,6 +362,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             return
         cds_labels_dest_present.selected.indices = []
         cds_labels_dest.selected.indices = []
+        cds_labels_dest_filled.selected.indices = []
 
         position = get_well_mapping(cds_labels_dest_2.selected.indices) 
 
@@ -530,6 +548,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             cds_labels_dest_2.data = dict(x=[], y=[], size=[])
             cds_labels_dest_present.data = dict(x=[], y=[], size=[])
             cds_labels_dest_2_present.data = dict(x=[], y=[], size=[])
+            cds_labels_dest_filled.data = dict(x=[], y=[], size=[])
+            cds_labels_dest_2_filled.data = dict(x=[], y=[], size=[])
             source_img_bf.data  = {'img':[]}
             source_img_yfp.data = {'img':[]}
             source_img_vast.data = {'img':[]}
@@ -551,7 +571,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             y_dest_1.append(row)
             size_dest_1.append(cds_labels_dest.data['size'][0])
             cds_labels_dest_present.data = {'x':x_dest_1, 'y':y_dest_1, 'size':size_dest_1}
-
+            cds_labels_dest_filled.data = {'x':x_dest_1, 'y':y_dest_1, 'size':size_dest_1}
 
         x_dest_2=[]
         y_dest_2=[]
@@ -566,6 +586,22 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             size_dest_2.append(cds_labels_dest_2.data['size'][0])
             cds_labels_dest_2_present.data = {'x':x_dest_2, 'y':y_dest_2, 'size':size_dest_2}
 
+
+        well_plate_1 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=1).first()
+        dest_1 = DestWellPosition.objects.filter(well_plate=well_plate_1).first()
+
+        well_plate_2 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=2).first()
+        dest_2 = DestWellPosition.objects.filter(well_plate=well_plate_2).first()
+
+        print('well_plate_1=', well_plate_1)
+        print('well_plate_2=', well_plate_2)
+        print('dest_1=', dest_1)
+        print('dest_2=', dest_2)
+
+        #dest = DestWellPosition.objects.filter(well_plate=well_plate, position_col=position[0][0], position_row=position[0][1]).first()
+        #dest_well_properties = DestWellProperties.objects.filter(dest_well=dest)
+        #print('dest_well_properties=', dest_well_properties)    
+        #cds_labels_dest_2_filled.data = {'x':x_dest_2, 'y':y_dest_2, 'size':size_dest_2}
     dropdown_exp.on_change("value", load_experiment)
 
 
