@@ -196,13 +196,13 @@ def _cleanup_orphan_drugs(sender, instance, **kwargs):
 
 #___________________________________________________________________________________________
 class DestWellProperties(models.Model):
-    dest_well      = models.OneToOneField(DestWellPosition, default='', on_delete=models.CASCADE, related_name='dest_well_properties')
-    n_good_somites = models.IntegerField(default=-9999, help_text="Number of good somites in this well", blank=True, null=True)
-    n_bad_somites  = models.IntegerField(default=-9999, help_text="Number of bad somites in this well", blank=True, null=True)
-    n_good_somites_err = models.IntegerField(default=0, help_text="Number of good somites error", blank=True, null=True)
-    n_bad_somites_err  = models.IntegerField(default=0, help_text="Number of bad somites error", blank=True, null=True)    
-    comments       = models.TextField(blank=True, max_length=2000, help_text="Comments if any", null=True)
-    valid          = models.BooleanField(default=True, help_text="should be used for training", blank=True, null=True)
+    dest_well           = models.OneToOneField(DestWellPosition, default='', on_delete=models.CASCADE, related_name='dest_well_properties')
+    n_total_somites     = models.IntegerField(default=-9999, help_text="Number of total somites in this well", blank=True, null=True)
+    n_bad_somites       = models.IntegerField(default=-9999, help_text="Number of bad somites in this well", blank=True, null=True)
+    n_total_somites_err = models.IntegerField(default=0, help_text="Number of total somites error", blank=True, null=True)
+    n_bad_somites_err   = models.IntegerField(default=0, help_text="Number of bad somites error", blank=True, null=True)    
+    comments            = models.TextField(blank=True, max_length=2000, help_text="Comments if any", null=True)
+    valid               = models.BooleanField(default=True, help_text="should be used for training", blank=True, null=True)
 
     def __str__(self):
         """String for representing the Model object (in Admin site etc.)"""

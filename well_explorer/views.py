@@ -361,15 +361,15 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         try:
             dest_well_properties = DestWellProperties.objects.get(dest_well=dest[0])
             print('Found properties for dest well:', dest, ' properties:', dest_well_properties)
-            if dest_well_properties.n_good_somites is not None:
-                dropdown_good_somites.value = str(dest_well_properties.n_good_somites)
+            if dest_well_properties.n_total_somites is not None:
+                dropdown_total_somites.value = str(dest_well_properties.n_total_somites)
             else:
-                dropdown_good_somites.value = 'Select a value'
+                dropdown_total_somites.value = 'Select a value'
             if dest_well_properties.n_bad_somites is not None:
                 dropdown_bad_somites.value  = str(dest_well_properties.n_bad_somites)
             else:
                 dropdown_bad_somites.value = 'Select a value'
-            dropdown_good_somites_err.value = str(dest_well_properties.n_good_somites_err)
+            dropdown_total_somites_err.value = str(dest_well_properties.n_total_somites_err)
             dropdown_bad_somites_err.value  = str(dest_well_properties.n_bad_somites_err)
             if dest_well_properties.valid:
                 dropdown_good_image.value = 'Yes'
@@ -381,9 +381,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 images_comments.value = ''
         except DestWellProperties.DoesNotExist:
             print('No properties found for dest well:', dest)
-            dropdown_good_somites.value = 'Select a value'
+            dropdown_total_somites.value = 'Select a value'
             dropdown_bad_somites.value  = 'Select a value'
-            dropdown_good_somites_err.value = '0'
+            dropdown_total_somites_err.value = '0'
             dropdown_bad_somites_err.value  = '0'
             dropdown_good_image.value = 'Yes'
             images_comments.value = ''
@@ -474,15 +474,15 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         try:
             dest_well_properties = DestWellProperties.objects.get(dest_well=dest[0])
             print('Found properties for dest well:', dest, ' properties:', dest_well_properties)
-            if dest_well_properties.n_good_somites is not None:
-                dropdown_good_somites.value = str(dest_well_properties.n_good_somites)
+            if dest_well_properties.n_total_somites is not None:
+                dropdown_total_somites.value = str(dest_well_properties.n_total_somites)
             else:
-                dropdown_good_somites.value = 'Select a value'
+                dropdown_total_somites.value = 'Select a value'
             if dest_well_properties.n_bad_somites is not None:
                 dropdown_bad_somites.value  = str(dest_well_properties.n_bad_somites)
             else:
                 dropdown_bad_somites.value = 'Select a value'
-            dropdown_good_somites_err.value = str(dest_well_properties.n_good_somites_err)
+            dropdown_total_somites_err.value = str(dest_well_properties.n_total_somites_err)
             dropdown_bad_somites_err.value  = str(dest_well_properties.n_bad_somites_err)
             if dest_well_properties.valid:
                 dropdown_good_image.value = 'Yes'
@@ -494,9 +494,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 images_comments.value = ''
         except DestWellProperties.DoesNotExist:
             print('No properties found for dest well:', dest)
-            dropdown_good_somites.value = 'Select a value'
+            dropdown_total_somites.value = 'Select a value'
             dropdown_bad_somites.value  = 'Select a value'
-            dropdown_good_somites_err.value = '0'
+            dropdown_total_somites_err.value = '0'
             dropdown_bad_somites_err.value  = '0'
             dropdown_good_image.value = 'Yes'
             images_comments.value = ''
@@ -664,9 +664,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     contrast_slider.on_change('value', update_contrast)
 
 
-    dropdown_good_somites      = bokeh.models.Select(value='Select a value', title='# good somites', options=['Select a value', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35'])
+    dropdown_total_somites      = bokeh.models.Select(value='Select a value', title='# total somites', options=['Select a value', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35'])
     dropdown_bad_somites       = bokeh.models.Select(value='Select a value', title='# bad somites',  options=['Select a value','0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30'])
-    dropdown_good_somites_err  = bokeh.models.Select(value='0', title='# good somites error', options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+    dropdown_total_somites_err  = bokeh.models.Select(value='0', title='# total somites error', options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     dropdown_bad_somites_err   = bokeh.models.Select(value='0', title='# bad somites error',  options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     dropdown_good_image        = bokeh.models.Select(value='Yes', title='Good image', options=['Yes', 'No'])
     images_comments            = bokeh.models.widgets.TextAreaInput(title="Comments if any:", value='', rows=7, width=200, css_classes=["font-size:18px"])
@@ -699,9 +699,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             return
 
 
-        if dropdown_good_somites.value == 'Select a value' and dropdown_bad_somites.value == 'Select a value':
-            print('Please select at least one of # good somites or # bad somites')
-            image_message.text = "<b style='color:red; font-size:18px;'>Please select at least one of # good somites or # bad somites</b>"
+        if dropdown_total_somites.value == 'Select a value' and dropdown_bad_somites.value == 'Select a value':
+            print('Please select at least one of # total somites or # bad somites')
+            image_message.text = "<b style='color:red; font-size:18px;'>Please select at least one of # total somites or # bad somites</b>"
             image_message.visible = True
             saveimages_button.label = "Save"
             saveimages_button.button_type = "success"
@@ -720,9 +720,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         dest = DestWellPosition.objects.filter(well_plate=well_plate, position_col=position[0][0], position_row=position[0][1]).first()
         #dest_well_properties = DestWellProperties(dest_well=dest)
         dest_well_properties, created = DestWellProperties.objects.get_or_create(dest_well=dest)
-        dest_well_properties.n_good_somites = int(dropdown_good_somites.value) if dropdown_good_somites.value != 'Select a value' else None
+        dest_well_properties.n_total_somites = int(dropdown_total_somites.value) if dropdown_total_somites.value != 'Select a value' else None
         dest_well_properties.n_bad_somites  = int(dropdown_bad_somites.value)  if dropdown_bad_somites.value != 'Select a value' else None
-        dest_well_properties.n_good_somites_err = int(dropdown_good_somites_err.value)
+        dest_well_properties.n_total_somites_err = int(dropdown_total_somites_err.value)
         dest_well_properties.n_bad_somites_err  = int(dropdown_bad_somites_err.value)
         dest_well_properties.valid = True if dropdown_good_image.value == 'Yes' else False
         dest_well_properties.comments = images_comments.value
@@ -771,7 +771,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 for dest in dest_well_positions:
                     try:
                         props = dest.dest_well_properties  # reverse OneToOne accessor
-                        if props.valid and props.n_good_somites>=0 and props.n_bad_somites >=0:
+                        if props.valid and props.n_total_somites>=0 and props.n_bad_somites >=0:
                             rand=random.uniform(0,1)
                             if rand>0.2: outdir=os.path.join(LOCALPATH_TRAINING,'train')
                             else: outdir=os.path.join(LOCALPATH_TRAINING,'valid')
@@ -796,9 +796,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                             shutil.copy(file_YFP, os.path.join(outdir, new_name_yfp))
                             out_json = new_name_yfp.replace('.tiff', '.json')
                             data = {
-                                'n_good_somites': props.n_good_somites,
+                                'n_total_somites': props.n_total_somites,
                                 'n_bad_somites': props.n_bad_somites,
-                                'n_good_somites_err': props.n_good_somites_err,
+                                'n_total_somites_err': props.n_total_somites_err,
                                 'n_bad_somites_err': props.n_bad_somites_err,
                                 'valid': props.valid,
                                 'comments': props.comments,
@@ -856,7 +856,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button, create_training_button), bokeh.models.Spacer(width=20),    bokeh.layouts.column(image_message,drug_message)),
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
-                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), contrast_slider, dropdown_good_somites, dropdown_good_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, saveimages_button,images_comments),
+                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), contrast_slider, dropdown_total_somites, dropdown_total_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, saveimages_button,images_comments),
                                                                               bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
                                                                               bokeh.layouts.row(plot_img_vast))))
 
