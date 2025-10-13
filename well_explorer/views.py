@@ -238,6 +238,41 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
     #___________________________________________________________________________________________
+    def update_filled_wells():
+        well_plate_1 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=1).first()
+        dest_1 = DestWellPosition.objects.filter(well_plate=well_plate_1)
+
+        x_dest_1_filled = []
+        y_dest_1_filled = []
+        size_dest_1_filled = []
+        for dest in dest_1:
+            try:
+                props = dest.dest_well_properties  # reverse OneToOne accessor
+                x_dest_1_filled.append(dest.position_col)
+                y_dest_1_filled.append(dest.position_row)
+                size_dest_1_filled.append(cds_labels_dest.data['size'][0])
+            except DestWellProperties.DoesNotExist:
+                pass
+
+        cds_labels_dest_filled.data = {'x':x_dest_1_filled, 'y':y_dest_1_filled, 'size':size_dest_1_filled}
+
+        well_plate_2 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=2).first()
+        dest_2 = DestWellPosition.objects.filter(well_plate=well_plate_2)
+        x_dest_2_filled = []
+        y_dest_2_filled = []
+        size_dest_2_filled = []
+        for dest in dest_2:
+            try:
+                props = dest.dest_well_properties  # reverse OneToOne accessor
+                x_dest_2_filled.append(dest.position_col)
+                y_dest_2_filled.append(dest.position_row)
+                size_dest_2_filled.append(cds_labels_dest_2.data['size'][0])
+            except DestWellProperties.DoesNotExist:
+                pass
+        cds_labels_dest_2_filled.data = {'x':x_dest_2_filled, 'y':y_dest_2_filled, 'size':size_dest_2_filled}
+    dropdown_exp.on_change("value", load_experiment)
+
+    #___________________________________________________________________________________________
     def dest_plate_visu(attr, old, new):
         if len(cds_labels_dest.selected.indices) == 0: 
             return
@@ -590,40 +625,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         update_filled_wells()
 
 
-    #___________________________________________________________________________________________
-    def update_filled_wells():
-        well_plate_1 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=1).first()
-        dest_1 = DestWellPosition.objects.filter(well_plate=well_plate_1)
 
-        x_dest_1_filled = []
-        y_dest_1_filled = []
-        size_dest_1_filled = []
-        for dest in dest_1:
-            try:
-                props = dest.dest_well_properties  # reverse OneToOne accessor
-                x_dest_1_filled.append(dest.position_col)
-                y_dest_1_filled.append(dest.position_row)
-                size_dest_1_filled.append(cds_labels_dest.data['size'][0])
-            except DestWellProperties.DoesNotExist:
-                pass
-
-        cds_labels_dest_filled.data = {'x':x_dest_1_filled, 'y':y_dest_1_filled, 'size':size_dest_1_filled}
-
-        well_plate_2 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=2).first()
-        dest_2 = DestWellPosition.objects.filter(well_plate=well_plate_2)
-        x_dest_2_filled = []
-        y_dest_2_filled = []
-        size_dest_2_filled = []
-        for dest in dest_2:
-            try:
-                props = dest.dest_well_properties  # reverse OneToOne accessor
-                x_dest_2_filled.append(dest.position_col)
-                y_dest_2_filled.append(dest.position_row)
-                size_dest_2_filled.append(cds_labels_dest_2.data['size'][0])
-            except DestWellProperties.DoesNotExist:
-                pass
-        cds_labels_dest_2_filled.data = {'x':x_dest_2_filled, 'y':y_dest_2_filled, 'size':size_dest_2_filled}
-    dropdown_exp.on_change("value", load_experiment)
 
 
     #___________________________________________________________________________________________
