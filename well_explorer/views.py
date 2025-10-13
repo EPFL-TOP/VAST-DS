@@ -608,6 +608,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         dest_well_properties.save()
         print('Saved properties for dest well:', dest, ' properties:', dest_well_properties)
 
+        saveimages_button.label = "Save"
+        saveimages_button.button_type = "success"
     saveimages_button = bokeh.models.Button(label="Save", button_type="success", width=150)
 
 
@@ -652,10 +654,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     indent = bokeh.models.Spacer(width=30)
 
-    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button), bokeh.models.Spacer(width=20),    bokeh.layouts.column(image_message,drug_message), images_comments),
+    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button), bokeh.models.Spacer(width=20),    bokeh.layouts.column(image_message,drug_message)),
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
-                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), contrast_slider, dropdown_good_somites, dropdown_good_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, saveimages_button),
+                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), contrast_slider, dropdown_good_somites, dropdown_good_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, saveimages_button,images_comments),
                                                                               bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
                                                                               bokeh.layouts.row(plot_img_vast))))
 
