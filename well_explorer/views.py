@@ -587,13 +587,19 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             cds_labels_dest_2_present.data = {'x':x_dest_2, 'y':y_dest_2, 'size':size_dest_2}
 
 
+
+
+
         well_plate_1 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=1).first()
         dest_1 = DestWellPosition.objects.filter(well_plate=well_plate_1)
+
+
         for dest in dest_1:
-            if dest.dest_well_properties:
-                print('Found properties for dest well:', dest)
-
-
+            try:
+                props = dest.dest_well_properties  # reverse OneToOne accessor
+                print('Found properties for dest well:', dest, props)
+            except DestWellProperties.DoesNotExist:
+                print('No properties for dest well:', dest)
 
         well_plate_2 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=2).first()
         dest_2 = DestWellPosition.objects.filter(well_plate=well_plate_2)
