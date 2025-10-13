@@ -47,12 +47,12 @@ class SomiteDataset(Dataset):
         # build target and error tensors
         y = torch.tensor([
             label_data["n_good_somites"], 
-            label_data["n_defective_somites"]
+            label_data["n_bad_somites"]
         ], dtype=torch.float32)
 
         err = torch.tensor([
             label_data["n_good_somites_err"], 
-            label_data["n_defective_somites_err"]
+            label_data["n_bad_somites_err"]
         ], dtype=torch.float32)
 
         return img, y, err
