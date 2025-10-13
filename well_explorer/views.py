@@ -270,7 +270,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             except DestWellProperties.DoesNotExist:
                 pass
         cds_labels_dest_2_filled.data = {'x':x_dest_2_filled, 'y':y_dest_2_filled, 'size':size_dest_2_filled}
-    dropdown_exp.on_change("value", load_experiment)
 
     #___________________________________________________________________________________________
     def dest_plate_visu(attr, old, new):
@@ -624,8 +623,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
         update_filled_wells()
 
-
-
+    dropdown_exp.on_change("value", load_experiment)
 
 
     #___________________________________________________________________________________________
