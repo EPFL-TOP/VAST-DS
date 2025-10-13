@@ -571,7 +571,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             y_dest_1.append(row)
             size_dest_1.append(cds_labels_dest.data['size'][0])
             cds_labels_dest_present.data = {'x':x_dest_1, 'y':y_dest_1, 'size':size_dest_1}
-            cds_labels_dest_filled.data = {'x':x_dest_1, 'y':y_dest_1, 'size':size_dest_1}
 
         x_dest_2=[]
         y_dest_2=[]
@@ -602,18 +601,22 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             except DestWellProperties.DoesNotExist:
                 pass
 
+        cds_labels_dest_filled.data = {'x':x_dest_1_filled, 'y':y_dest_1_filled, 'size':size_dest_1_filled}
+
         well_plate_2 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=2).first()
         dest_2 = DestWellPosition.objects.filter(well_plate=well_plate_2)
-
-        print('well_plate_1=', well_plate_1)
-        print('well_plate_2=', well_plate_2)
-        print('dest_1=', dest_1)
-        print('dest_2=', dest_2)
-
-        #dest = DestWellPosition.objects.filter(well_plate=well_plate, position_col=position[0][0], position_row=position[0][1]).first()
-        #dest_well_properties = DestWellProperties.objects.filter(dest_well=dest)
-        #print('dest_well_properties=', dest_well_properties)    
-        #cds_labels_dest_2_filled.data = {'x':x_dest_2, 'y':y_dest_2, 'size':size_dest_2}
+        x_dest_2_filled = []
+        y_dest_2_filled = []
+        size_dest_2_filled = []
+        for dest in dest_2:
+            try:
+                props = dest.dest_well_properties  # reverse OneToOne accessor
+                x_dest_2_filled.append(dest.position_col)
+                y_dest_2_filled.append(dest.position_row)
+                size_dest_2_filled.append(cds_labels_dest_2.data['size'][0])
+            except DestWellProperties.DoesNotExist:
+                pass
+        cds_labels_dest_2_filled.data = {'x':x_dest_2_filled, 'y':y_dest_2_filled, 'size':size_dest_2_filled}
     dropdown_exp.on_change("value", load_experiment)
 
 
