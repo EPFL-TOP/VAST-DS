@@ -318,7 +318,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 dropdown_bad_somites.value = 'Select a value'
             dropdown_good_somites_err.value = str(dest_well_properties.n_good_somites_err)
             dropdown_bad_somites_err.value  = str(dest_well_properties.n_bad_somites_err)
-            if dest_well_properties.good_image:
+            if dest_well_properties.valid:
                 dropdown_good_image.value = 'Yes'
             else:
                 dropdown_good_image.value = 'No'
@@ -431,7 +431,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 dropdown_bad_somites.value = 'Select a value'
             dropdown_good_somites_err.value = str(dest_well_properties.n_good_somites_err)
             dropdown_bad_somites_err.value  = str(dest_well_properties.n_bad_somites_err)
-            if dest_well_properties.good_image:
+            if dest_well_properties.valid:
                 dropdown_good_image.value = 'Yes'
             else:
                 dropdown_good_image.value = 'No'
