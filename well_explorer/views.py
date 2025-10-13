@@ -764,8 +764,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             print('Creating training set for experiment:', experiment.name)
 
             rand=random.uniform(0,1)
-            if rand>0.2: outdir=os.path.join(LOCALPATH_TRAINING,'train')
-            else: outdir=os.path.join(LOCALPATH_TRAINING,'valid')
 
             dest_well_plates   = DestWellPlate.objects.filter(experiment=experiment)
             print('dest_well_plates=', dest_well_plates)
@@ -775,6 +773,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                     try:
                         props = dest.dest_well_properties  # reverse OneToOne accessor
                         if props.valid and props.n_good_somites>=0 and props.n_bad_somites >=0:
+                            if rand>0.2: outdir=os.path.join(LOCALPATH_TRAINING,'train')
+                            else: outdir=os.path.join(LOCALPATH_TRAINING,'valid')
+
                             position_col = dest.position_col
                             position_row = dest.position_row
                             path_leica = os.path.join(LOCALPATH, experiment.name,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}{}'.format(position_row, position_col))
