@@ -763,7 +763,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         for experiment in experiments:
             print('Creating training set for experiment:', experiment.name)
 
-            rand=random.uniform(0,1)
 
             dest_well_plates   = DestWellPlate.objects.filter(experiment=experiment)
             print('dest_well_plates=', dest_well_plates)
@@ -773,6 +772,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                     try:
                         props = dest.dest_well_properties  # reverse OneToOne accessor
                         if props.valid and props.n_good_somites>=0 and props.n_bad_somites >=0:
+                            rand=random.uniform(0,1)
                             if rand>0.2: outdir=os.path.join(LOCALPATH_TRAINING,'train')
                             else: outdir=os.path.join(LOCALPATH_TRAINING,'valid')
 
@@ -794,6 +794,17 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                             # Copy the files to the training set folder with a new name
                             new_name_yfp = experiment.name + '_Plate' + str(dest_well_plate.plate_number) + '_' + position_row + position_col + '_YFP.tiff'
                             shutil.copy(file_YFP, os.path.join(outdir, new_name_yfp))
+                            out_json = new_name_yfp.replace('.tiff', '.json')
+                            data = {
+                                'n_good_somites': props.n_good_somites,
+                                'n_bad_somites': props.n_bad_somites,
+                                'n_good_somites_err': props.n_good_somites_err,
+                                'n_bad_somites_err': props.n_bad_somites_err,
+                                'valid': props.valid,
+                                'comments': props.comments,
+                            }
+                            with open(os.path.join(outdir, out_json), 'w') as f:
+                                json.dump(data, f, indent=4)
                             print('Copied files to training set:', new_name_yfp)
 
                     except DestWellProperties.DoesNotExist:
