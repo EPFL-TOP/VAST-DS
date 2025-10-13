@@ -158,16 +158,16 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     plot_wellplate_dest.circle('x', 'y', 
                                size='size', 
                                source=cds_labels_dest_filled, 
-                               line_color='blue', fill_color="blue",
+                               line_color='green', fill_color="white",
                                fill_alpha=0.0,
-                               line_width=2)
+                               line_width=4)
 
     plot_wellplate_dest_2.circle('x', 'y', 
                                  size='size', 
                                  source=cds_labels_dest_2_filled, 
-                                 line_color='blue', fill_color="blue",
+                                 line_color='green', fill_color="white",
                                  fill_alpha=0.0,
-                                 line_width=2)
+                                 line_width=4)
     
     im_size = 2048
     x_range = bokeh.models.Range1d(start=0, end=im_size)
