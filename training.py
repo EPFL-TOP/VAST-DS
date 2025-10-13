@@ -181,7 +181,7 @@ transform = T.Compose([
 ])
 
 train_dataset = SomiteDataset(r"D:\vast\training_data\train", r"D:\vast\training_data\train", transform=transform)
-valid_dataset = SomiteDataset(r"D:\vast\training_data\alid", r"D:\vast\training_data\valid", transform=transform)
+valid_dataset = SomiteDataset(r"D:\vast\training_data\valid", r"D:\vast\training_data\valid", transform=transform)
 
 model = train_model(train_dataset, valid_dataset, save_dir="checkpoints", epochs=50, patience=7)
 
