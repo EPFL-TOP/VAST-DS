@@ -720,10 +720,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         dest = DestWellPosition.objects.filter(well_plate=well_plate, position_col=position[0][0], position_row=position[0][1]).first()
         #dest_well_properties = DestWellProperties(dest_well=dest)
         dest_well_properties, created = DestWellProperties.objects.get_or_create(dest_well=dest)
-        dest_well_properties.num_good_somites = int(dropdown_good_somites.value) if dropdown_good_somites.value != 'Select a value' else None
-        dest_well_properties.num_bad_somites  = int(dropdown_bad_somites.value)  if dropdown_bad_somites.value != 'Select a value' else None
-        dest_well_properties.num_good_somites_err = int(dropdown_good_somites_err.value)
-        dest_well_properties.num_bad_somites_err  = int(dropdown_bad_somites_err.value)
+        dest_well_properties.n_good_somites = int(dropdown_good_somites.value) if dropdown_good_somites.value != 'Select a value' else None
+        dest_well_properties.n_bad_somites  = int(dropdown_bad_somites.value)  if dropdown_bad_somites.value != 'Select a value' else None
+        dest_well_properties.n_good_somites_err = int(dropdown_good_somites_err.value)
+        dest_well_properties.n_bad_somites_err  = int(dropdown_bad_somites_err.value)
         dest_well_properties.valid = True if dropdown_good_image.value == 'Yes' else False
         dest_well_properties.comments = images_comments.value
         dest_well_properties.save()
