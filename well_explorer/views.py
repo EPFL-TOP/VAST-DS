@@ -24,7 +24,7 @@ import bokeh.plotting
 import bokeh.embed
 import bokeh.layouts
 
-from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug
+from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug, DestWellProperties
 
 import vast_leica_mapping as vlm
 
@@ -540,11 +540,88 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         color_mapper.low = int(low*655.35)
         color_mapper.high = int(high*655.35)
 
-
-
-
-    contrast_slider = bokeh.models.RangeSlider(start=0, end=100, value=(0, 100), step=1, title="Contrast", width=150)
+    contrast_slider = bokeh.models.RangeSlider(start=0, end=100, value=(0, 100), step=1, title="Contrast", width=200)
     contrast_slider.on_change('value', update_contrast)
+
+
+    dropdown_good_somites      = bokeh.models.Select(value='Select a value', title='# good somites', options=['Select a value','15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35'])
+    dropdown_bad_somites       = bokeh.models.Select(value='Select a value', title='# bad somites',  options=['Select a value','0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30'])
+    dropdown_good_somites_err  = bokeh.models.Select(value='0', title='# good somites error', options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+    dropdown_bad_somites_err   = bokeh.models.Select(value='0', title='# bad somites error',  options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+    dropdown_good_image        = bokeh.models.Select(value='Yes', title='Good image', options=['Yes', 'No'])
+    images_comments            = bokeh.models.widgets.TextAreaInput(title="Comments if any:", value='', rows=7, width=200, css_classes=["font-size:18px"])
+
+    #___________________________________________________________________________________________
+    def saveimages_callback():
+        print('------------------->>>>>>>>> saveimages_callback')
+        if dropdown_exp.value == 'Select experiment':
+            print('Please select an experiment first')
+            image_message.text = "<b style='color:red; font-size:18px;'>Please select an experiment first</b>"
+            image_message.visible = True
+            saveimages_button.label = "Save"
+            saveimages_button.button_type = "success"
+            return
+        print('Saving properties for experiment:', dropdown_exp.value)
+        if len(cds_labels_dest.selected.indices) == 0 and len(cds_labels_dest_2.selected.indices) == 0:
+            print('Please select a well first')
+            image_message.text = "<b style='color:red; font-size:18px;'>Please select a well first</b>"
+            image_message.visible = True
+            saveimages_button.label = "Save"
+            saveimages_button.button_type = "success"
+            return
+        
+        if len(cds_labels_dest.selected.indices) > 0 and len(cds_labels_dest_2.selected.indices) > 0:
+            print('Please select a well in only one plate')
+            image_message.text = "<b style='color:red; font-size:18px;'>Please select a well in only one plate</b>"
+            image_message.visible = True
+            saveimages_button.label = "Save"
+            saveimages_button.button_type = "success"
+            return
+
+
+        if dropdown_good_somites.value == 'Select a value' and dropdown_bad_somites.value == 'Select a value':
+            print('Please select at least one of # good somites or # bad somites')
+            image_message.text = "<b style='color:red; font-size:18px;'>Please select at least one of # good somites or # bad somites</b>"
+            image_message.visible = True
+            saveimages_button.label = "Save"
+            saveimages_button.button_type = "success"
+            return
+
+        dest=None
+        if len(cds_labels_dest.selected.indices) > 0:
+            position = get_well_mapping(cds_labels_dest.selected.indices)
+            well_plate = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=1).first()
+
+        elif len(cds_labels_dest_2.selected.indices) > 0:
+            position = get_well_mapping(cds_labels_dest_2.selected.indices)
+            well_plate = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=2).first()
+            dest = DestWellPosition.objects.filter(well_plate=well_plate, position_col=position[0][0], position_row=position[0][1]).first()
+
+        dest = DestWellPosition.objects.filter(well_plate=well_plate, position_col=position[0][0], position_row=position[0][1]).first()
+        dest_well_properties = DestWellProperties(dest_well=dest)
+        dest_well_properties.num_good_somites = int(dropdown_good_somites.value) if dropdown_good_somites.value != 'Select a value' else None
+        dest_well_properties.num_bad_somites  = int(dropdown_bad_somites).value  if dropdown_bad_somites.value != 'Select a value' else None
+        dest_well_properties.num_good_somites_err = int(dropdown_good_somites_err.value)
+        dest_well_properties.num_bad_somites_err  = int(dropdown_bad_somites_err.value)
+        dest_well_properties.good_image = True if dropdown_good_image.value == 'Yes' else False
+        dest_well_properties.comments = images_comments.value
+        dest_well_properties.save()
+        print('Saved properties for dest well:', dest, ' properties:', dest_well_properties)
+
+    saveimages_button = bokeh.models.Button(label="Save", button_type="success", width=150)
+
+
+    #___________________________________________________________________________________________
+    def saveimages_callback_short():
+        saveimages_button.label = "Processing"
+        saveimages_button.button_type = "danger"
+        bokeh.io.curdoc().add_next_tick_callback(saveimages_callback)
+    saveimages_button.on_click(saveimages_callback_short)
+
+
+
+
+
 
 
     plot_wellplate_dest.add_tools(tap_tool)
@@ -575,11 +652,11 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     indent = bokeh.models.Spacer(width=30)
 
-    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button), bokeh.models.Spacer(width=20),    bokeh.layouts.column(image_message,drug_message) ),
+    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button), bokeh.models.Spacer(width=20),    bokeh.layouts.column(image_message,drug_message) images_comments),
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
-                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=40), contrast_slider),
-                                                             bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
+                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), contrast_slider, dropdown_good_somites, dropdown_good_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, saveimages_button),
+                                                                              bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
                                                                               bokeh.layouts.row(plot_img_vast))))
 
     plot_img_bf.axis.visible   = False
@@ -591,6 +668,15 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
     doc.add_root(norm_layout)
+
+
+
+dropdown_good_somites      = bokeh.models.Select(value='Select a value', title='# good somites', options=['Select a value','15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35'])
+    dropdown_bad_somites       = bokeh.models.Select(value='Select a value', title='# bad somites',  options=['Select a value','0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30'])
+    dropdown_good_somites_err  = bokeh.models.Select(value='0', title='# good somites error', options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+    dropdown_bad_somites_err   = bokeh.models.Select(value='0', title='# bad somites error',  options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+    dropdown_good_image        = bokeh.models.Select(value='Yes', title='Good image', options=['Yes', 'No'])
+    images_comments            = bokeh.models.widgets.TextAreaInput(title="Comments if any:", value='', rows=7, width=200, css_classes=["font-size:18px"])
 
 
 #___________________________________________________________________________________________
