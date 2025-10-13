@@ -239,6 +239,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     #___________________________________________________________________________________________
     def update_filled_wells():
+        print('------------------->>>>>>>>> update_filled_wells')
         well_plate_1 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=1).first()
         dest_1 = DestWellPosition.objects.filter(well_plate=well_plate_1)
 
@@ -386,7 +387,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             dropdown_good_image.value = 'Yes'
             images_comments.value = ''
 
-    update_filled_wells()
+        update_filled_wells()
 
     cds_labels_dest.selected.on_change('indices', lambda attr, old, new: dest_plate_visu(attr, old, new))
 
