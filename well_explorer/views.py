@@ -750,14 +750,13 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         print('------------------->>>>>>>>> create_training_callback')
         experiments = Experiment.objects.all()
 
-        if os.dir.exists(LOCALPATH_TRAINING):
-            os.dir.rmdir(LOCALPATH_TRAINING)
-
-        if os.dir.exists(LOCALPATH_TRAINING) is False:
+        if os.path.exists(LOCALPATH_TRAINING):
+            shutil.rmtree(LOCALPATH_TRAINING)
+        if os.path.exists(LOCALPATH_TRAINING) is False:
             os.mkdir(LOCALPATH_TRAINING)
-        if os.dir.exists(os.path.join(LOCALPATH_TRAINING,'train')) is False:
+        if os.path.exists(os.path.join(LOCALPATH_TRAINING,'train')) is False:
             os.mkdir(os.path.join(LOCALPATH_TRAINING,'train'))
-        if os.dir.exists(os.path.join(LOCALPATH_TRAINING,'valid')) is False:
+        if os.path.exists(os.path.join(LOCALPATH_TRAINING,'valid')) is False:
             os.mkdir(os.path.join(LOCALPATH_TRAINING,'valid'))
         
 
