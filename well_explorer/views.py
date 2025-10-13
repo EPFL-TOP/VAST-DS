@@ -590,7 +590,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         well_plate_1 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=1).first()
         dest_1 = DestWellPosition.objects.filter(well_plate=well_plate_1)
         for dest in dest_1:
-            if dest.dest_well_properties_set.exists():
+            if dest.dest_well_properties:
                 print('Found properties for dest well:', dest)
 
 
