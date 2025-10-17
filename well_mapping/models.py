@@ -206,4 +206,4 @@ class DestWellProperties(models.Model):
 
     def __str__(self):
         """String for representing the Model object (in Admin site etc.)"""
-        return "exp={0}, pos={1}{2}, n_plate={3}, n_good_somites={4}, n_bad_somites={5}, valid={6}".format(self.dest_well.well_plate.experiment.name, self.dest_well.position_row, self.dest_well.position_col, self.dest_well.well_plate.plate_number, self.n_total_somites, self.n_bad_somites, self.valid)
+        return "exp={0}, pos={1}{2}, n_plate={3}, n_total_somites={4}, n_bad_somites={5}, valid={6}".format(self.dest_well.well_plate.experiment.name, self.dest_well.position_row, self.dest_well.position_col, self.dest_well.well_plate.plate_number, self.n_total_somites, self.n_bad_somites, self.valid)
