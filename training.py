@@ -42,7 +42,7 @@ class SomiteDataset(Dataset):
         img_np /= img_np.max()  # normalize to 0-1
 
         if self.transform:
-            img = self.transform(img)
+            img_tensor = self.transform(img_np)
         else:
             img_tensor = torch.from_numpy(img_np).unsqueeze(0)  # 1,H,W
 
@@ -63,7 +63,7 @@ class SomiteDataset(Dataset):
             label_data["n_bad_somites_err"]
         ], dtype=torch.float32)
 
-        return img, y, err
+        return img_tensor, y, err
 
 
 
