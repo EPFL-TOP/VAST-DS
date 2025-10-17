@@ -9,8 +9,12 @@ from PIL import Image
 import pandas as pd
 import os
 import json
+import numpy as np
+import matplotlib.pyplot as plt
 
-
+# -----------------------------
+# Dataset for 16-bit grayscale images
+# -----------------------------
 class SomiteDataset(Dataset):
     def __init__(self, img_dir, label_dir, transform=None):
         """
@@ -21,8 +25,6 @@ class SomiteDataset(Dataset):
         self.img_dir = img_dir
         self.label_dir = label_dir
         self.transform = transform
-
-        # list all image files
         self.img_files = [f for f in os.listdir(img_dir) 
                           if f.lower().endswith(('.png','.jpg','.jpeg','.tif','.tiff'))]
 
@@ -33,8 +35,9 @@ class SomiteDataset(Dataset):
         img_name = self.img_files[idx]
         img_path = os.path.join(self.img_dir, img_name)
 
-        # load image
-        img = Image.open(img_path).convert("RGB")
+        # Load grayscale 16-bit image and scale to [0,1]
+        img = np.array(Image.open(img_path)).astype(np.float32) / 65535.0
+
         if self.transform:
             img = self.transform(img)
 
@@ -56,17 +59,26 @@ class SomiteDataset(Dataset):
         ], dtype=torch.float32)
 
         return img, y, err
-    
 
 
 # -----------------------------
-# Model
+# Custom transform for 16-bit grayscale to tensor
+# -----------------------------
+class ToTensorGrayscale:
+    def __call__(self, img):
+        # img is numpy HxW in [0,1]
+        return torch.from_numpy(img).unsqueeze(0)  # 1,H,W
+
+
+# -----------------------------
+# Model for 1-channel input
 # -----------------------------
 class SomiteCounter(nn.Module):
     def __init__(self):
         super().__init__()
-        base = models.resnet18(pretrained=True)
-        base.fc = nn.Linear(base.fc.in_features, 2)  # two outputs
+        base = models.resnet18(pretrained=False)
+        base.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        base.fc = nn.Linear(base.fc.in_features, 2)
         self.model = base
 
     def forward(self, x):
@@ -78,16 +90,32 @@ class SomiteCounter(nn.Module):
 # -----------------------------
 class WeightedMSELoss(nn.Module):
     def forward(self, pred, target, error):
-        # avoid division by zero
-        error = torch.clamp(error, min=1.0)  
+        error = torch.clamp(error, min=1.0)
         return torch.mean(((pred - target) ** 2) / (error ** 2))
 
 
+# -----------------------------
+# Visualization helper
+# -----------------------------
+def show_image_comparison(raw_img, tensor_img):
+    """
+    raw_img: numpy HxW in [0,1]
+    tensor_img: torch tensor 1xHxW
+    """
+    tensor_img = tensor_img.detach().cpu().squeeze(0).numpy()
+    fig, axes = plt.subplots(1,2,figsize=(10,5))
+    axes[0].imshow(raw_img, cmap="gray", vmin=0, vmax=1)
+    axes[0].set_title("Original 16-bit scaled")
+    axes[0].axis("off")
+    axes[1].imshow(tensor_img, cmap="gray", vmin=0, vmax=1)
+    axes[1].set_title("Network Input")
+    axes[1].axis("off")
+    plt.show()
 
 # -----------------------------
 # Training loop
 # -----------------------------
-def train_model(train_dataset, valid_dataset, 
+def train_model_old(train_dataset, valid_dataset, 
                 save_dir="checkpoints",
                 epochs=50, batch_size=8, lr=1e-4, patience=5,
                 resume=False):
@@ -171,33 +199,156 @@ def train_model(train_dataset, valid_dataset,
 
 
 
+    
+
+
+# -----------------------------
+# Training loop
+# -----------------------------
+def train_model(train_dataset, valid_dataset,
+                save_dir="checkpoints",
+                epochs=50, batch_size=8, lr=1e-4, patience=5,
+                resume=False, visualize_every=5):
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
+
+    model = SomiteCounter().to(device)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    criterion = WeightedMSELoss()
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    best_val_loss = float("inf")
+    start_epoch = 0
+    epochs_no_improve = 0
+
+    # Resume
+    if resume:
+        checkpoint_path = os.path.join(save_dir, "best_model.pth")
+        if os.path.exists(checkpoint_path):
+            checkpoint = torch.load(checkpoint_path, map_location=device)
+            model.load_state_dict(checkpoint["model_state_dict"])
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            start_epoch = checkpoint["epoch"] + 1
+            best_val_loss = checkpoint["val_loss"]
+            print(f"Resumed from epoch {start_epoch}, best val loss {best_val_loss:.4f}")
+
+    for epoch in range(start_epoch, epochs):
+        # Training
+        model.train()
+        train_loss = 0.0
+        for imgs, labels, errors in train_loader:
+            imgs, labels, errors = imgs.to(device), labels.to(device), errors.to(device)
+            optimizer.zero_grad()
+            outputs = model(imgs)
+            loss = criterion(outputs, labels, errors)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item() * imgs.size(0)
+        train_loss /= len(train_loader.dataset)
+
+        # Validation
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for imgs, labels, errors in valid_loader:
+                imgs, labels, errors = imgs.to(device), labels.to(device), errors.to(device)
+                outputs = model(imgs)
+                loss = criterion(outputs, labels, errors)
+                val_loss += loss.item() * imgs.size(0)
+        val_loss /= len(valid_loader.dataset)
+
+        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+
+        # Save best model
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save({
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "val_loss": val_loss
+            }, os.path.join(save_dir, "best_model.pth"))
+            print(" Saved best model")
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve += 1
+
+        # Early stopping
+        if epochs_no_improve >= patience:
+            print("Early stopping triggered")
+            break
+
+        # Visualize one training image every few epochs
+        if epoch % visualize_every == 0:
+            sample_img, _, _ = train_dataset[0]
+            show_image_comparison(sample_img.numpy().squeeze(), sample_img)
+
+    return model
+
+
+
+
 
 if __name__ == "__main__":
-    # Example usage: train the model
-    # (you can move your train_model code here)
     print("Training starts...")
-    # train_model(train_dataset, valid_dataset, ...)
 
+    # ------------------------
+    # Transforms for 16-bit grayscale
+    # ------------------------
     transform = T.Compose([
-        T.Resize((224,224)),
+        ToTensorGrayscale(),  # converts HxW numpy to 1xHxW tensor
+        T.Resize((224,224)),  # resize to network input
         T.RandomHorizontalFlip(),
         T.RandomRotation(10),
-        T.ColorJitter(brightness=0.2, contrast=0.2),
-        T.ToTensor(),
+        T.ColorJitter(brightness=0.2, contrast=0.2),  # optional augmentation
     ])
 
-    train_dataset = SomiteDataset(r"D:\vast\training_data\train", r"D:\vast\training_data\train", transform=transform)
-    valid_dataset = SomiteDataset(r"D:\vast\training_data\valid", r"D:\vast\training_data\valid", transform=transform)
+    # ------------------------
+    # Datasets
+    # ------------------------
+    train_dataset = SomiteDataset(
+        img_dir=r"D:\vast\training_data\train",
+        label_dir=r"D:\vast\training_data\train",
+        transform=transform
+    )
 
-    model = train_model(train_dataset, valid_dataset, save_dir="checkpoints", epochs=50, patience=7)
+    valid_dataset = SomiteDataset(
+        img_dir=r"D:\vast\training_data\valid",
+        label_dir=r"D:\vast\training_data\valid",
+        transform=transform
+    )
 
+    # ------------------------
+    # Train the model
+    # ------------------------
+    model = train_model(
+        train_dataset,
+        valid_dataset,
+        save_dir="checkpoints",
+        epochs=50,
+        batch_size=8,
+        lr=1e-4,
+        patience=7,
+        resume=True,        # resume if checkpoint exists
+        visualize_every=5   # show a sample image every 5 epochs
+    )
 
+    # ------------------------
+    # Load the best checkpoint after training
+    # ------------------------
+    checkpoint_path = "checkpoints/best_model.pth"
+    if os.path.exists(checkpoint_path):
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        model = SomiteCounter()
+        model.load_state_dict(checkpoint["model_state_dict"])
 
-    checkpoint = torch.load("checkpoints/best_model.pth", map_location="cpu")
-    model = SomiteCounter()
-    model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer = optim.Adam(model.parameters(), lr=1e-4)
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        start_epoch = checkpoint["epoch"] + 1
 
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
-    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-    start_epoch = checkpoint["epoch"] + 1
-
+        print(f"Best model loaded from epoch {checkpoint['epoch']}, val_loss={checkpoint['val_loss']:.4f}")
+    else:
+        print("No checkpoint found, using trained model as-is.")
