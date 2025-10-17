@@ -163,7 +163,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                source=cds_labels_dest_filled, 
                                line_color='green', fill_color="white",
                                fill_alpha=0.0,
-                               line_width=4,
+                               line_width='line_width',
                                nonselection_line_width=2,
                                selection_line_width=2)
 
@@ -172,7 +172,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                  source=cds_labels_dest_2_filled, 
                                  line_color='green', fill_color="white",
                                  fill_alpha=0.0,
-                                 line_width=4,
+                                 line_width='line_width',
                                  nonselection_line_width=2,
                                  selection_line_width=2)
     
