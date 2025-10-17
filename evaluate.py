@@ -7,7 +7,7 @@ from PIL import Image
 
 # --- Import your model definition ---
 from training import SomiteCounter   # <-- replace "your_code" with the file where SomiteCounter is defined
-
+from utils import show_image_comparison
 
 def load_model(checkpoint_path, device):
     model = SomiteCounter().to(device)
@@ -24,12 +24,34 @@ def evaluate_one(img_path, json_path, checkpoint_path="checkpoints/best_model.pt
     model = load_model(checkpoint_path, device)
 
     # --- Load image ---
+    #transform = T.Compose([
+    #    T.Resize((224,224)),
+    #    T.ToTensor(),
+    #])
+    #img = Image.open(img_path).convert("RGB")
+    #img_tensor = transform(img).unsqueeze(0).to(device)
+
+    img = Image.open(img_path).convert("RGB")
     transform = T.Compose([
         T.Resize((224,224)),
         T.ToTensor(),
+        T.Normalize(mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225]),
     ])
-    img = Image.open(img_path).convert("RGB")
-    img_tensor = transform(img).unsqueeze(0).to(device)
+    img_tensor = transform(img)
+
+    # Show comparison
+    show_image_comparison(img, img_tensor, mean=[0.485, 0.456, 0.406],
+                                        std=[0.229, 0.224, 0.225])
+
+    # Add batch dimension for inference
+    img_tensor = img_tensor.unsqueeze(0).to(device)
+
+
+
+
+
+
 
     # --- Load ground truth ---
     with open(json_path, "r") as f:
