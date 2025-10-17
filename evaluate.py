@@ -6,7 +6,7 @@ import torchvision.transforms.functional as TF
 from PIL import Image
 import matplotlib.pyplot as plt
 import pandas as pd
-from your_training_module import SomiteCounter  # import your model class
+from training import SomiteCounter  # import your model class
 
 # -----------------------------
 # Evaluation helper
