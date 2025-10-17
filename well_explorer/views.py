@@ -27,7 +27,7 @@ import bokeh.layouts
 from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug, DestWellProperties
 
 import vast_leica_mapping as vlm
-_updating = False
+
 LOCALPATH_CH = "/Users/helsens/Software/github/EPFL-TOP/VAST-DS/data"
 LOCALPATH_HIVE= r'Y:\raw_data\microscopy\vast'
 LOCALPATH_RAID5 =r'D:\vast'
