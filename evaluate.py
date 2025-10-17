@@ -1,84 +1,96 @@
 import os
 import json
+import numpy as np
 import torch
-import torchvision.transforms as T
-import matplotlib.pyplot as plt
+import torchvision.transforms.functional as TF
 from PIL import Image
+import matplotlib.pyplot as plt
+import pandas as pd
+from your_training_module import SomiteCounter  # import your model class
 
-# --- Import your model definition ---
-from training import SomiteCounter   # <-- replace "your_code" with the file where SomiteCounter is defined
-from utils import show_image_comparison
+# -----------------------------
+# Evaluation helper
+# -----------------------------
+def load_and_prepare_image(img_path, resize=(224,224)):
+    img_raw = np.array(Image.open(img_path)).astype(np.float32)
+    img_raw /= img_raw.max()  # scale to 0-1
 
-def load_model(checkpoint_path, device):
+    img_pil = Image.fromarray((img_raw*65535).astype(np.uint16))
+    img_pil = img_pil.resize(resize, resample=Image.BILINEAR)
+    img_tensor = torch.from_numpy(np.array(img_pil).astype(np.float32)/65535.0).unsqueeze(0).unsqueeze(0)
+    return img_raw, img_tensor
+
+def show_image_prediction(img_raw, gt_total, gt_def, pred_total, pred_def):
+    plt.figure(figsize=(6,6))
+    plt.imshow(img_raw, cmap="gray", vmin=0, vmax=1)
+    plt.axis("off")
+    plt.title(f"GT: total={gt_total}, defective={gt_def}\nPred: total={pred_total:.1f}, defective={pred_def:.1f}")
+    plt.show()
+
+# -----------------------------
+# Main evaluation function
+# -----------------------------
+def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=None):
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     model = SomiteCounter().to(device)
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
-    return model
 
+    results = []
 
-def evaluate_one(img_path, json_path, checkpoint_path="checkpoints/best_model.pth"):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    img_files = [f for f in os.listdir(img_dir) if f.lower().endswith(('.tif','.tiff','.png'))]
+    for img_name in img_files:
+        img_path = os.path.join(img_dir, img_name)
+        base_name = os.path.splitext(img_name)[0]
+        json_path = os.path.join(label_dir, base_name + ".json")
 
-    # --- Load model ---
-    model = load_model(checkpoint_path, device)
+        if not os.path.exists(json_path):
+            print(f"Warning: no JSON label for {img_name}, skipping.")
+            continue
 
-    # --- Load image ---
-    #transform = T.Compose([
-    #    T.Resize((224,224)),
-    #    T.ToTensor(),
-    #])
-    #img = Image.open(img_path).convert("RGB")
-    #img_tensor = transform(img).unsqueeze(0).to(device)
+        # Load image and prepare tensor
+        img_raw, img_tensor = load_and_prepare_image(img_path)
+        img_tensor = img_tensor.to(device)
 
-    img = Image.open(img_path).convert("RGB")
-    transform = T.Compose([
-        T.Resize((224,224)),
-        T.ToTensor(),
-        T.Normalize(mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225]),
-    ])
-    img_tensor = transform(img)
+        # Load ground truth
+        with open(json_path, "r") as f:
+            gt = json.load(f)
+        gt_total = gt["n_total_somites"]
+        gt_def = gt["n_bad_somites"]
 
-    # Show comparison
-    show_image_comparison(img, img_tensor, mean=[0.485, 0.456, 0.406],
-                                        std=[0.229, 0.224, 0.225])
+        # Prediction
+        with torch.no_grad():
+            pred = model(img_tensor).cpu().numpy().flatten()
+        pred_total, pred_def = pred
 
-    # Add batch dimension for inference
-    img_tensor = img_tensor.unsqueeze(0).to(device)
+        # Display
+        show_image_prediction(img_raw, gt_total, gt_def, pred_total, pred_def)
 
+        # Store results
+        results.append({
+            "image": img_name,
+            "gt_total": gt_total,
+            "gt_defective": gt_def,
+            "pred_total": pred_total,
+            "pred_defective": pred_def
+        })
 
+    if save_csv:
+        pd.DataFrame(results).to_csv(save_csv, index=False)
+        print(f"Predictions saved to {save_csv}")
 
+    return results
 
-
-
-
-    # --- Load ground truth ---
-    with open(json_path, "r") as f:
-        gt = json.load(f)
-
-    gt_total = gt["n_total_somites"]
-    gt_def = gt["n_bad_somites"]
-
-    # --- Inference ---
-    with torch.no_grad():
-        pred = model(img_tensor).cpu().numpy().flatten()
-
-    pred_total, pred_def = pred
-
-    # --- Plot result ---
-    plt.figure(figsize=(6,6))
-    plt.imshow(img)
-    plt.axis("off")
-    plt.title(
-        f"GT: total={gt_total}, defective={gt_def}\n"
-        f"Pred: total={pred_total:.1f}, defective={pred_def:.1f}"
-    )
-    plt.show()
-
-
+# -----------------------------
+# Example usage
+# -----------------------------
 if __name__ == "__main__":
-    # Example usage
-    img_path = r"D:\vast\training_data\valid\VAST_2025-07-21_Plate1_D2_YFP.tiff"
-    json_path = r"D:\vast\training_data\valid\VAST_2025-07-21_Plate1_D2_YFP.json"
-    evaluate_one(img_path, json_path)
+    img_dir = r"D:\vast\training_data\valid"
+    label_dir = r"D:\vast\training_data\valid"
+    checkpoint_path = r"checkpoints/best_model.pth"
+    save_csv = "predictions.csv"
+
+    evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=save_csv)
