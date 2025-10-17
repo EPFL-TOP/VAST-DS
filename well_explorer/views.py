@@ -874,23 +874,37 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
     #___________________________________________________________________________________________
-    # JS callback: when selection changes, update all line widths
-    callback = bokeh.models.CustomJS(args=dict(source=dict(s1=cds_labels_dest_filled, s2=cds_labels_dest_2_filled)), code="""
-        function update_width(src) {
-            const inds = src.selected.indices;
-            const lw = src.data['line_width'];
-            if (inds.length > 0) {
-                for (let i = 0; i < lw.length; i++) { lw[i] = 4; }
-            } else {
-                for (let i = 0; i < lw.length; i++) { lw[i] = 1; }
-            }
-            src.change.emit();
-        }
-        update_width(s1);
-        update_width(s2);
-    """)
-    cds_labels_dest_filled.selected.js_on_change("indices", callback)
-    cds_labels_dest_2_filled.selected.js_on_change("indices", callback)
+    def update_widths(attr, old, new):
+        global _updating
+        if _updating:
+            return
+        _updating = True
+        try:
+            # Helper to compute widths for a source: non-selected -> 4, selected -> 1
+            def compute_widths(src):
+                n = len(src.data['x'])
+                sel = set(src.selected.indices)
+                # make a fresh list rather than patching in place
+                return [1 if i in sel else 4 for i in range(n)]
+
+            # update source_1
+            new_lw1 = compute_widths(cds_labels_dest_filled)
+            d1 = cds_labels_dest_filled.data.copy()
+            d1['line_width'] = new_lw1
+            cds_labels_dest_filled.data = d1
+
+            # update source_2
+            new_lw2 = compute_widths(cds_labels_dest_2_filled)
+            d2 = cds_labels_dest_2_filled.data.copy()
+            d2['line_width'] = new_lw2
+            cds_labels_dest_2_filled.data = d2
+
+        finally:
+            _updating = False
+
+    # Attach same python callback to both sources' selection changes
+    cds_labels_dest_2_filled.selected.on_change('indices', update_widths)
+    cds_labels_dest_2_filled.selected.on_change('indices', update_widths)
 
 
     plot_wellplate_dest.add_tools(tap_tool)
