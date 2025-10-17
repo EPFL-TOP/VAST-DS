@@ -172,26 +172,32 @@ def train_model(train_dataset, valid_dataset,
 
 
 
-transform = T.Compose([
-    T.Resize((224,224)),
-    T.RandomHorizontalFlip(),
-    T.RandomRotation(10),
-    T.ColorJitter(brightness=0.2, contrast=0.2),
-    T.ToTensor(),
-])
+if __name__ == "__main__":
+    # Example usage: train the model
+    # (you can move your train_model code here)
+    print("Training starts...")
+    # train_model(train_dataset, valid_dataset, ...)
 
-train_dataset = SomiteDataset(r"D:\vast\training_data\train", r"D:\vast\training_data\train", transform=transform)
-valid_dataset = SomiteDataset(r"D:\vast\training_data\valid", r"D:\vast\training_data\valid", transform=transform)
+    transform = T.Compose([
+        T.Resize((224,224)),
+        T.RandomHorizontalFlip(),
+        T.RandomRotation(10),
+        T.ColorJitter(brightness=0.2, contrast=0.2),
+        T.ToTensor(),
+    ])
 
-model = train_model(train_dataset, valid_dataset, save_dir="checkpoints", epochs=50, patience=7)
+    train_dataset = SomiteDataset(r"D:\vast\training_data\train", r"D:\vast\training_data\train", transform=transform)
+    valid_dataset = SomiteDataset(r"D:\vast\training_data\valid", r"D:\vast\training_data\valid", transform=transform)
+
+    model = train_model(train_dataset, valid_dataset, save_dir="checkpoints", epochs=50, patience=7)
 
 
 
-checkpoint = torch.load("checkpoints/best_model.pth", map_location="cpu")
-model = SomiteCounter()
-model.load_state_dict(checkpoint["model_state_dict"])
+    checkpoint = torch.load("checkpoints/best_model.pth", map_location="cpu")
+    model = SomiteCounter()
+    model.load_state_dict(checkpoint["model_state_dict"])
 
-optimizer = optim.Adam(model.parameters(), lr=1e-4)
-optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-start_epoch = checkpoint["epoch"] + 1
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    start_epoch = checkpoint["epoch"] + 1
 

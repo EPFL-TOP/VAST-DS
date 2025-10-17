@@ -57,6 +57,6 @@ def evaluate_one(img_path, json_path, checkpoint_path="checkpoints/best_model.pt
 
 if __name__ == "__main__":
     # Example usage
-    img_path = r"D:\vast\training_data\valid\VAST_2025-07-21_Plate1_D2_YFP.tif"
+    img_path = r"D:\vast\training_data\valid\VAST_2025-07-21_Plate1_D2_YFP.tiff"
     json_path = r"D:\vast\training_data\valid\VAST_2025-07-21_Plate1_D2_YFP.json"
     evaluate_one(img_path, json_path)
