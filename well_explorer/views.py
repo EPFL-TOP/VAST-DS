@@ -87,8 +87,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     cds_labels_dest_present   = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
     cds_labels_dest_2_present = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
 
-    cds_labels_dest_filled    = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
-    cds_labels_dest_2_filled   = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
+    cds_labels_dest_filled    = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[], line_width=[]))
+    cds_labels_dest_2_filled   = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[], line_width=[]))
 
     cds_labels_dest_filled_bad    = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
     cds_labels_dest_2_filled_bad   = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
@@ -290,8 +290,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             except DestWellProperties.DoesNotExist:
                 pass
 
-        cds_labels_dest_filled.data = {'x':x_dest_1_filled, 'y':y_dest_1_filled, 'size':size_dest_1_filled}
-        cds_labels_dest_filled_bad.data = {'x':x_dest_1_filled_bad, 'y':y_dest_1_filled_bad, 'size':size_dest_1_filled_bad}
+        cds_labels_dest_filled.data = {'x':x_dest_1_filled, 'y':y_dest_1_filled, 'size':size_dest_1_filled, 'line_width':[4]*len(x_dest_1_filled)}
+        cds_labels_dest_filled_bad.data = {'x':x_dest_1_filled_bad, 'y':y_dest_1_filled_bad, 'size':size_dest_1_filled_bad, 'line_width':[4]*len(x_dest_1_filled_bad)}
 
         well_plate_2 = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=2).first()
         dest_2 = DestWellPosition.objects.filter(well_plate=well_plate_2)
@@ -315,8 +315,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                     size_dest_2_filled_bad.append(cds_labels_dest_2.data['size'][0])
             except DestWellProperties.DoesNotExist:
                 pass
-        cds_labels_dest_2_filled.data = {'x':x_dest_2_filled, 'y':y_dest_2_filled, 'size':size_dest_2_filled}
-        cds_labels_dest_2_filled_bad.data = {'x':x_dest_2_filled_bad, 'y':y_dest_2_filled_bad, 'size':size_dest_2_filled_bad}
+        cds_labels_dest_2_filled.data = {'x':x_dest_2_filled, 'y':y_dest_2_filled, 'size':size_dest_2_filled, 'line_width':[4]*len(x_dest_2_filled)}
+        cds_labels_dest_2_filled_bad.data = {'x':x_dest_2_filled_bad, 'y':y_dest_2_filled_bad, 'size':size_dest_2_filled_bad, 'line_width':[4]*len(x_dest_2_filled_bad)}
 
     #___________________________________________________________________________________________
     def dest_plate_visu(attr, old, new):
@@ -631,10 +631,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             cds_labels_dest_2.data = dict(x=[], y=[], size=[])
             cds_labels_dest_present.data = dict(x=[], y=[], size=[])
             cds_labels_dest_2_present.data = dict(x=[], y=[], size=[])
-            cds_labels_dest_filled.data = dict(x=[], y=[], size=[])
-            cds_labels_dest_filled_bad.data = dict(x=[], y=[], size=[])
-            cds_labels_dest_2_filled.data = dict(x=[], y=[], size=[])
-            cds_labels_dest_2_filled_bad.data = dict(x=[], y=[], size=[])
+            cds_labels_dest_filled.data = dict(x=[], y=[], size=[], line_width=[])
+            cds_labels_dest_filled_bad.data = dict(x=[], y=[], size=[], line_width=[])
+            cds_labels_dest_2_filled.data = dict(x=[], y=[], size=[], line_width=[])
+            cds_labels_dest_2_filled_bad.data = dict(x=[], y=[], size=[], line_width=[])
             source_img_bf.data  = {'img':[]}
             source_img_yfp.data = {'img':[]}
             source_img_vast.data = {'img':[]}
