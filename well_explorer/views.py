@@ -875,7 +875,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     #___________________________________________________________________________________________
     # JS callback: when selection changes, update all line widths
-    callback = bokeh.models.CustomJS(args=dict(source=dict(cds_labels_dest_filled, cds_labels_dest_2_filled)), code="""
+    callback = bokeh.models.CustomJS(args=dict(source=dict(s1=cds_labels_dest_filled, s2=cds_labels_dest_2_filled)), code="""
         function update_width(src) {
             const inds = src.selected.indices;
             const lw = src.data['line_width'];
