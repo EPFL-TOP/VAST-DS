@@ -885,7 +885,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 n = len(src.data['x'])
                 sel = set(src.selected.indices)
                 # make a fresh list rather than patching in place
-                return [1 if i in sel else 4 for i in range(n)]
+                return [4 if i in sel else 4 for i in range(n)]
 
             # update source_1
             new_lw1 = compute_widths(cds_labels_dest_filled)
