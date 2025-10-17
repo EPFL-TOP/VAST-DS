@@ -164,7 +164,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                line_color='green', fill_color="white",
                                fill_alpha=0.0,
                                line_width=4,
-                               nonselection_line_width=2)
+                               nonselection_line_width=2,
+                               selection_line_width=2)
 
     plot_wellplate_dest_2.circle('x', 'y', 
                                  size='size', 
@@ -172,7 +173,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                  line_color='green', fill_color="white",
                                  fill_alpha=0.0,
                                  line_width=4,
-                                 nonselection_line_width=2)
+                                 nonselection_line_width=2,
+                                 selection_line_width=2)
     
 
     plot_wellplate_dest.circle('x', 'y', 
@@ -181,7 +183,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                line_color='black', fill_color="white",
                                fill_alpha=0.0,
                                line_width=4,
-                               nonselection_line_width=2)
+                               nonselection_line_width=2,
+                               selection_line_width=2)
 
     plot_wellplate_dest_2.circle('x', 'y', 
                                  size='size', 
@@ -189,7 +192,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                  line_color='black', fill_color="white",
                                  fill_alpha=0.0,
                                  line_width=4,
-                                 nonselection_line_width=2)
+                                 nonselection_line_width=2,
+                                 selection_line_width=2)
 
     im_size = 2048
     x_range = bokeh.models.Range1d(start=0, end=im_size)
@@ -816,6 +820,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 for dest in dest_well_positions:
                     try:
                         props = dest.dest_well_properties  # reverse OneToOne accessor
+                        print('Found properties for dest well:', dest, ' properties:', props)
+                        print('props.valid=', props.valid, ' props.n_total_somites=', props.n_total_somites, ' props.n_bad_somites=', props.n_bad_somites)
                         if props.valid and props.n_total_somites>=0 and props.n_bad_somites >=0:
                             rand=random.uniform(0,1)
                             if rand>0.2: outdir=os.path.join(LOCALPATH_TRAINING,'train')
