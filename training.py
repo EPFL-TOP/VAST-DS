@@ -51,7 +51,7 @@ class SomiteDataset(Dataset):
         ], dtype=torch.float32)
 
         err = torch.tensor([
-            label_data["n_good_total_err"], 
+            label_data["n_total_somites_err"], 
             label_data["n_bad_somites_err"]
         ], dtype=torch.float32)
 
