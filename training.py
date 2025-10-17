@@ -12,6 +12,7 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 from torchvision.models import ResNet18_Weights
+import torchvision.transforms.functional as TF
 
 # -----------------------------
 # Dataset for 16-bit grayscale images
@@ -37,10 +38,13 @@ class SomiteDataset(Dataset):
         img_path = os.path.join(self.img_dir, img_name)
 
         # Load grayscale 16-bit image and scale to [0,1]
-        img = np.array(Image.open(img_path)).astype(np.float32) / 65535.0
+        img_np = np.array(Image.open(img_path)).astype(np.float32)
+        img_np /= img_np.max()  # normalize to 0-1
 
         if self.transform:
             img = self.transform(img)
+        else:
+            img_tensor = torch.from_numpy(img_np).unsqueeze(0)  # 1,H,W
 
         # load json label
         base_name = os.path.splitext(img_name)[0]
@@ -62,26 +66,24 @@ class SomiteDataset(Dataset):
         return img, y, err
 
 
-import torchvision.transforms.functional as TF
 
-class GrayscaleTransform:
-    """Apply augmentations to a 16-bit grayscale image and convert to tensor"""
+# -----------------------------
+# Transform / augmentation for grayscale
+# -----------------------------
+class GrayscaleAugment:
     def __init__(self, resize=(224,224), horizontal_flip=True, rotation=10):
         self.resize = resize
         self.horizontal_flip = horizontal_flip
         self.rotation = rotation
 
     def __call__(self, img_np):
-        """
-        img_np: numpy array HxW, dtype uint16
-        """
-        # Convert to PIL (mode 'I;16') to preserve 16-bit info
-        img_pil = Image.fromarray(img_np)
+        # Convert to PIL for augmentations
+        img_pil = Image.fromarray((img_np*65535).astype(np.uint16))
 
         # Resize
         img_pil = img_pil.resize(self.resize, resample=Image.BILINEAR)
 
-        # Random horizontal flip
+        # Horizontal flip
         if self.horizontal_flip and np.random.rand() > 0.5:
             img_pil = TF.hflip(img_pil)
 
@@ -90,15 +92,9 @@ class GrayscaleTransform:
             angle = np.random.uniform(-self.rotation, self.rotation)
             img_pil = TF.rotate(img_pil, angle)
 
-        # Convert to numpy float32
-        img_np = np.array(img_pil).astype(np.float32)
-
-        # Scale to [0,1]
-        img_np /= 65535.0
-
-        # Convert to tensor
+        # Convert back to float32 0-1
+        img_np = np.array(img_pil).astype(np.float32) / 65535.0
         img_tensor = torch.from_numpy(img_np).unsqueeze(0)  # 1,H,W
-
         return img_tensor
 
 
@@ -337,18 +333,9 @@ def train_model(train_dataset, valid_dataset,
 if __name__ == "__main__":
     print("Training starts...")
 
-    # ------------------------
-    # Transforms for 16-bit grayscale
-    # ------------------------
-    #transform = T.Compose([
-    #    ToTensorGrayscale(),  # converts HxW numpy to 1xHxW tensor
-    #    T.Resize((224,224)),  # resize to network input
-    #    T.RandomHorizontalFlip(),
-    #    T.RandomRotation(10),
-    #    T.ColorJitter(brightness=0.2, contrast=0.2),  # optional augmentation
-    #])
 
-    transform = GrayscaleTransform(resize=(224,224), horizontal_flip=True, rotation=10)
+
+    transform = GrayscaleAugment(resize=(224,224), horizontal_flip=True, rotation=10)
 
 
     # ------------------------
