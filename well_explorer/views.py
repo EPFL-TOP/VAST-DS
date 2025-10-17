@@ -906,8 +906,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             _updating = False
 
     # Attach same python callback to both sources' selection changes
-    cds_labels_dest_2_filled.selected.on_change('indices', update_widths)
-    cds_labels_dest_2_filled.selected.on_change('indices', update_widths)
+    plot_wellplate_dest.selected.on_change('indices', update_widths)
+    plot_wellplate_dest_2.selected.on_change('indices', update_widths)
 
 
     plot_wellplate_dest.add_tools(tap_tool)
