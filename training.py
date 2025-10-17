@@ -62,6 +62,46 @@ class SomiteDataset(Dataset):
         return img, y, err
 
 
+import torchvision.transforms.functional as TF
+
+class GrayscaleTransform:
+    """Apply augmentations to a 16-bit grayscale image and convert to tensor"""
+    def __init__(self, resize=(224,224), horizontal_flip=True, rotation=10):
+        self.resize = resize
+        self.horizontal_flip = horizontal_flip
+        self.rotation = rotation
+
+    def __call__(self, img_np):
+        """
+        img_np: numpy array HxW, dtype uint16
+        """
+        # Convert to PIL (mode 'I;16') to preserve 16-bit info
+        img_pil = Image.fromarray(img_np)
+
+        # Resize
+        img_pil = img_pil.resize(self.resize, resample=Image.BILINEAR)
+
+        # Random horizontal flip
+        if self.horizontal_flip and np.random.rand() > 0.5:
+            img_pil = TF.hflip(img_pil)
+
+        # Random rotation
+        if self.rotation > 0:
+            angle = np.random.uniform(-self.rotation, self.rotation)
+            img_pil = TF.rotate(img_pil, angle)
+
+        # Convert to numpy float32
+        img_np = np.array(img_pil).astype(np.float32)
+
+        # Scale to [0,1]
+        img_np /= 65535.0
+
+        # Convert to tensor
+        img_tensor = torch.from_numpy(img_np).unsqueeze(0)  # 1,H,W
+
+        return img_tensor
+
+
 # -----------------------------
 # Custom transform for 16-bit grayscale to tensor
 # -----------------------------
@@ -300,13 +340,16 @@ if __name__ == "__main__":
     # ------------------------
     # Transforms for 16-bit grayscale
     # ------------------------
-    transform = T.Compose([
-        ToTensorGrayscale(),  # converts HxW numpy to 1xHxW tensor
-        T.Resize((224,224)),  # resize to network input
-        T.RandomHorizontalFlip(),
-        T.RandomRotation(10),
-        T.ColorJitter(brightness=0.2, contrast=0.2),  # optional augmentation
-    ])
+    #transform = T.Compose([
+    #    ToTensorGrayscale(),  # converts HxW numpy to 1xHxW tensor
+    #    T.Resize((224,224)),  # resize to network input
+    #    T.RandomHorizontalFlip(),
+    #    T.RandomRotation(10),
+    #    T.ColorJitter(brightness=0.2, contrast=0.2),  # optional augmentation
+    #])
+
+    transform = GrayscaleTransform(resize=(224,224), horizontal_flip=True, rotation=10)
+
 
     # ------------------------
     # Datasets
