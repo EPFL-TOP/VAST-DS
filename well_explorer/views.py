@@ -748,7 +748,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             return
 
 
-        if dropdown_total_somites.value == 'Select a value' and dropdown_bad_somites.value == 'Select a value':
+        if dropdown_total_somites.value == 'Select a value' or dropdown_bad_somites.value == 'Select a value':
             print('Please select at least one of # total somites or # bad somites')
             image_message.text = "<b style='color:red; font-size:18px;'>Please select at least one of # total somites or # bad somites</b>"
             image_message.visible = True
@@ -820,8 +820,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 for dest in dest_well_positions:
                     try:
                         props = dest.dest_well_properties  # reverse OneToOne accessor
-                        print('Found properties for dest well:', dest, ' properties:', props)
-                        print('props.valid=', props.valid, ' props.n_total_somites=', props.n_total_somites, ' props.n_bad_somites=', props.n_bad_somites)
                         if props.valid and props.n_total_somites>=0 and props.n_bad_somites >=0:
                             rand=random.uniform(0,1)
                             if rand>0.2: outdir=os.path.join(LOCALPATH_TRAINING,'train')
