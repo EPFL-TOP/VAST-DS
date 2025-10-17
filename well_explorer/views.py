@@ -875,6 +875,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     #___________________________________________________________________________________________
     def update_widths(attr, old, new):
+        print('==================================update_widths called')
         global _updating
         if _updating:
             return
@@ -889,12 +890,14 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
             # update source_1
             new_lw1 = compute_widths(cds_labels_dest_filled)
+            print('new_lw1=', new_lw1)
             d1 = cds_labels_dest_filled.data.copy()
             d1['line_width'] = new_lw1
             cds_labels_dest_filled.data = d1
 
             # update source_2
             new_lw2 = compute_widths(cds_labels_dest_2_filled)
+            print('new_lw2=', new_lw2)
             d2 = cds_labels_dest_2_filled.data.copy()
             d2['line_width'] = new_lw2
             cds_labels_dest_2_filled.data = d2
