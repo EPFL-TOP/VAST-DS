@@ -103,13 +103,14 @@ class GrayscaleAugment:
 
 class GrayscaleAugment_aggressive:
     def __init__(self, resize=(224,224), horizontal_flip=True, vertical_flip=True,
-                 rotation=15, brightness=0.2, contrast=0.2):
+                 rotation=15, brightness=0.2, contrast=0.2, normalize=True):
         self.resize = resize
         self.horizontal_flip = horizontal_flip
         self.vertical_flip = vertical_flip
         self.rotation = rotation
         self.brightness = brightness
         self.contrast = contrast
+        self.normalize = normalize
 
     def __call__(self, img_np: np.ndarray):
         """
@@ -153,6 +154,12 @@ class GrayscaleAugment_aggressive:
 
         # Back to tensor (1,H,W) in [0,1]
         img_tensor = TF.to_tensor(img_pil)  # already returns float32 0-1
+
+        if self.normalize:
+            # Normalize with ImageNet stats
+            mean, std = 0.485, 0.229
+            img_tensor = (img_tensor - mean) / std
+
         return img_tensor
 
 
