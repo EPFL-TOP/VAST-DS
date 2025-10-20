@@ -420,7 +420,7 @@ def train_model(train_dataset, valid_dataset,
     #optimizer = optim.Adam(model.parameters(), lr=lr)
 
     #pretrained model with partial finetuning (some layers unfreezed)
-    model = SomiteCounter_freeze(unfreeze_layers=("layer3", "layer4"))
+    model = SomiteCounter_freeze(unfreeze_layers=("layer3", "layer4")).to(device)
     # Define optimizer with differential learning rates
     params = [
         {"params": model.model.fc.parameters(), "lr": 1e-4},       # head
