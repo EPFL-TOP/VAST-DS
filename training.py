@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from torchvision.models import ResNet18_Weights
 import torchvision.transforms.functional as TF
+import random
 
 # -----------------------------
 # Dataset for 16-bit grayscale images
@@ -98,6 +99,64 @@ class GrayscaleAugment:
         return img_tensor
 
 
+
+
+class GrayscaleAugment_aggressive:
+    def __init__(self, resize=(224,224), horizontal_flip=True, vertical_flip=True,
+                 rotation=15, brightness=0.2, contrast=0.2):
+        self.resize = resize
+        self.horizontal_flip = horizontal_flip
+        self.vertical_flip = vertical_flip
+        self.rotation = rotation
+        self.brightness = brightness
+        self.contrast = contrast
+
+    def __call__(self, img_np: np.ndarray):
+        """
+        img_np: numpy array of shape (H, W), dtype uint16 or float32 in [0,1]
+        """
+
+        # Ensure float in [0,1]
+        if img_np.dtype == np.uint16:
+            img_np = img_np.astype(np.float32) / 65535.0
+        elif img_np.dtype == np.uint8:
+            img_np = img_np.astype(np.float32) / 255.0
+        else:
+            img_np = img_np.astype(np.float32)
+            if img_np.max() > 1.0:
+                img_np /= img_np.max()
+
+        # Convert to PIL (8-bit, since PIL doesn’t handle float32 well)
+        img_pil = Image.fromarray((img_np*255).astype(np.uint8), mode="L")
+
+        # Resize
+        img_pil = img_pil.resize(self.resize, resample=Image.BILINEAR)
+
+        # Random flips
+        if self.horizontal_flip and random.random() < 0.5:
+            img_pil = TF.hflip(img_pil)
+        if self.vertical_flip and random.random() < 0.5:
+            img_pil = TF.vflip(img_pil)
+
+        # Random rotation
+        if self.rotation > 0:
+            angle = random.uniform(-self.rotation, self.rotation)
+            img_pil = TF.rotate(img_pil, angle, fill=0)
+
+        # Random brightness/contrast jitter
+        if self.brightness > 0:
+            factor = 1.0 + random.uniform(-self.brightness, self.brightness)
+            img_pil = TF.adjust_brightness(img_pil, factor)
+        if self.contrast > 0:
+            factor = 1.0 + random.uniform(-self.contrast, self.contrast)
+            img_pil = TF.adjust_contrast(img_pil, factor)
+
+        # Back to tensor (1,H,W) in [0,1]
+        img_tensor = TF.to_tensor(img_pil)  # already returns float32 0-1
+        return img_tensor
+
+
+
 # -----------------------------
 # Custom transform for 16-bit grayscale to tensor
 # -----------------------------
@@ -108,7 +167,7 @@ class ToTensorGrayscale:
 
 
 # -----------------------------
-# Model for 1-channel input
+# Model for 1-channel input from scratch
 # -----------------------------
 class SomiteCounter(nn.Module):
     def __init__(self):
@@ -117,6 +176,40 @@ class SomiteCounter(nn.Module):
         base = models.resnet18(weights=ResNet18_Weights.DEFAULT)
         base.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         base.fc = nn.Linear(base.fc.in_features, 2)
+        self.model = base
+
+
+# -----------------------------
+# Model for 1-channel input with pretrained weights and transfer learning
+# -----------------------------
+class SomiteCounter_pt(nn.Module):
+    def __init__(self, freeze_backbone=True):
+        super().__init__()
+        base = models.resnet18(weights=ResNet18_Weights.DEFAULT)
+
+        # Change first conv layer to accept 1-channel input
+        old_conv1 = base.conv1
+        base.conv1 = nn.Conv2d(1, old_conv1.out_channels,
+                               kernel_size=old_conv1.kernel_size,
+                               stride=old_conv1.stride,
+                               padding=old_conv1.padding,
+                               bias=False)
+
+        # Copy pretrained weights by averaging across channels
+        base.conv1.weight.data = old_conv1.weight.data.mean(dim=1, keepdim=True)
+
+        # Replace classifier head (2 outputs: total + defective)
+        base.fc = nn.Linear(base.fc.in_features, 2)
+
+        # Optionally freeze backbone
+        if freeze_backbone:
+            for param in base.parameters():
+                param.requires_grad = False
+            for param in base.fc.parameters():
+                param.requires_grad = True
+            for param in base.conv1.parameters():
+                param.requires_grad = True
+
         self.model = base
 
     def forward(self, x):
@@ -131,6 +224,17 @@ class WeightedMSELoss(nn.Module):
         error = torch.clamp(error, min=1.0)
         return torch.mean(((pred - target) ** 2) / (error ** 2))
 
+
+def get_augmentations(resize=(224,224)):
+    return T.Compose([
+        T.ToPILImage(mode="F"),  # interpret float32 image
+        T.Resize(resize),
+        T.RandomHorizontalFlip(),
+        T.RandomVerticalFlip(),
+        T.RandomRotation(20),
+        T.ColorJitter(brightness=0.3, contrast=0.3),
+        T.ToTensor()  # scales back to 0–1 tensor
+    ])
 
 # -----------------------------
 # Visualization helper
@@ -252,7 +356,9 @@ def train_model(train_dataset, valid_dataset,
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
 
-    model = SomiteCounter().to(device)
+    #use this model when more images are available
+    #model = SomiteCounter().to(device)
+    model = SomiteCounter_pt().to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     criterion = WeightedMSELoss()
 
@@ -335,7 +441,17 @@ if __name__ == "__main__":
 
 
 
-    transform = GrayscaleAugment(resize=(224,224), horizontal_flip=True, rotation=10)
+    #transform = GrayscaleAugment(resize=(224,224), horizontal_flip=True, rotation=10)
+
+    transform = GrayscaleAugment_aggressive(
+        resize=(224,224),
+        horizontal_flip=True,
+        vertical_flip=True,
+        rotation=10,
+        brightness=0.3,
+        contrast=0.3
+    )
+
 
 
     # ------------------------
