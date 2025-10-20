@@ -6,7 +6,7 @@ import torchvision.transforms.functional as TF
 from PIL import Image
 import matplotlib.pyplot as plt
 import pandas as pd
-from training import SomiteCounter  # import your model class
+from training import SomiteCounter, SomiteCounter_freeze, SomiteCounter_pt  # import your model class
 
 # -----------------------------
 # Evaluation helper
@@ -34,7 +34,8 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = SomiteCounter().to(device)
+    #model = SomiteCounter().to(device)
+    model = SomiteCounter_freeze().to(device)
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
