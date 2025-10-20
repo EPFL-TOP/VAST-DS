@@ -103,7 +103,7 @@ class GrayscaleAugment:
 
 class GrayscaleAugment_aggressive:
     def __init__(self, resize=(224,224), horizontal_flip=True, vertical_flip=True,
-                 rotation=15, brightness=0.2, contrast=0.2, normalize=True):
+                 rotation=15, brightness=0.2, contrast=0.2, normalize=False):
         self.resize = resize
         self.horizontal_flip = horizontal_flip
         self.vertical_flip = vertical_flip
@@ -219,8 +219,57 @@ class SomiteCounter_pt(nn.Module):
 
         self.model = base
 
+#network structure:
+#conv1 → bn1 → relu → maxpool
+#layer1 → layer2 → layer3 → layer4 → avgpool → fc
+class SomiteCounter_freeze(nn.Module):
+    def __init__(self, unfreeze_layers=("layer3", "layer4"),unfreeze_all=False):
+        super().__init__()
+        base = models.resnet18(weights=ResNet18_Weights.DEFAULT)
+
+        # Adapt conv1 for grayscale
+        old_conv1 = base.conv1
+        base.conv1 = nn.Conv2d(
+            1, old_conv1.out_channels,
+            kernel_size=old_conv1.kernel_size,
+            stride=old_conv1.stride,
+            padding=old_conv1.padding,
+            bias=False
+        )
+        base.conv1.weight.data = old_conv1.weight.data.mean(dim=1, keepdim=True)
+
+        # Replace classifier
+        base.fc = nn.Linear(base.fc.in_features, 2)
+
+        if unfreeze_all:
+            # Make ALL layers trainable
+            for param in base.parameters():
+                param.requires_grad = True
+
+        else:
+            # Freeze everything first
+            for param in base.parameters():
+                param.requires_grad = False
+
+            # Always train fc and conv1
+            for param in base.fc.parameters():
+                param.requires_grad = True
+            for param in base.conv1.parameters():
+                param.requires_grad = True
+
+            # Unfreeze selected layers (e.g. layer3 + layer4)
+            for name, module in base.named_children():
+                if name in unfreeze_layers:
+                    for param in module.parameters():
+                        param.requires_grad = True
+
+        self.model = base
+
     def forward(self, x):
         return self.model(x)
+
+
+
 
 
 # -----------------------------
@@ -365,8 +414,32 @@ def train_model(train_dataset, valid_dataset,
 
     #use this model when more images are available
     #model = SomiteCounter().to(device)
-    model = SomiteCounter_pt().to(device)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+
+    #pretrained model with finetuning (all layers freezed except fc and conv1)    
+    #model = SomiteCounter_pt().to(device)
+    #optimizer = optim.Adam(model.parameters(), lr=lr)
+
+    #pretrained model with partial finetuning (some layers unfreezed)
+    model = SomiteCounter_freeze(unfreeze_layers=("layer3", "layer4"))
+    # Define optimizer with differential learning rates
+    params = [
+        {"params": model.model.fc.parameters(), "lr": 1e-4},       # head
+        {"params": model.model.layer3.parameters(), "lr": 1e-5},   # unfreezed backbone
+        {"params": model.model.layer4.parameters(), "lr": 1e-5},
+        {"params": model.model.conv1.parameters(), "lr": 1e-5}
+    ]
+
+    #if you want to unfreeze all layers
+    #model = SomiteCounter_freeze(unfreeze_all=True)
+    #params = [
+    #    {"params": model.model.fc.parameters(), "lr": 1e-4},   # head
+    #    {"params": model.model.parameters(), "lr": 1e-5}       # rest of backbone
+    #]
+
+    optimizer = torch.optim.Adam(params)
+
+
+
     criterion = WeightedMSELoss()
 
     os.makedirs(save_dir, exist_ok=True)
