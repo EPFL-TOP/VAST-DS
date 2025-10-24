@@ -328,7 +328,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         cds_labels_dest_2_filled_bad.selected.indices = []
         position = get_well_mapping(cds_labels_dest.selected.indices)
 
+        if os.path.exists(os.path.join(LOCALPATH_RAID5, dropdown_exp.value)):
+            LOCALPATH = LOCALPATH_RAID5
 
+        print('=======================LOCALPATH=', LOCALPATH)
 
         path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 1', 'Well_{}{}'.format(position[0][1], position[0][0]))
         if int(position[0][0]) < 10:
@@ -447,6 +450,11 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         cds_labels_dest_filled_bad.selected.indices = []
 
         position = get_well_mapping(cds_labels_dest_2.selected.indices) 
+
+        if os.path.exists(os.path.join(LOCALPATH_RAID5, dropdown_exp.value)):
+            LOCALPATH = LOCALPATH_RAID5
+
+        print('=======================LOCALPATH=', LOCALPATH)
 
         path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 2', 'Well_{}{}'.format(position[0][1], position[0][0]))
         if int(position[0][0]) < 10:
@@ -613,6 +621,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 cds_labels_dest_2.data = dict(source_labels_24.data, size=[80]*len(source_labels_24.data['x']))
                 plot_wellplate_dest_2.axis.visible = True
 
+        if os.path.exists(os.path.join(LOCALPATH_RAID5, dropdown_exp.value)):
+            LOCALPATH = LOCALPATH_RAID5
 
         path_plate_1_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 1', 'Well_*')
         path_plate_2_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 2', 'Well_*')
