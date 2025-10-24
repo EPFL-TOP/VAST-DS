@@ -685,6 +685,11 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
         update_filled_wells()
 
+        cds_labels_dest_present.selected.indices = []
+        cds_labels_dest_2_present.selected.indices = []
+        cds_labels_dest.selected.indices = []
+        cds_labels_dest_2.selected.indices = []
+
     dropdown_exp.on_change("value", load_experiment)
 
 
