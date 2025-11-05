@@ -558,7 +558,7 @@ if __name__ == "__main__":
         train_dataset,
         valid_dataset,
         save_dir="checkpoints",
-        epochs=50,
+        epochs=150,
         batch_size=8,
         lr=1e-4,
         patience=7,
@@ -566,43 +566,7 @@ if __name__ == "__main__":
         visualize_every=5   # show a sample image every 5 epochs
     )
 
-    # ------------------------
-    # Load the best checkpoint after training
-    # ------------------------
-    checkpoint_path = "checkpoints/best_model.pth"
-    if os.path.exists(checkpoint_path):
-
-        params = [
-            {"params": model.model.fc.parameters(), "lr": 1e-4},       # head
-            {"params": model.model.layer3.parameters(), "lr": 1e-5},   # unfreezed backbone
-            {"params": model.model.layer4.parameters(), "lr": 1e-5},
-            {"params": model.model.conv1.parameters(), "lr": 1e-5}
-        ]
-        optimizer = optim.Adam(params)
-
-        checkpoint = torch.load(checkpoint_path, map_location="cpu")
-        model.load_state_dict(checkpoint["model_state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        start_epoch = checkpoint["epoch"] + 1
-        print(f"Resuming from epoch {start_epoch} (best val_loss={checkpoint['val_loss']:.4f})")
-
-
-        model = train_model(
-            train_dataset,
-            valid_dataset,
-            save_dir="checkpoints",
-            epochs=50,                # total number of epochs (not added to start_epoch)
-            batch_size=8,
-            lr=None,                  # ignore since optimizer is passed
-            patience=7,
-            model=model,
-            optimizer=optimizer,
-            start_epoch=start_epoch,  # continue from previous
-            resume=True
-        )
-
-    else:
-        print("No checkpoint found, starting new training.")
+    print("Training completed.")
 
 
 
