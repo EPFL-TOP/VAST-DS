@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from torchvision.models import ResNet18_Weights
 import torchvision.transforms.functional as TF
 import random
+showimage=False
 
 # -----------------------------
 # Dataset for 16-bit grayscale images
@@ -101,6 +102,7 @@ class GrayscaleAugment:
 
 
 
+# -----------------------------
 class GrayscaleAugment_aggressive:
     def __init__(self, resize=(224,224), horizontal_flip=True, vertical_flip=True,
                  rotation=15, brightness=0.2, contrast=0.2, normalize=False):
@@ -281,6 +283,7 @@ class WeightedMSELoss(nn.Module):
         return torch.mean(((pred - target) ** 2) / (error ** 2))
 
 
+# -----------------------------
 def get_augmentations(resize=(224,224)):
     return T.Compose([
         T.ToPILImage(mode="F"),  # interpret float32 image
@@ -506,7 +509,7 @@ def train_model(train_dataset, valid_dataset,
             break
 
         # Visualize one training image every few epochs
-        if epoch % visualize_every == 0:
+        if epoch % visualize_every == 0 and showimage==True:
             sample_img, _, _ = train_dataset[0]
             show_image_comparison(sample_img.numpy().squeeze(), sample_img)
 
@@ -516,10 +519,9 @@ def train_model(train_dataset, valid_dataset,
 
 
 
+# -----------------------------
 if __name__ == "__main__":
     print("Training starts...")
-
-
 
     #transform = GrayscaleAugment(resize=(224,224), horizontal_flip=True, rotation=10)
 
@@ -573,7 +575,19 @@ if __name__ == "__main__":
         model = SomiteCounter()
         model.load_state_dict(checkpoint["model_state_dict"])
 
-        optimizer = optim.Adam(model.parameters(), lr=1e-4)
+        #optimizer = optim.Adam(model.parameters(), lr=1e-4)
+
+   
+        params = [
+            {"params": model.model.fc.parameters(), "lr": 1e-4},       # head
+            {"params": model.model.layer3.parameters(), "lr": 1e-5},   # unfreezed backbone
+            {"params": model.model.layer4.parameters(), "lr": 1e-5},
+            {"params": model.model.conv1.parameters(), "lr": 1e-5}
+        ]
+
+        optimizer = torch.optim.Adam(params)
+
+
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         start_epoch = checkpoint["epoch"] + 1
 
