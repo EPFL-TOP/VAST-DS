@@ -531,6 +531,7 @@ if __name__ == "__main__":
     parser.add_argument("--patience", type=int, default=7, help="Early stopping patience")
     parser.add_argument("--resume", action="store_true", help="Resume training if checkpoint exists", default=False)
     parser.add_argument("--visualize_every", type=int, default=-1, help="Visualize sample every N epochs")
+    parser.add_argument("--visualize_first", action="store_true", default=False, help="Visualize first epochs")
     args = parser.parse_args()
 
 
@@ -560,6 +561,10 @@ if __name__ == "__main__":
         transform=transform
     )
 
+    if args.visualize_first:
+        sample_img, _, _ = train_dataset[0]
+        show_image_comparison(sample_img.numpy().squeeze(), sample_img)
+        
     # ------------------------
     # Train the model
     # ------------------------
