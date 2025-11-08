@@ -432,7 +432,7 @@ def train_model(train_dataset, valid_dataset,
         {"params": model.model.conv1.parameters(), "lr": 1e-5}
     ]
 
-    #if you want to unfreeze all layers
+    #to unfreeze all layers
     #model = SomiteCounter_freeze(unfreeze_all=True)
     #params = [
     #    {"params": model.model.fc.parameters(), "lr": 1e-4},   # head
@@ -451,7 +451,7 @@ def train_model(train_dataset, valid_dataset,
     start_epoch = 0
     epochs_no_improve = 0
 
-    # Resume
+    # Resume if more images available (CAUTION this currently not consistent as I am changing the training dataset, while I should just add more images to the same dataset)
     if resume:
         checkpoint_path = os.path.join(save_dir, "best_model.pth")
         if os.path.exists(checkpoint_path):
