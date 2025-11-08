@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 from torchvision.models import ResNet18_Weights
 import torchvision.transforms.functional as TF
 import random
-showimage=False
 
 # -----------------------------
 # Dataset for 16-bit grayscale images
@@ -509,7 +508,7 @@ def train_model(train_dataset, valid_dataset,
             break
 
         # Visualize one training image every few epochs
-        if epoch % visualize_every == 0 and showimage==True:
+        if epoch % visualize_every == 0 and visualize_every > 0:
             sample_img, _, _ = train_dataset[0]
             show_image_comparison(sample_img.numpy().squeeze(), sample_img)
 
@@ -523,6 +522,18 @@ def train_model(train_dataset, valid_dataset,
 if __name__ == "__main__":
     print("Training starts...")
 
+    # ------------------------
+    import argparse
+    parser = argparse.ArgumentParser(description="Train Somite Counting Model")
+    parser.add_argument("--epochs", type=int, default=150, help="Number of training epochs")
+    parser.add_argument("--batch_size", type=int, default=8, help="Batch size")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+    parser.add_argument("--patience", type=int, default=7, help="Early stopping patience")
+    parser.add_argument("--resume", action="store_true", help="Resume training if checkpoint exists", default=False)
+    parser.add_argument("--visualize_every", type=int, default=-1, help="Visualize sample every N epochs")
+    args = parser.parse_args()
+
+
     #transform = GrayscaleAugment(resize=(224,224), horizontal_flip=True, rotation=10)
 
     transform = GrayscaleAugment_aggressive(
@@ -533,8 +544,6 @@ if __name__ == "__main__":
         brightness=0.3,
         contrast=0.3
     )
-
-
 
     # ------------------------
     # Datasets
@@ -558,12 +567,12 @@ if __name__ == "__main__":
         train_dataset,
         valid_dataset,
         save_dir="checkpoints",
-        epochs=150,
-        batch_size=8,
-        lr=1e-4,
-        patience=7,
-        resume=True,        # resume if checkpoint exists
-        visualize_every=5   # show a sample image every 5 epochs
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        lr=args.lr,
+        patience=args.patience,
+        resume=args.resume,        # resume if checkpoint exists
+        visualize_every=args.visualize_every   # show a sample image every 5 epochs
     )
 
     print("Training completed.")
