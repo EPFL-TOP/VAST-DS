@@ -525,12 +525,12 @@ if __name__ == "__main__":
     # ------------------------
     import argparse
     parser = argparse.ArgumentParser(description="Train Somite Counting Model")
-    parser.add_argument("--epochs", type=int, default=150, help="Number of training epochs")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch size")
-    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
-    parser.add_argument("--patience", type=int, default=7, help="Early stopping patience")
+    parser.add_argument("--epochs", type=int, default=150, help="Number of training epochs (default: 150)")
+    parser.add_argument("--batch_size", type=int, default=8, help="Batch size (default: 8)")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate (default: 1e-4)")
+    parser.add_argument("--patience", type=int, default=7, help="Early stopping patience (default: 7)")
     parser.add_argument("--resume", action="store_true", help="Resume training if checkpoint exists", default=False)
-    parser.add_argument("--visualize_every", type=int, default=-1, help="Visualize sample every N epochs")
+    parser.add_argument("--visualize_every", type=int, default=-1, help="Visualize sample every N epochs (default: -1, disabled)")
     parser.add_argument("--visualize_first", action="store_true", default=False, help="Visualize first epochs")
     args = parser.parse_args()
 
@@ -564,7 +564,7 @@ if __name__ == "__main__":
     if args.visualize_first:
         sample_img, _, _ = train_dataset[0]
         show_image_comparison(sample_img.numpy().squeeze(), sample_img)
-        
+
     # ------------------------
     # Train the model
     # ------------------------
