@@ -20,11 +20,11 @@ def load_and_prepare_image(img_path, resize=(224,224)):
     img_tensor = torch.from_numpy(np.array(img_pil).astype(np.float32)/65535.0).unsqueeze(0).unsqueeze(0)
     return img_raw, img_tensor
 
-def show_image_prediction(img_raw, gt_total, gt_def, pred_total, pred_def, img_name=""):
+def show_image_prediction(img_raw, gt_total, gt_total_err, gt_def, gt_def_err, pred_total, pred_def, img_name=""):
     plt.figure(figsize=(6,6))
     plt.imshow(img_raw, cmap="gray", vmin=0, vmax=1)
     plt.axis("off")
-    plt.title(f"image name: {img_name}\nGT: total={gt_total}, defective={gt_def}\nPred: total={pred_total:.1f}, defective={pred_def:.1f}")
+    plt.title(f"image name: {img_name}\nGT: total={gt_total}+/-{gt_total_err}, defective={gt_def}+/-{gt_def_err}\nPred: total={pred_total:.1f}, defective={pred_def:.1f}")
     plt.show()
 
 # -----------------------------
@@ -61,6 +61,8 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
             gt = json.load(f)
         gt_total = gt["n_total_somites"]
         gt_def = gt["n_bad_somites"]
+        gt_total_err = gt["n_total_somites_err"]
+        gt_def_err = gt["n_bad_somites_err"]
 
         # Prediction
         with torch.no_grad():
@@ -68,7 +70,7 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
         pred_total, pred_def = pred
 
         # Display
-        show_image_prediction(img_raw, gt_total, gt_def, pred_total, pred_def, img_name=img_name)
+        show_image_prediction(img_raw, gt_total, gt_total_err, gt_def, gt_def_err, pred_total, pred_def, img_name=img_name)
 
         # Store results
         results.append({
