@@ -532,6 +532,7 @@ if __name__ == "__main__":
     parser.add_argument("--resume", action="store_true", help="Resume training if checkpoint exists", default=False)
     parser.add_argument("--visualize_every", type=int, default=-1, help="Visualize sample every N epochs (default: -1, disabled)")
     parser.add_argument("--visualize_first", action="store_true", default=False, help="Visualize first epochs")
+    parser.add_argument("--input_data_path", type=str, default=r"D:\vast\training_data", help="Path to training data")
     args = parser.parse_args()
 
 
@@ -550,14 +551,14 @@ if __name__ == "__main__":
     # Datasets
     # ------------------------
     train_dataset = SomiteDataset(
-        img_dir=r"D:\vast\training_data\train",
-        label_dir=r"D:\vast\training_data\train",
+        img_dir=os.path.join(args.input_data_path,"train"),
+        label_dir=os.path.join(args.input_data_path,"train"),
         transform=transform
     )
 
     valid_dataset = SomiteDataset(
-        img_dir=r"D:\vast\training_data\valid",
-        label_dir=r"D:\vast\training_data\valid",
+        img_dir=os.path.join(args.input_data_path,"valid"),
+        label_dir=os.path.join(args.input_data_path,"valid"),
         transform=transform
     )
 
