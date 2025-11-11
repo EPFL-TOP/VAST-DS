@@ -102,8 +102,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
 
-    img_dir=os.path.join(args.input_data_path,"valid"),
-    label_dir=os.path.join(args.input_data_path,"valid"),
+    img_dir=os.path.join(args.input_data_path,"valid")
+    label_dir=os.path.join(args.input_data_path,"valid")
     checkpoint_path = r"checkpoints/best_model.pth"
     save_csv = "predictions.csv"
 
