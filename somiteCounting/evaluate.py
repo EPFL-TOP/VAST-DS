@@ -42,6 +42,7 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
 
     results = []
 
+    print(f"Evaluating images in {img_dir} with labels in {label_dir} using model {checkpoint_path} on device {device}")
     img_files = [f for f in os.listdir(img_dir) if f.lower().endswith(('.tif','.tiff','.png'))]
     for img_name in img_files:
         img_path = os.path.join(img_dir, img_name)
