@@ -91,8 +91,18 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
 # Example usage
 # -----------------------------
 if __name__ == "__main__":
-    img_dir = r"D:\vast\training_data\valid"
-    label_dir = r"D:\vast\training_data\valid"
+
+
+  # ------------------------
+    import argparse
+    parser = argparse.ArgumentParser(description="Train Somite Counting Model")
+    parser.add_argument("--input_data_path", type=str, default=r"D:\vast\training_data", help="Path to training data")
+    parser.add_argument("model_checkpoint", type=str, help="Path to model checkpoint")
+    args = parser.parse_args()
+
+
+    img_dir=os.path.join(args.input_data_path,"valid"),
+    label_dir=os.path.join(args.input_data_path,"valid"),
     checkpoint_path = r"checkpoints/best_model.pth"
     save_csv = "predictions.csv"
 
