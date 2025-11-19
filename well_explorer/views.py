@@ -888,11 +888,20 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         print('Files found for prediction:', files)
 
 
+        for f in files:
+            if 'YFP' in f and 'norm' not in f:
+                file_YFP = f
+                img_raw, img_tensor = load_and_prepare_image(file_YFP)
+                img_tensor = img_tensor.to(device)
 
 
+                # Prediction
+                with torch.no_grad():
+                    pred = model(img_tensor).cpu().numpy().flatten()
+                pred_total, pred_def = pred
+                prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {}. defective {}</b>".format(pred_total,pred_def)
+                prediction_message.visible = True
 
-        prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {}. defective {}</b>".format(1,2)
-        prediction_message.visible = True
         predict_button.label = "Predict"
         predict_button.button_type = "success"
 
