@@ -350,6 +350,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         cds_labels_dest_2_filled.selected.indices = []
         cds_labels_dest_2_filled_bad.selected.indices = []
         position = get_well_mapping(cds_labels_dest.selected.indices)
+        prediction_message.visible = False
 
         LOCALPATH = LOCALPATH_HIVE
         if os.path.exists(os.path.join(LOCALPATH_RAID5, dropdown_exp.value)):
@@ -472,6 +473,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         cds_labels_dest.selected.indices = []
         cds_labels_dest_filled.selected.indices = []
         cds_labels_dest_filled_bad.selected.indices = []
+        prediction_message.visible = False
 
         position = get_well_mapping(cds_labels_dest_2.selected.indices) 
 
@@ -889,6 +891,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
 
+        prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {}. defective {}</b>".format(1,2)
+        prediction_message.visible = True
         predict_button.label = "Predict"
         predict_button.button_type = "success"
 
