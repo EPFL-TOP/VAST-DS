@@ -27,7 +27,16 @@ import bokeh.layouts
 from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug, DestWellProperties
 
 from somiteCounting.training import SomiteCounter_freeze
-from somiteCounting.evaluate import load_and_prepare_image
+
+def load_and_prepare_image(img_path, resize=(224,224)):
+    img_raw = np.array(Image.open(img_path)).astype(np.float32)
+    img_raw /= img_raw.max()  # scale to 0-1
+
+    img_pil = Image.fromarray((img_raw*65535).astype(np.uint16))
+    img_pil = img_pil.resize(resize, resample=Image.BILINEAR)
+    img_tensor = torch.from_numpy(np.array(img_pil).astype(np.float32)/65535.0).unsqueeze(0).unsqueeze(0)
+    return img_raw, img_tensor
+
 import torch
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
