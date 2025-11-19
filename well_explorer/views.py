@@ -117,6 +117,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     drug_message    = bokeh.models.Div(visible=False)
     image_message    = bokeh.models.Div(visible=False)
+    prediction_message    = bokeh.models.Div(visible=False)
 
     plot_wellplate_dest   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title='',width=900, height=600, tools="box_select,box_zoom,reset,undo")
     plot_wellplate_dest.xaxis.major_label_text_font_size = "15pt"
@@ -877,9 +878,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         print('=======================LOCALPATH=', LOCALPATH)
         print('position for prediction=', position)
 
-        path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}', 'Well_{}{}'.format(plate, position[0][1], position[0][0]))
+        path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(plate), 'Well_{}{}'.format(position[0][1], position[0][0]))
         if int(position[0][0]) < 10:
-            path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}', 'Well_{}0{}'.format(plate, position[0][1], position[0][0]))  
+            path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(plate), 'Well_{}0{}'.format(position[0][1], position[0][0]))  
         print('path_leica=', path_leica)
         files = glob.glob(os.path.join(path_leica, '*.tiff'))
         print('Files found for prediction:', files)
@@ -1013,6 +1014,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
                                                          bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), bokeh.layouts.column(contrast_slider,predict_button), dropdown_total_somites, dropdown_total_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, saveimages_button,images_comments),
+                                                                              bokeh.layouts.row(prediction_message),
                                                                               bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
                                                                               bokeh.layouts.row(plot_img_vast))))
 
