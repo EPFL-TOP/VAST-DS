@@ -576,11 +576,15 @@ if __name__ == "__main__":
         transform=transform
     )
 
+    print(f"Training dataset size: {len(train_dataset)} images")
+
     valid_dataset = SomiteDataset(
         img_dir=os.path.join(args.input_data_path,"valid"),
         label_dir=os.path.join(args.input_data_path,"valid"),
         transform=transform
     )
+
+    print(f"Validation dataset size: {len(valid_dataset)} images")
 
     if args.visualize_first:
         sample_img, _, _ = train_dataset[0]
