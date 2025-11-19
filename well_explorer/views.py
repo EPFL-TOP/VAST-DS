@@ -26,6 +26,19 @@ import bokeh.layouts
 
 from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug, DestWellProperties
 
+from somiteCounting.training import SomiteCounter_freeze
+from somiteCounting.evaluate import load_and_prepare_image
+import torch
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+#model = SomiteCounter().to(device)
+model = SomiteCounter_freeze().to(device)
+checkpoint_path=r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints\best_model.pth"
+checkpoint = torch.load(checkpoint_path, map_location=device)
+model.load_state_dict(checkpoint["model_state_dict"])
+model.eval()
+
 import vast_leica_mapping as vlm
 
 LOCALPATH_CH = "/Users/helsens/Software/github/EPFL-TOP/VAST-DS/data"
@@ -810,6 +823,67 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         bokeh.io.curdoc().add_next_tick_callback(saveimages_callback)
     saveimages_button.on_click(saveimages_callback_short)
 
+    predict_button = bokeh.models.Button(label="Predict", button_type="success", width=150)
+
+#___________________________________________________________________________________________
+    def predict_callback():
+        print('------------------->>>>>>>>> predict_callback')
+        if dropdown_exp.value == 'Select experiment':
+            print('Please select an experiment first')
+            image_message.text = "<b style='color:red; font-size:18px;'>Please select an experiment first</b>"
+            image_message.visible = True
+            predict_button.label = "Predict"
+            predict_button.button_type = "success"
+            return
+        print('Predicting properties for experiment:', dropdown_exp.value)
+
+        if len(cds_labels_dest.selected.indices) == 0 and len(cds_labels_dest_2.selected.indices) == 0:
+            print('Please select a well first')
+            image_message.text = "<b style='color:red; font-size:18px;'>Please select a well first</b>"
+            image_message.visible = True
+            predict_button.label = "Predict"
+            predict_button.button_type = "success"
+            return
+        
+        if len(cds_labels_dest.selected.indices) > 0 and len(cds_labels_dest_2.selected.indices) > 0:
+            print('Please select a well in only one plate')
+            image_message.text = "<b style='color:red; font-size:18px;'>Please select a well in only one plate</b>"
+            image_message.visible = True
+            predict_button.label = "Predict"
+            predict_button.button_type = "success"
+            return
+        
+        position=None
+        plate="1"
+        if len(cds_labels_dest.selected.indices) > 0:
+            position = get_well_mapping(cds_labels_dest.selected.indices)
+        elif len(cds_labels_dest_2.selected.indices) > 0:
+            position = get_well_mapping(cds_labels_dest_2.selected.indices) 
+            plate="2"
+
+        LOCALPATH = LOCALPATH_HIVE
+        if os.path.exists(os.path.join(LOCALPATH_RAID5, dropdown_exp.value)):
+            LOCALPATH = LOCALPATH_RAID5
+
+        print('=======================LOCALPATH=', LOCALPATH)
+
+        path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}', 'Well_{}{}'.format(plate, position[0][1], position[0][0]))
+        if int(position[0][0]) < 10:
+            path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}', 'Well_{}0{}'.format(plate, position[0][1], position[0][0]))  
+        files = glob.glob(os.path.join(path_leica, '*.tiff'))
+        print('Files found for prediction:', files)
+
+
+
+        predict_button.label = "Predict"
+        predict_button.button_type = "success"
+
+#___________________________________________________________________________________________
+    def predict_callback_short():
+        predict_button.label = "Processing"
+        predict_button.button_type = "danger"
+        bokeh.io.curdoc().add_next_tick_callback(predict_callback)
+    predict_button.on_click(predict_callback_short)
 
 
     #___________________________________________________________________________________________

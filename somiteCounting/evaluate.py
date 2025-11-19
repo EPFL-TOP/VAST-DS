@@ -27,6 +27,41 @@ def show_image_prediction(img_raw, gt_total, gt_total_err, gt_def, gt_def_err, p
     plt.title(f"image name: {img_name}\nGT: total={gt_total}+/-{gt_total_err}, defective={gt_def}+/-{gt_def_err}\nPred: total={pred_total:.1f}, defective={pred_def:.1f}")
     plt.show()
 
+
+
+#________________________________________
+def evaluate_image(img_file, checkpoint_path, device=None):
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    #model = SomiteCounter().to(device)
+    model = SomiteCounter_freeze().to(device)
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+
+    results = []
+
+    # Load image and prepare tensor
+    img_raw, img_tensor = load_and_prepare_image(img_file)
+    img_tensor = img_tensor.to(device)
+
+
+    # Prediction
+    with torch.no_grad():
+        pred = model(img_tensor).cpu().numpy().flatten()
+    pred_total, pred_def = pred
+
+
+    # Store results
+    results={
+        "pred_total": pred_total,
+        "pred_defective": pred_def
+    }
+
+    return results
+
+
 # -----------------------------
 # Main evaluation function
 # -----------------------------
