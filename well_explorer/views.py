@@ -885,9 +885,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         print('Files found for prediction:', files)
 
 
-positions= [('9', 'E')]
-=======================LOCALPATH= D:\vast
-Files found for prediction: []
 
 
 
