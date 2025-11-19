@@ -877,15 +877,12 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         if os.path.exists(os.path.join(LOCALPATH_RAID5, dropdown_exp.value)):
             LOCALPATH = LOCALPATH_RAID5
 
-        print('=======================LOCALPATH=', LOCALPATH)
-        print('position for prediction=', position)
+
 
         path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(plate), 'Well_{}{}'.format(position[0][1], position[0][0]))
         if int(position[0][0]) < 10:
             path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(plate), 'Well_{}0{}'.format(position[0][1], position[0][0]))  
-        print('path_leica=', path_leica)
         files = glob.glob(os.path.join(path_leica, '*.tiff'))
-        print('Files found for prediction:', files)
 
 
         for f in files:
