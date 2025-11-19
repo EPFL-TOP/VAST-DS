@@ -28,8 +28,28 @@ class SomiteDataset(Dataset):
         self.img_dir = img_dir
         self.label_dir = label_dir
         self.transform = transform
-        self.img_files = [f for f in os.listdir(img_dir) 
+        image_list = [f for f in os.listdir(img_dir) 
                           if f.lower().endswith(('.png','.jpg','.jpeg','.tif','.tiff'))]
+        self.img_files = []
+        for f in image_list:
+            base_name = os.path.splitext(f)[0]
+            label_path = os.path.join(label_dir, base_name + ".json")
+            if not os.path.exists(label_path):
+                raise FileNotFoundError(f"Label file {label_path} not found for image {f}")
+            with open(label_path, "r") as file:
+                label_data = json.load(file)
+                if not all(key in label_data for key in 
+                           ["n_total_somites", "n_bad_somites", 
+                            "n_total_somites_err", "n_bad_somites_err",
+                            "valid"]):
+                    raise ValueError(f"Label file {label_path} is missing required keys.")
+                if not label_data["valid"]:
+                    continue
+
+            self.img_files.append(f)
+
+
+
 
     def __len__(self):
         return len(self.img_files)
