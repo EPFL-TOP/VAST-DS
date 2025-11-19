@@ -899,7 +899,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 with torch.no_grad():
                     pred = model(img_tensor).cpu().numpy().flatten()
                 pred_total, pred_def = pred
-                prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {}. defective {}</b>".format(pred_total,pred_def)
+                prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {:.1f}. defective {:.1f}</b>".format(pred_total,pred_def)
                 prediction_message.visible = True
 
         predict_button.label = "Predict"
