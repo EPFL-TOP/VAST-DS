@@ -350,7 +350,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         cds_labels_dest_2_filled.selected.indices = []
         cds_labels_dest_2_filled_bad.selected.indices = []
         position = get_well_mapping(cds_labels_dest.selected.indices)
-        prediction_message.visible = False
+
 
         LOCALPATH = LOCALPATH_HIVE
         if os.path.exists(os.path.join(LOCALPATH_RAID5, dropdown_exp.value)):
@@ -378,6 +378,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             drug_message.visible = False
             image_message.text = "<b style='color:red; font-size:18px;'>No images found for selected well {}</b>".format(position[0][1] + position[0][0])
             image_message.visible = True
+            prediction_message.visible = False
+
             return
 
         image_message.text = ""
@@ -406,6 +408,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         view[:, :, :] = merged_array
         source_img_vast.data = {'img': [rgba_image]}
 
+        predict_callback()
 
         well_plate = DestWellPlate.objects.filter(experiment__name=dropdown_exp.value, plate_number=1).first()
         dest = DestWellPosition.objects.filter(well_plate=well_plate, position_col=position[0][0], position_row=position[0][1])
@@ -473,7 +476,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         cds_labels_dest.selected.indices = []
         cds_labels_dest_filled.selected.indices = []
         cds_labels_dest_filled_bad.selected.indices = []
-        prediction_message.visible = False
+
 
         position = get_well_mapping(cds_labels_dest_2.selected.indices) 
 
@@ -503,6 +506,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             drug_message.visible = False
             image_message.text = "<b style='color:red; font-size:18px;'>No images found for selected well {}</b>".format(position[0][1] + position[0][0])
             image_message.visible = True
+            prediction_message.visible = False
+
             return
 
 
@@ -516,6 +521,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         if int(position[0][0]) < 10:
             path_vast = os.path.join(LOCALPATH, dropdown_exp.value,'VAST images', 'Plate 2', 'Well_{}0{}'.format(position[0][1], position[0][0]))  
         files = glob.glob(os.path.join(path_vast, '*.tiff'))
+
+        predict_callback()
+
 
         img_list= []
         for f in files: 
