@@ -691,11 +691,10 @@ def train_fish_classifier(train_dataset, valid_dataset,
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             epochs_no_improve = 0
-            torch.save(model.state_dict(), save_path)
-#torch.save({
-#    "model_state_dict": model.state_dict(),
-#    ...
-#})
+            #torch.save(model.state_dict(), save_path)
+            torch.save({
+                "model_state_dict": model.state_dict(),
+                })
 
             print(" Saved best model")
         else:
