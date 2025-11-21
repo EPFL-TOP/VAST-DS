@@ -71,7 +71,7 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
 
     #model = SomiteCounter().to(device)
     model = SomiteCounter_freeze().to(device)
-    checkpoint = torch.load(os.path.joint(checkpoint_path,"best_model.pth"), map_location=device)
+    checkpoint = torch.load(os.path.join(checkpoint_path,"best_model.pth"), map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
 
