@@ -814,8 +814,6 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             lr=args.lr,
             patience=args.patience,
-            resume=args.resume,        # resume if checkpoint exists
-            visualize_every=args.visualize_every   # show a sample image every 5 epochs
     )
     else:
         model = train_model(
