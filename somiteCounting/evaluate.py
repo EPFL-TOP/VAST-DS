@@ -6,7 +6,7 @@ import torchvision.transforms.functional as TF
 from PIL import Image
 import matplotlib.pyplot as plt
 import pandas as pd
-from training import SomiteCounter, SomiteCounter_freeze, SomiteCounter_pt  # import your model class
+from training import SomiteCounter, SomiteCounter_freeze, SomiteCounter_pt, FishQualityClassifier  # import your model class
 
 # -----------------------------
 # Evaluation helper
@@ -71,9 +71,17 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
 
     #model = SomiteCounter().to(device)
     model = SomiteCounter_freeze().to(device)
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(os.path.joint(checkpoint_path,"best_model.pth"), map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
+
+
+
+    model_fish = FishQualityClassifier().to(device)
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model_fish.load_state_dict(checkpoint["model_state_dict"])
+    model_fish.eval()
+
 
     results = []
 
@@ -99,11 +107,23 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
         gt_def = gt["n_bad_somites"]
         gt_total_err = gt["n_total_somites_err"]
         gt_def_err = gt["n_bad_somites_err"]
+        gt_valid = gt["valid", True]
 
         # Prediction
         with torch.no_grad():
             pred = model(img_tensor).cpu().numpy().flatten()
         pred_total, pred_def = pred
+
+
+
+        with torch.no_grad():
+            logit = model(img_tensor)
+            prob = torch.sigmoid(logit).item()
+
+        label = "VALID fish" if prob >= 0.5 else "INVALID fish"
+        print(f"Image: {img_name} | Fish quality prediction: {label} (prob={prob:.3f})")
+        fish_quality = label
+        fish_prob = prob
 
         # Display
         show_image_prediction(img_raw, gt_total, gt_total_err, gt_def, gt_def_err, pred_total, pred_def, img_name=img_name)
@@ -133,13 +153,13 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Train Somite Counting Model")
     parser.add_argument("--input_data_path", type=str, default=r"D:\vast\training_data", help="Path to training data")
-    parser.add_argument("model_checkpoint", type=str, help="Path to model checkpoint")
+    parser.add_argument("--model_checkpoint", type=str, help="Path to model checkpoint")
     args = parser.parse_args()
 
 
     img_dir=os.path.join(args.input_data_path,"valid")
     label_dir=os.path.join(args.input_data_path,"valid")
-    checkpoint_path = r"checkpoints/best_model.pth"
+    checkpoint_path = args.model_checkpoint
     save_csv = "predictions.csv"
 
     evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=save_csv)
