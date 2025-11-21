@@ -110,7 +110,7 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
         gt_def = gt["n_bad_somites"]
         gt_total_err = gt["n_total_somites_err"]
         gt_def_err = gt["n_bad_somites_err"]
-        gt_valid = gt["valid", True]
+        gt_valid = gt["valid"]
 
         # Prediction
         with torch.no_grad():
