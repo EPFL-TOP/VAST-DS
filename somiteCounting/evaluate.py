@@ -115,30 +115,16 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
         # Prediction
         with torch.no_grad():
             pred = model(img_tensor).cpu().numpy().flatten()
+            pre_fish = model_fish(img_tensor).cpu().numpy().flatten()
         pred_total, pred_def = pred
 
+        print('pred fish: ', pre_fish)
 
 
-        with torch.no_grad():
-            img_tensor = img_tensor.repeat(1, 3, 1, 1)  # batch x channels x H x W
-            logit = model_fish(img_tensor)
-            if logit.numel() == 1:
-                # single output
-                prob = torch.sigmoid(logit).item()
-            elif logit.shape[1] == 1:
-                # shape [1,1]
-                prob = torch.sigmoid(logit.squeeze(0)).item()
-            elif logit.shape[1] == 2:
-                # shape [1,2], pick class 1 probability
-                prob = torch.softmax(logit, dim=1)[0,1].item()
-            else:
-                raise ValueError(f"Unexpected output shape {logit.shape}")
-
-
-        label = "VALID fish" if prob >= 0.5 else "INVALID fish"
-        print(f"Image: {img_name} | Fish quality prediction: {label} (prob={prob:.3f})")
-        fish_quality = label
-        fish_prob = prob
+        #label = "VALID fish" if prob >= 0.5 else "INVALID fish"
+        #print(f"Image: {img_name} | Fish quality prediction: {label} (prob={prob:.3f})")
+        #fish_quality = label
+        #fish_prob = prob
 
         # Display
         show_image_prediction(img_raw, gt_total, gt_total_err, gt_def, gt_def_err, gt_valid, pred_total, pred_def, img_name=img_name)
