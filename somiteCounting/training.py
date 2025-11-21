@@ -519,7 +519,7 @@ def train_model_old(train_dataset, valid_dataset,
 def train_model(train_dataset, valid_dataset,
                 save_file="checkpoints/dummy.pth",
                 epochs=50, batch_size=8, lr=1e-4, patience=5,
-                resume=False, visualize_every=5, fish_classifier=False):
+                resume=False, visualize_every=5):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -532,11 +532,8 @@ def train_model(train_dataset, valid_dataset,
     #model = SomiteCounter_pt().to(device)
     #optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    #pretrained model with partial finetuning (some layers unfreezed)
-    if fish_classifier:
-        model = FishQualityClassifier(unfreeze_layers=("layer3", "layer4")).to(device)
-    else:
-        model = SomiteCounter_freeze(unfreeze_layers=("layer3", "layer4")).to(device)
+
+    model = SomiteCounter_freeze(unfreeze_layers=("layer3", "layer4")).to(device)
     # Define optimizer with differential learning rates
     params = [
         {"params": model.model.fc.parameters(), "lr": 1e-4},       # head
@@ -629,6 +626,109 @@ def train_model(train_dataset, valid_dataset,
 
 
 
+def train_fish_classifier(train_dataset, valid_dataset,
+                          save_file="checkpoints/fish_classifier.pth",
+                          epochs=50, batch_size=8, lr=1e-4, patience=5):
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
+
+    model = FishQualityClassifier(unfreeze_layers=("layer3","layer4")).to(device)
+
+    # Only train un-frozen layers
+    params = filter(lambda p: p.requires_grad, model.parameters())
+    optimizer = torch.optim.Adam(params, lr=lr)
+
+    # correct classification loss
+    criterion = torch.nn.BCEWithLogitsLoss()
+
+    best_val_loss = float("inf")
+    best_acc = 0.0
+    epochs_no_improve = 0
+
+    for epoch in range(epochs):
+
+        # -------------------------------
+        # TRAINING
+        # -------------------------------
+        model.train()
+        train_loss = 0.0
+        correct = 0
+        total = 0
+
+        for imgs, labels in train_loader:
+            imgs = imgs.to(device)
+            labels = labels.to(device).unsqueeze(1)
+
+            optimizer.zero_grad()
+
+            logits = model(imgs)          # shape [B,1]
+            loss = criterion(logits, labels)
+
+            loss.backward()
+            optimizer.step()
+
+            train_loss += loss.item() * imgs.size(0)
+
+            preds = (torch.sigmoid(logits) > 0.5).float()
+            correct += (preds == labels).sum().item()
+            total += labels.size(0)
+
+        train_loss /= len(train_loader.dataset)
+        train_acc = correct / total
+
+        # -------------------------------
+        # VALIDATION
+        # -------------------------------
+        model.eval()
+        val_loss = 0.0
+        correct = 0
+        total = 0
+
+        with torch.no_grad():
+            for imgs, labels in valid_loader:
+                imgs = imgs.to(device)
+                labels = labels.to(device).unsqueeze(1)
+
+                logits = model(imgs)
+                loss = criterion(logits, labels)
+
+                val_loss += loss.item() * imgs.size(0)
+
+                preds = (torch.sigmoid(logits) > 0.5).float()
+                correct += (preds == labels).sum().item()
+                total += labels.size(0)
+
+        val_loss /= len(valid_loader.dataset)
+        val_acc = correct / total
+
+        print(f"Epoch {epoch+1}/{epochs} | "
+              f"Train Loss: {train_loss:.4f}, Acc: {train_acc:.3f} | "
+              f"Val Loss: {val_loss:.4f}, Acc: {val_acc:.3f}")
+
+        # Save best
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save({
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "val_loss": val_loss
+            }, save_file)
+            print("  Saved best model.")
+
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve += 1
+
+        if epochs_no_improve >= patience:
+            print("Early stopping.")
+            break
+
+    return model
+
 
 # -----------------------------
 if __name__ == "__main__":
@@ -706,7 +806,7 @@ if __name__ == "__main__":
     # Train the model
     # ------------------------
     if args.train_fish_classifier:
-        model = train_model(
+        model = train_fish_classifier(
             train_dataset,
             valid_dataset,
             save_file=os.path.join(args.model_save_path, "fish_quality_best.pth"),
