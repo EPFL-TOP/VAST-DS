@@ -694,7 +694,8 @@ def train_fish_classifier(train_dataset, valid_dataset,
             #torch.save(model.state_dict(), save_path)
             torch.save({
                 "model_state_dict": model.state_dict()
-                })
+                },
+                save_path)
 
             print(" Saved best model")
         else:
