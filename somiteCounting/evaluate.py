@@ -120,6 +120,8 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
 
 
         with torch.no_grad():
+            img_tensor = img_tensor.repeat(3, 1, 1)  # (1,H,W) → (3,H,W)
+
             logit = model_fish(img_tensor)
             if logit.numel() == 1:
                 # single output
