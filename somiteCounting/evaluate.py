@@ -120,9 +120,19 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
 
 
         with torch.no_grad():
-            logit = model(img_tensor)
-            prob = torch.sigmoid(logit.squeeze(0))  # -> [1]
-            prob = prob.item()   
+            logit = model_fish(img_tensor)
+            if logit.numel() == 1:
+                # single output
+                prob = torch.sigmoid(logit).item()
+            elif logit.shape[1] == 1:
+                # shape [1,1]
+                prob = torch.sigmoid(logit.squeeze(0)).item()
+            elif logit.shape[1] == 2:
+                # shape [1,2], pick class 1 probability
+                prob = torch.softmax(logit, dim=1)[0,1].item()
+            else:
+                raise ValueError(f"Unexpected output shape {logit.shape}")
+
 
         label = "VALID fish" if prob >= 0.5 else "INVALID fish"
         print(f"Image: {img_name} | Fish quality prediction: {label} (prob={prob:.3f})")
