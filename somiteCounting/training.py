@@ -48,9 +48,6 @@ class SomiteDataset(Dataset):
 
             self.img_files.append(f)
 
-
-
-
     def __len__(self):
         return len(self.img_files)
 
@@ -85,6 +82,56 @@ class SomiteDataset(Dataset):
         ], dtype=torch.float32)
 
         return img_tensor, y, err
+
+
+#______________________________________________
+class FishDataset(Dataset):
+    """
+    Expects images + json files with "valid": True/False
+    Example JSON: {"valid": true}
+    """
+    def __init__(self, folder, transform=None):
+        self.folder = folder
+        self.transform = transform
+
+        self.samples = []
+        for f in os.listdir(folder):
+            if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
+                img_path = os.path.join(folder, f)
+
+                json_path = os.path.splitext(img_path)[0] + ".json"
+                if os.path.exists(json_path):
+                    self.samples.append((img_path, json_path))
+                else:
+                    print(f"⚠ Warning: missing JSON for {img_path}")
+
+        self.samples.sort()  # ensure reproducible order
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        img_path, json_path = self.samples[idx]
+
+        # ---------- Load label ----------
+        with open(json_path, "r") as f:
+            info = json.load(f)
+        label = 1 if info.get("valid", False) else 0  # valid=True → 1
+
+
+        # Load grayscale 16-bit image and scale to [0,1]
+        img_np = np.array(Image.open(img_path)).astype(np.float32)
+        img_np /= img_np.max()  # normalize to 0-1
+
+        if self.transform:
+            img_tensor = self.transform(img_np)
+        else:
+            img_tensor = torch.from_numpy(img_np).unsqueeze(0)  # 1,H,W
+
+
+        label = torch.tensor(label, dtype=torch.float32)
+
+        return img_tensor, label
 
 
 
@@ -289,6 +336,36 @@ class SomiteCounter_freeze(nn.Module):
     def forward(self, x):
         return self.model(x)
 
+
+class FishQualityClassifier(nn.Module):
+    def __init__(self, pretrained=True, freeze_backbone=False):
+        super().__init__()
+
+        self.model = models.resnet18(
+            weights=models.ResNet18_Weights.DEFAULT if pretrained else None
+        )
+
+        # Add dropout for uncertainty estimation
+        self.dropout = nn.Dropout(p=0.3)
+
+        # Replace final layer → 1 logit
+        in_features = self.model.fc.in_features
+        self.model.fc = nn.Linear(in_features, 1)
+
+        if freeze_backbone:
+            for name, param in self.model.named_parameters():
+                if not name.startswith("fc"):
+                    param.requires_grad = False
+
+    def forward(self, x):
+        features = self.model.avgpool(self.model.layer4(self.model.layer3(
+                     self.model.layer2(self.model.layer1(self.model.relu(
+                     self.model.bn1(self.model.conv1(x))))))))
+        
+        features = torch.flatten(features, 1)
+        features = self.dropout(features)  # MC dropout active in eval for uncertainty
+        logit = self.model.fc(features)
+        return logit  # raw logits (not sigmoid)
 
 
 
@@ -536,6 +613,93 @@ def train_model(train_dataset, valid_dataset,
 
 
 
+def train_fish_classifier(train_dataset, valid_dataset,
+                          epochs=30, batch_size=8, lr=1e-4,
+                          save_path="fish_quality_best.pth",
+                          patience=5):
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
+
+    model = FishQualityClassifier(pretrained=True).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.BCEWithLogitsLoss()
+
+    best_val_loss = float("inf")
+    epochs_no_improve = 0
+
+    for epoch in range(epochs):
+        model.train()
+        train_loss = 0
+        correct = 0
+        total = 0
+
+        for imgs, labels in train_loader:
+            imgs = imgs.to(device)
+            labels = labels.float().to(device).unsqueeze(1)
+
+            optimizer.zero_grad()
+            logits = model(imgs)
+            loss = criterion(logits, labels)
+            loss.backward()
+            optimizer.step()
+
+            train_loss += loss.item() * imgs.size(0)
+
+            probs = torch.sigmoid(logits)
+            preds = (probs > 0.5).float()
+            correct += (preds == labels).sum().item()
+            total += labels.size(0)
+
+        train_loss /= len(train_loader.dataset)
+        train_acc = correct / total
+
+        # ---------- Validation ----------
+        model.eval()
+        val_loss = 0
+        correct = 0
+        total = 0
+
+        with torch.no_grad():
+            for imgs, labels in valid_loader:
+                imgs = imgs.to(device)
+                labels = labels.float().to(device).unsqueeze(1)
+
+                logits = model(imgs)
+                loss = criterion(logits, labels)
+                val_loss += loss.item() * imgs.size(0)
+
+                probs = torch.sigmoid(logits)
+                preds = (probs > 0.5).float()
+                correct += (preds == labels).sum().item()
+                total += labels.size(0)
+
+        val_loss /= len(valid_loader.dataset)
+        val_acc = correct / total
+
+        print(f"Epoch {epoch+1}/{epochs} | "
+              f"Train Loss: {train_loss:.4f}, Acc: {train_acc:.3f} | "
+              f"Val Loss: {val_loss:.4f}, Acc: {val_acc:.3f}")
+
+        # Save best
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            epochs_no_improve = 0
+            torch.save(model.state_dict(), save_path)
+            print(" Saved best model")
+        else:
+            epochs_no_improve += 1
+
+        # Early stopping
+        if epochs_no_improve >= patience:
+            print("Early stopping triggered")
+            break
+
+    print("Training finished.")
+    return model
+
 
 
 # -----------------------------
@@ -585,6 +749,21 @@ if __name__ == "__main__":
     )
 
     print(f"Validation dataset size: {len(valid_dataset)} images")
+
+
+    train_dataset_Fish = FishDataset(
+        folder=os.path.join(args.input_data_path,"train"),
+        transform=transform
+    )
+
+    print(f"Fish Training dataset size: {len(train_dataset_Fish)} images")
+
+    valid_dataset_Fish = FishDataset(
+        folder=os.path.join(args.input_data_path,"valid"),
+        transform=transform
+    )
+
+    print(f"Fish Validation dataset size: {len(valid_dataset_Fish)} images")
 
     if args.visualize_first:
         sample_img, _, _ = train_dataset[0]
