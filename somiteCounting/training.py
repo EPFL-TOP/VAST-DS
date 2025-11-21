@@ -807,8 +807,8 @@ if __name__ == "__main__":
     # ------------------------
     if args.train_fish_classifier:
         model = train_fish_classifier(
-            train_dataset,
-            valid_dataset,
+            train_dataset_Fish,
+            valid_dataset_Fish,
             save_file=os.path.join(args.model_save_path, "fish_quality_best.pth"),
             epochs=args.epochs,
             batch_size=args.batch_size,
