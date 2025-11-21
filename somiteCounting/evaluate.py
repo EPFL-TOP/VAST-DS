@@ -116,10 +116,11 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
         with torch.no_grad():
             pred = model(img_tensor).cpu().numpy().flatten()
             pre_fish = model_fish(img_tensor).cpu().numpy().flatten()
+            logit = model_fish(img_tensor.to(device))    # shape [1,1]
+            prob = torch.sigmoid(logit)[0,0].item()
         pred_total, pred_def = pred
 
         print('pred fish: ', pre_fish)
-        prob = torch.sigmoid(pre_fish)
         print('prob fish: ', prob)
 
 
