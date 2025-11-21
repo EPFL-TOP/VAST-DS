@@ -97,7 +97,7 @@ class FishDataset(Dataset):
         self.samples = []
         for f in os.listdir(folder):
             if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
-                img_path = os.pfath.join(folder, f)
+                img_path = os.path.join(folder, f)
 
                 json_path = os.path.splitext(img_path)[0] + ".json"
                 if os.path.exists(json_path):
