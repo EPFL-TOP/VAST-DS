@@ -110,29 +110,33 @@ class FishDataset(Dataset):
     def __len__(self):
         return len(self.samples)
 
+  
+
+
     def __getitem__(self, idx):
         img_path, json_path = self.samples[idx]
 
-        # ---------- Load label ----------
+        # ---------- Load JSON label ----------
         with open(json_path, "r") as f:
             info = json.load(f)
-        label = 1 if info.get("valid", False) else 0  # valid=True → 1
-
-
-        # Load grayscale 16-bit image and scale to [0,1]
-        img_np = np.array(Image.open(img_path)).astype(np.float32)
-        img_np /= img_np.max()  # normalize to 0-1
-
-        if self.transform:
-            img_tensor = self.transform(img_np)
-        else:
-            img_tensor = torch.from_numpy(img_np).unsqueeze(0)  # 1,H,W
-
-
+        label = 1 if info.get("valid", False) else 0   # valid=True → 1
         label = torch.tensor(label, dtype=torch.float32)
 
-        return img_tensor, label
+        # ---------- Load grayscale 16-bit image ----------
+        img_np = np.array(Image.open(img_path)).astype(np.float32)
 
+        # Avoid division by zero
+        max_val = img_np.max() if img_np.max() > 0 else 1.0
+        img_np /= max_val  # normalize to [0,1]
+
+        # Convert to tensor in C,H,W format
+        img_tensor = torch.from_numpy(img_np).unsqueeze(0)  # → (1,H,W)
+        img_tensor = img_tensor.repeat(3, 1, 1)  # → (3,H,W)
+        # ---------- Apply transforms ----------
+        if self.transform:
+            img_tensor = self.transform(img_tensor)
+
+        return img_tensor, label
 
 
 # -----------------------------
