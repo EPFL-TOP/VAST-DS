@@ -717,6 +717,8 @@ if __name__ == "__main__":
     parser.add_argument("--visualize_every", type=int, default=-1, help="Visualize sample every N epochs (default: -1, disabled)")
     parser.add_argument("--visualize_first", action="store_true", default=False, help="Visualize first epochs")
     parser.add_argument("--input_data_path", type=str, default=r"D:\vast\training_data", help="Path to training data")
+    parser.add_argument("--model_save_path", type=str, default="checkpoints", help="Path to save trained model")
+    parser.add_argument("--train_fish_classifier", action="store_true", default=False, help="Train fish quality classifier instead")
     args = parser.parse_args()
 
 
@@ -766,22 +768,36 @@ if __name__ == "__main__":
     print(f"Fish Validation dataset size: {len(valid_dataset_Fish)} images")
 
     if args.visualize_first:
-        sample_img, _, _ = train_dataset[0]
+        if args.train_fish_classifier:
+            sample_img, _ = train_dataset_Fish[0]
+        else:
+            sample_img, _, _ = train_dataset[0]
         show_image_comparison(sample_img.numpy().squeeze(), sample_img)
 
     # ------------------------
     # Train the model
     # ------------------------
-    model = train_model(
-        train_dataset,
-        valid_dataset,
-        save_dir="checkpoints",
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        lr=args.lr,
-        patience=args.patience,
-        resume=args.resume,        # resume if checkpoint exists
-        visualize_every=args.visualize_every   # show a sample image every 5 epochs
+    if args.train_fish_classifier:
+        model = train_fish_classifier(
+            train_dataset_Fish,
+            valid_dataset_Fish,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            lr=args.lr,
+            save_path=os.path.join(args.model_save_path, "fish_quality_best.pth"),
+            patience=args.patience
+        )
+    else:
+        model = train_model(
+            train_dataset,
+            valid_dataset,
+            save_dir=args.model_save_path,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            lr=args.lr,
+            patience=args.patience,
+            resume=args.resume,        # resume if checkpoint exists
+            visualize_every=args.visualize_every   # show a sample image every 5 epochs
     )
 
     print("Training completed.")
