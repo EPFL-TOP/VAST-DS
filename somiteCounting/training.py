@@ -97,7 +97,7 @@ class FishDataset(Dataset):
         self.samples = []
         for f in os.listdir(folder):
             if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
-                img_path = os.path.join(folder, f)
+                img_path = os.pfath.join(folder, f)
 
                 json_path = os.path.splitext(img_path)[0] + ".json"
                 if os.path.exists(json_path):
@@ -121,20 +121,16 @@ class FishDataset(Dataset):
         label = torch.tensor(label, dtype=torch.float32)
 
         # ---------- Load grayscale 16-bit image ----------
-        img_np = np.array(Image.open(img_path))  # leave it raw, uint16
+        #img_np = np.array(Image.open(img_path))  # leave it raw, uint16
+        img_np = np.array(Image.open(img_path)).astype(np.float32)
+        img_np /= img_np.max()  # normalize to 0-1
 
         # ---------- Apply transform (expects numpy array) ----------
         if self.transform:
             img_tensor = self.transform(img_np)  # transform returns (1,H,W) tensor
         else:
-            # fallback: convert to float tensor
-            img_np = img_np.astype(np.float32)
-            if img_np.max() > 0:
-                img_np /= img_np.max()
-            img_tensor = torch.from_numpy(img_np).unsqueeze(0)
+            img_tensor = torch.from_numpy(img_np).unsqueeze(0)  # 1,H,W
 
-
-        img_tensor = img_tensor.repeat(3, 1, 1)  # (1,H,W) → (3,H,W)
         return img_tensor, label
 
 
@@ -342,36 +338,50 @@ class SomiteCounter_freeze(nn.Module):
 
 
 class FishQualityClassifier(nn.Module):
-    def __init__(self, pretrained=True, freeze_backbone=False):
+    def __init__(self, unfreeze_layers=("layer3", "layer4"),unfreeze_all=False):
         super().__init__()
+        base = models.resnet18(weights=ResNet18_Weights.DEFAULT)
 
-        self.model = models.resnet18(
-            weights=models.ResNet18_Weights.DEFAULT if pretrained else None
+        # Adapt conv1 for grayscale
+        old_conv1 = base.conv1
+        base.conv1 = nn.Conv2d(
+            1, old_conv1.out_channels,
+            kernel_size=old_conv1.kernel_size,
+            stride=old_conv1.stride,
+            padding=old_conv1.padding,
+            bias=False
         )
+        base.conv1.weight.data = old_conv1.weight.data.mean(dim=1, keepdim=True)
 
-        # Add dropout for uncertainty estimation
-        self.dropout = nn.Dropout(p=0.3)
+        # Replace classifier
+        base.fc = nn.Linear(base.fc.in_features, 1)
 
-        # Replace final layer → 1 logit
-        in_features = self.model.fc.in_features
-        self.model.fc = nn.Linear(in_features, 1)
+        if unfreeze_all:
+            # Make ALL layers trainable
+            for param in base.parameters():
+                param.requires_grad = True
 
-        if freeze_backbone:
-            for name, param in self.model.named_parameters():
-                if not name.startswith("fc"):
-                    param.requires_grad = False
+        else:
+            # Freeze everything first
+            for param in base.parameters():
+                param.requires_grad = False
+
+            # Always train fc and conv1
+            for param in base.fc.parameters():
+                param.requires_grad = True
+            for param in base.conv1.parameters():
+                param.requires_grad = True
+
+            # Unfreeze selected layers (e.g. layer3 + layer4)
+            for name, module in base.named_children():
+                if name in unfreeze_layers:
+                    for param in module.parameters():
+                        param.requires_grad = True
+
+        self.model = base
 
     def forward(self, x):
-        features = self.model.avgpool(self.model.layer4(self.model.layer3(
-                     self.model.layer2(self.model.layer1(self.model.relu(
-                     self.model.bn1(self.model.conv1(x))))))))
-        
-        features = torch.flatten(features, 1)
-        features = self.dropout(features)  # MC dropout active in eval for uncertainty
-        logit = self.model.fc(features)
-        return logit  # raw logits (not sigmoid)
-
-
+        return self.model(x)
 
 
 # -----------------------------
@@ -507,9 +517,9 @@ def train_model_old(train_dataset, valid_dataset,
 # Training loop
 # -----------------------------
 def train_model(train_dataset, valid_dataset,
-                save_dir="checkpoints",
+                save_file="checkpoints/dummy.pth",
                 epochs=50, batch_size=8, lr=1e-4, patience=5,
-                resume=False, visualize_every=5):
+                resume=False, visualize_every=5, fish_classifier=False):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -523,7 +533,10 @@ def train_model(train_dataset, valid_dataset,
     #optimizer = optim.Adam(model.parameters(), lr=lr)
 
     #pretrained model with partial finetuning (some layers unfreezed)
-    model = SomiteCounter_freeze(unfreeze_layers=("layer3", "layer4")).to(device)
+    if fish_classifier:
+        model = FishQualityClassifier(unfreeze_layers=("layer3", "layer4")).to(device)
+    else:
+        model = SomiteCounter_freeze(unfreeze_layers=("layer3", "layer4")).to(device)
     # Define optimizer with differential learning rates
     params = [
         {"params": model.model.fc.parameters(), "lr": 1e-4},       # head
@@ -541,10 +554,9 @@ def train_model(train_dataset, valid_dataset,
 
     optimizer = torch.optim.Adam(params)
 
-
-
     criterion = WeightedMSELoss()
 
+    save_dir = os.path.dirname(save_file)
     os.makedirs(save_dir, exist_ok=True)
 
     best_val_loss = float("inf")
@@ -553,7 +565,7 @@ def train_model(train_dataset, valid_dataset,
 
     # Resume if more images available (CAUTION this currently not consistent as I am changing the training dataset, while I should just add more images to the same dataset)
     if resume:
-        checkpoint_path = os.path.join(save_dir, "best_model.pth")
+        checkpoint_path = save_file
         if os.path.exists(checkpoint_path):
             checkpoint = torch.load(checkpoint_path, map_location=device)
             model.load_state_dict(checkpoint["model_state_dict"])
@@ -597,7 +609,7 @@ def train_model(train_dataset, valid_dataset,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "val_loss": val_loss
-            }, os.path.join(save_dir, "best_model.pth"))
+            }, save_file)
             print(" Saved best model")
             epochs_no_improve = 0
         else:
@@ -615,99 +627,6 @@ def train_model(train_dataset, valid_dataset,
 
     return model
 
-
-
-def train_fish_classifier(train_dataset, valid_dataset,
-                          epochs=30, batch_size=8, lr=1e-4,
-                          save_path="fish_quality_best.pth",
-                          patience=5):
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
-
-    model = FishQualityClassifier(pretrained=True).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.BCEWithLogitsLoss()
-
-    best_val_loss = float("inf")
-    epochs_no_improve = 0
-
-    for epoch in range(epochs):
-        model.train()
-        train_loss = 0
-        correct = 0
-        total = 0
-
-        for imgs, labels in train_loader:
-            imgs = imgs.to(device)
-            labels = labels.float().to(device).unsqueeze(1)
-
-            optimizer.zero_grad()
-            logits = model(imgs)
-            loss = criterion(logits, labels)
-            loss.backward()
-            optimizer.step()
-
-            train_loss += loss.item() * imgs.size(0)
-
-            probs = torch.sigmoid(logits)
-            preds = (probs > 0.5).float()
-            correct += (preds == labels).sum().item()
-            total += labels.size(0)
-
-        train_loss /= len(train_loader.dataset)
-        train_acc = correct / total
-
-        # ---------- Validation ----------
-        model.eval()
-        val_loss = 0
-        correct = 0
-        total = 0
-
-        with torch.no_grad():
-            for imgs, labels in valid_loader:
-                imgs = imgs.to(device)
-                labels = labels.float().to(device).unsqueeze(1)
-
-                logits = model(imgs)
-                loss = criterion(logits, labels)
-                val_loss += loss.item() * imgs.size(0)
-
-                probs = torch.sigmoid(logits)
-                preds = (probs > 0.5).float()
-                correct += (preds == labels).sum().item()
-                total += labels.size(0)
-
-        val_loss /= len(valid_loader.dataset)
-        val_acc = correct / total
-
-        print(f"Epoch {epoch+1}/{epochs} | "
-              f"Train Loss: {train_loss:.4f}, Acc: {train_acc:.3f} | "
-              f"Val Loss: {val_loss:.4f}, Acc: {val_acc:.3f}")
-
-        # Save best
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            epochs_no_improve = 0
-            #torch.save(model.state_dict(), save_path)
-            torch.save({
-                "model_state_dict": model.state_dict()
-                },
-                save_path)
-
-            print(" Saved best model")
-        else:
-            epochs_no_improve += 1
-
-        # Early stopping
-        if epochs_no_improve >= patience:
-            print("Early stopping triggered")
-            break
-
-    print("Training finished.")
-    return model
 
 
 
@@ -787,20 +706,22 @@ if __name__ == "__main__":
     # Train the model
     # ------------------------
     if args.train_fish_classifier:
-        model = train_fish_classifier(
-            train_dataset_Fish,
-            valid_dataset_Fish,
+        model = train_model(
+            train_dataset,
+            valid_dataset,
+            save_file=os.path.join(args.model_save_path, "fish_quality_best.pth"),
             epochs=args.epochs,
             batch_size=args.batch_size,
             lr=args.lr,
-            save_path=os.path.join(args.model_save_path, "fish_quality_best.pth"),
-            patience=args.patience
-        )
+            patience=args.patience,
+            resume=args.resume,        # resume if checkpoint exists
+            visualize_every=args.visualize_every   # show a sample image every 5 epochs
+    )
     else:
         model = train_model(
             train_dataset,
             valid_dataset,
-            save_dir=args.model_save_path,
+            save_file=os.path.join(args.model_save_path, "somite_counting_best.pth"),
             epochs=args.epochs,
             batch_size=args.batch_size,
             lr=args.lr,
