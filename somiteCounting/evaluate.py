@@ -78,8 +78,8 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
 
 
     model_fish = FishQualityClassifier().to(device)
-    checkpoint = torch.load(os.path.join(checkpoint_path,"fish_quality_best.pth"), map_location=device)
-    model_fish.load_state_dict(checkpoint["model_state_dict"])
+    checkpoint_fish = torch.load(os.path.join(checkpoint_path,"fish_quality_best.pth"), map_location=device)
+    model_fish.load_state_dict(checkpoint_fish["model_state_dict"])
     model_fish.eval()
 
 
@@ -119,6 +119,8 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
         pred_total, pred_def = pred
 
         print('pred fish: ', pre_fish)
+        prob = torch.sigmoid(pre_fish)
+        print('prob fish: ', prob)
 
 
         #label = "VALID fish" if prob >= 0.5 else "INVALID fish"
