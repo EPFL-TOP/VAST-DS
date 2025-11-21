@@ -121,7 +121,8 @@ def evaluate_folder(img_dir, label_dir, checkpoint_path, save_csv=None, device=N
 
         with torch.no_grad():
             logit = model(img_tensor)
-            prob = torch.sigmoid(logit).item()
+            prob = torch.sigmoid(logit[0,0]).item()
+
 
         label = "VALID fish" if prob >= 0.5 else "INVALID fish"
         print(f"Image: {img_name} | Fish quality prediction: {label} (prob={prob:.3f})")
