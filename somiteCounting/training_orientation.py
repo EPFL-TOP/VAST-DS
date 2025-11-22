@@ -111,6 +111,8 @@ def train_orientation(data_folder, save_path="orientation_best.pth",
     dataset_train = OrientationDataset(os.path.join(data_folder,'train'), transform=transform)
     dataset_valid = OrientationDataset(os.path.join(data_folder, 'valid'), transform=transform)
 
+    print(f"Training samples: {len(dataset_train)}, Validation samples: {len(dataset_valid)}")  
+
     train_loader = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     val_loader   = DataLoader(dataset_valid,   batch_size=batch_size, shuffle=False)
 
