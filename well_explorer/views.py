@@ -453,9 +453,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 dropdown_good_image.value = 'Yes'
             else:
                 dropdown_good_image.value = 'No'
-            if dest_well_properties.correct_orientation:
+            if dest_well_properties.correct_orientation == True:
                 dropdown_good_orientation.value = 'Yes'
-            elif not dest_well_properties.correct_orientation:
+            elif dest_well_properties.correct_orientation == False:
                 dropdown_good_orientation.value = 'No'
             else:
                 dropdown_good_orientation.value = 'Not set'
@@ -786,7 +786,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     dropdown_total_somites_err = bokeh.models.Select(value='0', title='# total somites error', options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     dropdown_bad_somites_err   = bokeh.models.Select(value='0', title='# bad somites error',  options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     dropdown_good_image        = bokeh.models.Select(value='Yes', title='Good image', options=['Yes', 'No'])
-    dropdown_good_orientation  = bokeh.models.Select(value='Not set', title='Good image', options=['Not set', 'Yes', 'No'])
+    dropdown_good_orientation  = bokeh.models.Select(value='Not set', title='Good orientation', options=['Not set', 'Yes', 'No'], default_value='Not set')
     images_comments            = bokeh.models.widgets.TextAreaInput(title="Comments if any:", value='', rows=7, width=200, css_classes=["font-size:18px"])
 
     #___________________________________________________________________________________________
