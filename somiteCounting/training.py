@@ -32,6 +32,9 @@ class SomiteDataset(Dataset):
                           if f.lower().endswith(('.png','.jpg','.jpeg','.tif','.tiff'))]
         self.img_files = []
         for f in image_list:
+            if 'YFP' not in f:
+                continue # only use YFP images
+
             base_name = os.path.splitext(f)[0]
             label_path = os.path.join(label_dir, base_name + ".json")
             if not os.path.exists(label_path):
@@ -45,6 +48,7 @@ class SomiteDataset(Dataset):
                     raise ValueError(f"Label file {label_path} is missing required keys.")
                 if not label_data["valid"]:
                     continue
+
 
             self.img_files.append(f)
 
@@ -96,6 +100,8 @@ class FishDataset(Dataset):
 
         self.samples = []
         for f in os.listdir(folder):
+            if 'YFP' not in f:
+                continue # only use YFP images
             if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
                 img_path = os.path.join(folder, f)
 

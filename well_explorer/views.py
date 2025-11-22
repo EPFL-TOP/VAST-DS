@@ -958,19 +958,26 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                             path_leica = os.path.join(LOCALPATH, experiment.name,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}{}'.format(position_row, position_col))
                             if int(position_col) < 10:
                                 path_leica = os.path.join(LOCALPATH, experiment.name,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}0{}'.format(position_row, position_col))  
-                            files = glob.glob(os.path.join(path_leica, '*YFP*.tiff'))
-                            for f in files:
+                            files_YFP = glob.glob(os.path.join(path_leica, '*YFP*.tiff'))
+                            files_BF  = glob.glob(os.path.join(path_leica, '*BF*.tiff'))
+                            for f in files_YFP:
                                 if 'norm' in f:
                                     continue
                                 file_YFP = f
 
-                            if len(files) == 0:
+                            for f in files_BF:
+                                if 'norm' in f:
+                                    continue
+                                file_BF = f
+                            if len(files_YFP)==0 or len(files_BF)== 0:
                                 print('No files found in path:', path_leica)
                                 continue
 
                             # Copy the files to the training set folder with a new name
                             new_name_yfp = experiment.name + '_Plate' + str(dest_well_plate.plate_number) + '_' + position_row + position_col + '_YFP.tiff'
+                            new_name_bf  = experiment.name + '_Plate' + str(dest_well_plate.plate_number) + '_' + position_row + position_col + '_BF.tiff'
                             shutil.copy(file_YFP, os.path.join(outdir, new_name_yfp))
+                            shutil.copy(file_BF, os.path.join(outdir, new_name_bf))
                             out_json = new_name_yfp.replace('.tiff', '.json')
                             data = {
                                 'n_total_somites': props.n_total_somites,
@@ -978,6 +985,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                 'n_total_somites_err': props.n_total_somites_err,
                                 'n_bad_somites_err': props.n_bad_somites_err,
                                 'valid': props.valid,
+                                'correct_orientation': props.correct_orientation,
                                 'comments': props.comments,
                             }
                             with open(os.path.join(outdir, out_json), 'w') as f:
