@@ -978,7 +978,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                             new_name_bf  = experiment.name + '_Plate' + str(dest_well_plate.plate_number) + '_' + position_row + position_col + '_BF.tiff'
                             shutil.copy(file_YFP, os.path.join(outdir, new_name_yfp))
                             shutil.copy(file_BF, os.path.join(outdir, new_name_bf))
-                            out_json = new_name_yfp.replace('.tiff', '.json')
+                            out_json_yfp = new_name_yfp.replace('.tiff', '.json')
+                            out_json_bf = new_name_bf.replace('.tiff', '.json')
+
                             data = {
                                 'n_total_somites': props.n_total_somites,
                                 'n_bad_somites': props.n_bad_somites,
@@ -988,9 +990,12 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                 'correct_orientation': props.correct_orientation,
                                 'comments': props.comments,
                             }
-                            with open(os.path.join(outdir, out_json), 'w') as f:
+                            with open(os.path.join(outdir, out_json_yfp), 'w') as f:
                                 json.dump(data, f, indent=4)
                             print('Copied files to training set:', new_name_yfp)
+                            with open(os.path.join(outdir, out_json_bf), 'w') as f:
+                                json.dump(data, f, indent=4)
+                            print('Copied files to training set:', new_name_bf)
 
                     except DestWellProperties.DoesNotExist:
                         pass
