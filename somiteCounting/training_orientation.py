@@ -182,7 +182,7 @@ if __name__ == "__main__":
     train_orientation(
         data_folder=r"D:\vast\training_data",
         save_path=r"checkpoints\orientation_best.pth",
-        epochs=10,
+        epochs=50,
         batch_size=16,
         lr=1e-4,
     )
