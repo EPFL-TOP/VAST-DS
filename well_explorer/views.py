@@ -588,9 +588,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 dropdown_good_image.value = 'Yes'
             else:
                 dropdown_good_image.value = 'No'
-            if dest_well_properties.correct_orientation:
+
+            if dest_well_properties.correct_orientation == True:
                 dropdown_good_orientation.value = 'Yes'
-            elif not dest_well_properties.correct_orientation:
+            elif dest_well_properties.correct_orientation == False:
                 dropdown_good_orientation.value = 'No'
             else:
                 dropdown_good_orientation.value = 'Not set'
