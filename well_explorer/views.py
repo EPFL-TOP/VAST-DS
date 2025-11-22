@@ -453,6 +453,13 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 dropdown_good_image.value = 'Yes'
             else:
                 dropdown_good_image.value = 'No'
+            if dest_well_properties.correct_orientation:
+                dropdown_good_orientation.value = 'Yes'
+            elif not dest_well_properties.correct_orientation:
+                dropdown_good_orientation.value = 'No'
+            else:
+                dropdown_good_orientation.value = 'Not set'
+
             if dest_well_properties.comments is not None:
                 images_comments.value = dest_well_properties.comments
             else:
@@ -464,6 +471,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             dropdown_total_somites_err.value = '0'
             dropdown_bad_somites_err.value  = '0'
             dropdown_good_image.value = 'Yes'
+            dropdown_good_orientation.value = 'Not set'
             images_comments.value = ''
 
 
@@ -580,6 +588,12 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 dropdown_good_image.value = 'Yes'
             else:
                 dropdown_good_image.value = 'No'
+            if dest_well_properties.correct_orientation:
+                dropdown_good_orientation.value = 'Yes'
+            elif not dest_well_properties.correct_orientation:
+                dropdown_good_orientation.value = 'No'
+            else:
+                dropdown_good_orientation.value = 'Not set'
             if dest_well_properties.comments is not None:
                 images_comments.value = dest_well_properties.comments
             else:
@@ -591,6 +605,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             dropdown_total_somites_err.value = '0'
             dropdown_bad_somites_err.value  = '0'
             dropdown_good_image.value = 'Yes'
+            dropdown_good_orientation.value = 'Not set'
             images_comments.value = ''
 
 
@@ -766,11 +781,12 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     contrast_slider.on_change('value', update_contrast)
 
 
-    dropdown_total_somites      = bokeh.models.Select(value='Select a value', title='# total somites', options=['Select a value', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35'])
+    dropdown_total_somites     = bokeh.models.Select(value='Select a value', title='# total somites', options=['Select a value', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35'])
     dropdown_bad_somites       = bokeh.models.Select(value='Select a value', title='# bad somites',  options=['Select a value','0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30'])
-    dropdown_total_somites_err  = bokeh.models.Select(value='0', title='# total somites error', options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+    dropdown_total_somites_err = bokeh.models.Select(value='0', title='# total somites error', options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     dropdown_bad_somites_err   = bokeh.models.Select(value='0', title='# bad somites error',  options=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     dropdown_good_image        = bokeh.models.Select(value='Yes', title='Good image', options=['Yes', 'No'])
+    dropdown_good_orientation  = bokeh.models.Select(value='Not set', title='Good image', options=['Not set', 'Yes', 'No'])
     images_comments            = bokeh.models.widgets.TextAreaInput(title="Comments if any:", value='', rows=7, width=200, css_classes=["font-size:18px"])
 
     #___________________________________________________________________________________________
@@ -827,6 +843,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         dest_well_properties.n_total_somites_err = int(dropdown_total_somites_err.value)
         dest_well_properties.n_bad_somites_err  = int(dropdown_bad_somites_err.value)
         dest_well_properties.valid = True if dropdown_good_image.value == 'Yes' else False
+        if dropdown_good_orientation.value == 'Not set':
+            pass
+        else:
+            dest_well_properties.correct_orientation = True if dropdown_good_orientation.value == 'Yes' else False
         dest_well_properties.comments = images_comments.value
         dest_well_properties.save()
         print('Saved properties for dest well:', dest, ' properties:', dest_well_properties)
@@ -1046,7 +1066,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button, create_training_button), bokeh.models.Spacer(width=20),    bokeh.layouts.column(image_message,drug_message)),
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
-                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), bokeh.layouts.column(contrast_slider,predict_button), dropdown_total_somites, dropdown_total_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, saveimages_button,images_comments),
+                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), bokeh.layouts.column(contrast_slider,predict_button), dropdown_total_somites, dropdown_total_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, dropdown_good_orientation, saveimages_button,images_comments),
                                                                               bokeh.layouts.row(prediction_message),
                                                                               bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
                                                                               bokeh.layouts.row(plot_img_vast))))
