@@ -178,8 +178,8 @@ def train_orientation(data_folder, save_path="orientation_best.pth",
 if __name__ == "__main__":
     print("Training starts...")
     train_orientation(
-        data_folder="D:\vast\training_data",
-        save_path="checkpoints\orientation_best.pth",
+        data_folder=r"D:\vast\training_data",
+        save_path=r"checkpoints\orientation_best.pth",
         epochs=10,
         batch_size=16,
         lr=1e-4,
