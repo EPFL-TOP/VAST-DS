@@ -95,7 +95,7 @@ for exp in os.listdir(image_path):
                     img_path = os.path.join(well_path, f)
                     print(f"     Processing {img_path}...")
                     img = np.array(Image.open(img_path)).astype(np.float32)
-                    img_max /= img.max()
+                    img_max = img/img.max()
 
                     corrected = oc.correct(img_max, img)
 
