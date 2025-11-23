@@ -26,7 +26,7 @@ class OrientationCorrector:
             logit = self.model(tensor)
             return torch.sigmoid(logit).item()  # scalar
 
-    def correct(self, img_np):
+    def correct(self, img_np, img_np_raw=None):
         """
         img_np: float32 numpy array normalized 0-1
         """
@@ -34,7 +34,7 @@ class OrientationCorrector:
         score0 = self.score(t)
 
         if score0 >= 0.5:
-            return img_np  # already correct
+            return img_np_raw  # already correct
 
         # Try horizontal flip
         t_h = torch.flip(t, dims=[3])
@@ -55,11 +55,11 @@ class OrientationCorrector:
         if best == 0:
             return img_np
         elif best == 1:
-            return np.flip(img_np, axis=1)      # horizontal
+            return np.flip(img_np_raw, axis=1)      # horizontal
         elif best == 2:
-            return np.flip(img_np, axis=0)      # vertical
+            return np.flip(img_np_raw, axis=0)      # vertical
         elif best == 3:
-            return np.flip(np.flip(img_np, axis=1), axis=0)
+            return np.flip(np.flip(img_np_raw, axis=1), axis=0)
 
 
 
@@ -94,17 +94,17 @@ for exp in os.listdir(image_path):
                 if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
                     img_path = os.path.join(well_path, f)
                     print(f"     Processing {img_path}...")
-                    #img = np.array(Image.open(img_path)).astype(np.float32)
-                    #img /= img.max()
+                    img = np.array(Image.open(img_path)).astype(np.float32)
+                    img_max /= img.max()
 
-                    #corrected = oc.correct(img)
+                    corrected = oc.correct(img_max, img)
 
-                    #save_path = os.path.join(well_path, "corrected_orientation")
-                    #if not os.path.exists(save_path):
-                    #    os.makedirs(save_path)
-                    #save_file = os.path.join(save_path, f)
+                    save_path = os.path.join(well_path, "corrected_orientation")
+                    if not os.path.exists(save_path):
+                        os.makedirs(save_path)
+                    save_file = os.path.join(save_path, f)
                     #corrected_img = (corrected * 255).astype(np.uint8)
-                    #Image.fromarray(corrected_img).save(save_file)
+                    Image.fromarray(corrected).save(save_file)
                     #print(f"Saved corrected image to {save_file}")
 
             
