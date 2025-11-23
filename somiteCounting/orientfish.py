@@ -66,33 +66,48 @@ class OrientationCorrector:
 
 oc = OrientationCorrector(os.path.join("checkpoints","orientation_best.pth"))
 
-image_path = r"D:\vast\VAST_2025-06-10\VAST images"
-for folder in os.listdir(image_path):
-    folder_path =  os.path.join(image_path, folder)
-    print(f"Processing folder: {folder_path}")
-    if os.path.isdir(folder_path):
-        if "plate 1" not in folder and "plate 2" not in folder and "Plate 1" not in folder and "Plate 2" not in folder:
+#image_path = r"D:\vast\VAST_2025-06-10\VAST images"
+image_path = r"D:\vast"
+for exp in os.listdir(image_path):
+    exp_path =  os.path.join(image_path, exp, "Leica images")
+    print(f"Processing experiment: {exp}")
+    if not os.path.isdir(exp_path):
+        continue
+    if "VAST_" not in exp:
+        continue
+
+    for plate in os.listdir(exp_path):
+        plate_path = os.path.join(exp_path, plate)
+        print(f"  Processing folder: {plate}")
+        if "plate 1" not in plate and "plate 2" not in plate and "Plate 1" not in plate and "Plate 2" not in plate:
             continue
-        for plate in os.listdir(folder_path):
-            print(f" Processing plate: {plate}")
-            plate_path = os.path.join(folder_path, plate)
-            if not os.path.isdir(plate_path):
+
+        for well in os.listdir(plate_path):
+            print(f"   Processing well: {well}")
+            well_path = os.path.join(plate_path, well)
+            if not os.path.isdir(well_path):
                 continue
-            if "Well_" not in plate:
+            if "Well_" not in well:
                 continue
 
-            for well in os.listdir(plate_path):
-                well_path = os.path.join(plate_path, well)
-                print(f"  Processing well: {well}")
-                for f in os.listdir(well_path):
-                    if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
-                        img_path = os.path.join(well_path, f)
-                        print(f"Processing {img_path}...")
-                        img = np.array(Image.open(img_path)).astype(np.float32)
-                        img /= img.max()
+            for f in os.listdir(well_path):
+                if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
+                    img_path = os.path.join(well_path, f)
+                    print(f"     Processing {img_path}...")
+                    #img = np.array(Image.open(img_path)).astype(np.float32)
+                    #img /= img.max()
 
-                        corrected = oc.correct(img)
+                    #corrected = oc.correct(img)
 
+                    #save_path = os.path.join(well_path, "corrected_orientation")
+                    #if not os.path.exists(save_path):
+                    #    os.makedirs(save_path)
+                    #save_file = os.path.join(save_path, f)
+                    #corrected_img = (corrected * 255).astype(np.uint8)
+                    #Image.fromarray(corrected_img).save(save_file)
+                    #print(f"Saved corrected image to {save_file}")
 
-                        
+            
+
+                        #D:\vast\VAST_2025-06-10\Leica images\Plate 1\Well_E01
 
