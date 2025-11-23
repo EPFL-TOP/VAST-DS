@@ -26,7 +26,7 @@ class OrientationCorrector:
             logit = self.model(tensor)
             return torch.sigmoid(logit).item()  # scalar
 
-    def correct(self, img_np, img_np_raw=None):
+    def correct(self, img_np):
         """
         img_np: float32 numpy array normalized 0-1
         """
@@ -34,7 +34,7 @@ class OrientationCorrector:
         score0 = self.score(t)
 
         if score0 >= 0.5:
-            return img_np_raw  # already correct
+            return 0  # already correct
 
         # Try horizontal flip
         t_h = torch.flip(t, dims=[3])
@@ -53,13 +53,13 @@ class OrientationCorrector:
         best = np.argmax(scores)
 
         if best == 0:
-            return img_np
+            return 0
         elif best == 1:
-            return np.flip(img_np_raw, axis=1)      # horizontal
+            return 1#np.flip(img_np_raw, axis=1)      # horizontal
         elif best == 2:
-            return np.flip(img_np_raw, axis=0)      # vertical
+            return 2#np.flip(img_np_raw, axis=0)      # vertical
         elif best == 3:
-            return np.flip(np.flip(img_np_raw, axis=1), axis=0)
+            return 3#np.flip(np.flip(img_np_raw, axis=1), axis=0)
 
 
 
@@ -90,21 +90,34 @@ for exp in os.listdir(image_path):
             if "Well_" not in well:
                 continue
 
+            corrected = 0
             for f in os.listdir(well_path):
                 if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
                     img_path = os.path.join(well_path, f)
+                    if "norm" not in f:
+                        continue
+                    if "BF" not in f:
+                        continue
                     print(f"     Processing {img_path}...")
                     img = np.array(Image.open(img_path)).astype(np.float32)
                     img_max = img/img.max()
 
                     corrected = oc.correct(img_max, img)
 
+            for f in os.listdir(well_path):
+                if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
+                    img_path = os.path.join(well_path, f)
+                    print(f"      correcting {img_path}...")
                     save_path = os.path.join(well_path, "corrected_orientation")
                     if not os.path.exists(save_path):
                         os.makedirs(save_path)
                     save_file = os.path.join(save_path, f)
+
+                    img = np.array(Image.open(img_path))
+                    print(f"      Original image shape: {img.shape}")
+                    print(f"      dtype: {img.dtype}, min: {img.min()}, max: {img.max()}")
                     #corrected_img = (corrected * 255).astype(np.uint8)
-                    Image.fromarray(corrected).save(save_file)
+                    #Image.fromarray(corrected).save(save_file)
                     #print(f"Saved corrected image to {save_file}")
 
             
