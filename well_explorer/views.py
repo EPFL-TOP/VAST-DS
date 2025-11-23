@@ -43,7 +43,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 #model = SomiteCounter().to(device)
 model = SomiteCounter_freeze().to(device)
-checkpoint_path=r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints\best_model.pth"
+checkpoint_path=r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints\somite_counting_best.pth"
 checkpoint = torch.load(checkpoint_path, map_location=device)
 model.load_state_dict(checkpoint["model_state_dict"])
 model.eval()
