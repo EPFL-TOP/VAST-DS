@@ -965,6 +965,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             print('Creating training set for experiment:', experiment.name)
 
 
+            LOCALPATH = LOCALPATH_HIVE
+            if os.path.exists(os.path.join(LOCALPATH_RAID5, experiment.name)):
+                LOCALPATH = LOCALPATH_RAID5
+
             dest_well_plates   = DestWellPlate.objects.filter(experiment=experiment)
             print('dest_well_plates=', dest_well_plates)
             for dest_well_plate in dest_well_plates:
