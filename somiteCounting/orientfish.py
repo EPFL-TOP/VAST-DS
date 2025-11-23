@@ -114,6 +114,21 @@ for exp in os.listdir(image_path):
                     save_file = os.path.join(save_path, f)
 
                     img = np.array(Image.open(img_path))
+
+                    if corrected == 1:
+                        img = np.flip(img, axis=1)      # horizontal
+                    elif corrected == 2:
+                        img = np.flip(img, axis=0)      # vertical
+                    elif corrected == 3:
+                        img = np.flip(np.flip(img, axis=1), axis=0)
+
+                    if img.dtype == np.uint8:
+                        im = Image.fromarray(img, mode='L')
+                    elif img.dtype == np.uint16:
+                        im = Image.fromarray(img, mode='I;16')
+
+                    im.save(save_file)
+
                     print(f"      dtype: {img.dtype}, min: {img.min()}, max: {img.max()}")
                     #corrected_img = (corrected * 255).astype(np.uint8)
                     #Image.fromarray(corrected).save(save_file)
