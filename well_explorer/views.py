@@ -26,7 +26,7 @@ import bokeh.layouts
 
 from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug, DestWellProperties
 
-from somiteCounting.training import SomiteCounter_freeze
+from somiteCounting.training import SomiteCounter_freeze, FishQualityClassifier
 
 def load_and_prepare_image(img_path, resize=(224,224)):
     img_raw = np.array(Image.open(img_path)).astype(np.float32)
@@ -47,6 +47,14 @@ checkpoint_path=r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints\s
 checkpoint = torch.load(checkpoint_path, map_location=device)
 model.load_state_dict(checkpoint["model_state_dict"])
 model.eval()
+
+
+model_fish = FishQualityClassifier().to(device)
+checkpoint_path=r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints\fish_quality_best.pth"
+checkpoint_fish = torch.load(checkpoint_path, map_location=device)
+model_fish.load_state_dict(checkpoint_fish["model_state_dict"])
+model_fish.eval()
+
 
 import vast_leica_mapping as vlm
 
@@ -931,8 +939,11 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 # Prediction
                 with torch.no_grad():
                     pred = model(img_tensor).cpu().numpy().flatten()
+                    logit = model_fish(img_tensor.to(device))    # shape [1,1]
+                    prob = torch.sigmoid(logit)[0,0].item()
+                
                 pred_total, pred_def = pred
-                prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {:.1f}  --  defective {:.1f}</b>".format(pred_total,pred_def)
+                prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {:.1f}  --  defective {:.1f}  --  Valid Fish {}</b>".format(pred_total,pred_def, 'Yes' if prob>0.5 else 'No')
                 prediction_message.visible = True
 
         predict_button.label = "Predict"
