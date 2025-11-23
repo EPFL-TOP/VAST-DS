@@ -33,8 +33,8 @@ class OrientationCorrector:
         t = self.preprocess(img_np)
         score0 = self.score(t)
 
-        if score0 >= 0.5:
-            return 0  # already correct
+        #if score0 >= 0.5:
+        #    return 0  # already correct
 
         # Try horizontal flip
         t_h = torch.flip(t, dims=[3])
