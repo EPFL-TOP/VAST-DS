@@ -341,6 +341,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         cds_labels_dest_2_filled.data = {'x':x_dest_2_filled, 'y':y_dest_2_filled, 'size':size_dest_2_filled}
         cds_labels_dest_2_filled_bad.data = {'x':x_dest_2_filled_bad, 'y':y_dest_2_filled_bad, 'size':size_dest_2_filled_bad}
 
+
+    use_corrected_checkbox = bokeh.models.Checkbox(label="Use corrected", active=True)
+
     #___________________________________________________________________________________________
     def dest_plate_visu(attr, old, new):
         if len(cds_labels_dest.selected.indices) == 0: 
@@ -359,9 +362,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
         print('=======================LOCALPATH=', LOCALPATH)
 
-        path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 1', 'Well_{}{}'.format(position[0][1], position[0][0]))
+        path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 1', 'Well_{}{}'.format(position[0][1], position[0][0]), 'corrected_orientation' if checkbox.active else '')
         if int(position[0][0]) < 10:
-            path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 1', 'Well_{}0{}'.format(position[0][1], position[0][0]))  
+            path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 1', 'Well_{}0{}'.format(position[0][1], position[0][0]), 'corrected_orientation' if checkbox.active else '')  
         files = glob.glob(os.path.join(path_leica, '*_norm.tiff'))
 
         for f in files:
@@ -392,9 +395,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         image_yfp = imread(file_YFP)
         source_img_yfp.data = {'img':[np.flip(image_yfp,0)]}
 
-        path_vast = os.path.join(LOCALPATH, dropdown_exp.value,'VAST images', 'Plate 1', 'Well_{}{}'.format(position[0][1], position[0][0]))
+        path_vast = os.path.join(LOCALPATH, dropdown_exp.value,'VAST images', 'Plate 1', 'Well_{}{}'.format(position[0][1], position[0][0]), 'corrected_orientation' if checkbox.active else '')
         if int(position[0][0]) < 10:
-            path_vast = os.path.join(LOCALPATH, dropdown_exp.value,'VAST images', 'Plate 1', 'Well_{}0{}'.format(position[0][1], position[0][0]))  
+            path_vast = os.path.join(LOCALPATH, dropdown_exp.value,'VAST images', 'Plate 1', 'Well_{}0{}'.format(position[0][1], position[0][0]), 'corrected_orientation' if checkbox.active else '')  
         files = glob.glob(os.path.join(path_vast, '*.tiff'))
 
         img_list= []
@@ -476,6 +479,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
     cds_labels_dest.selected.on_change('indices', lambda attr, old, new: dest_plate_visu(attr, old, new))
+    use_corrected_checkbox.on_change("active", lambda attr, old, new: dest_plate_visu(attr, old, new))
 
     #___________________________________________________________________________________________
     def dest_plate_2_visu(attr, old, new):
@@ -1067,7 +1071,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button, create_training_button), bokeh.models.Spacer(width=20),    bokeh.layouts.column(image_message,drug_message)),
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
-                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), bokeh.layouts.column(contrast_slider,predict_button), dropdown_total_somites, dropdown_total_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, dropdown_good_orientation, saveimages_button,images_comments),
+                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), bokeh.layouts.column(contrast_slider,predict_button, use_corrected_checkbox), dropdown_total_somites, dropdown_total_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, dropdown_good_orientation, saveimages_button,images_comments),
                                                                               bokeh.layouts.row(prediction_message),
                                                                               bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
                                                                               bokeh.layouts.row(plot_img_vast))))
