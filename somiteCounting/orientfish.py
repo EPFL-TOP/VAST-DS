@@ -69,10 +69,12 @@ oc = OrientationCorrector(os.path.join("checkpoints","orientation_best.pth"))
 image_path = r"D:\vast\VAST_2025-06-10\VAST images"
 for folder in os.listdir(image_path):
     folder_path =  os.path.join(image_path, folder)
+    print(f"Processing folder: {folder_path}")
     if os.path.isdir(folder_path):
         if "plate 1" not in folder or "plate 2" not in folder or "Plate 1" not in folder or "Plate 2" not in folder:
             continue
         for plate in os.listdir(folder_path):
+            print(f" Processing plate: {plate}")
             plate_path = os.path.join(folder_path, plate)
             if not os.path.isdir(plate_path):
                 continue
@@ -81,7 +83,7 @@ for folder in os.listdir(image_path):
 
             for well in os.listdir(plate_path):
                 well_path = os.path.join(plate_path, well)
-
+                print(f"  Processing well: {well}")
                 for f in os.listdir(well_path):
                     if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
                         img_path = os.path.join(well_path, f)
