@@ -500,9 +500,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
         print('=======================LOCALPATH=', LOCALPATH)
 
-        path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 2', 'Well_{}{}'.format(position[0][1], position[0][0]))
+        path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 2', 'Well_{}{}'.format(position[0][1], position[0][0]), 'corrected_orientation' if use_corrected_checkbox.active else '')
         if int(position[0][0]) < 10:
-            path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 2', 'Well_{}0{}'.format(position[0][1], position[0][0]))  
+            path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate 2', 'Well_{}0{}'.format(position[0][1], position[0][0]), 'corrected_orientation' if use_corrected_checkbox.active else '')  
         files = glob.glob(os.path.join(path_leica, '*_norm.tiff'))
 
         for f in files:
@@ -914,9 +914,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
 
-        path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(plate), 'Well_{}{}'.format(position[0][1], position[0][0]))
+        path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(plate), 'Well_{}{}'.format(position[0][1], position[0][0]), 'corrected_orientation' if use_corrected_checkbox.active else '')
         if int(position[0][0]) < 10:
-            path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(plate), 'Well_{}0{}'.format(position[0][1], position[0][0]))  
+            path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(plate), 'Well_{}0{}'.format(position[0][1], position[0][0]), 'corrected_orientation' if use_corrected_checkbox.active else '')  
         files = glob.glob(os.path.join(path_leica, '*.tiff'))
 
 
@@ -980,9 +980,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
                             position_col = dest.position_col
                             position_row = dest.position_row
-                            path_leica = os.path.join(LOCALPATH, experiment.name,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}{}'.format(position_row, position_col))
+                            path_leica = os.path.join(LOCALPATH, experiment.name,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}{}'.format(position_row, position_col), 'corrected_orientation' if use_corrected_checkbox.active else '')
                             if int(position_col) < 10:
-                                path_leica = os.path.join(LOCALPATH, experiment.name,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}0{}'.format(position_row, position_col))  
+                                path_leica = os.path.join(LOCALPATH, experiment.name,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}0{}'.format(position_row, position_col), 'corrected_orientation' if use_corrected_checkbox.active else '')  
                             files_YFP = glob.glob(os.path.join(path_leica, '*YFP*.tiff'))
                             files_BF  = glob.glob(os.path.join(path_leica, '*BF*.tiff'))
                             for f in files_YFP:
