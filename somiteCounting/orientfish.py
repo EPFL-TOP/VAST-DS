@@ -102,7 +102,7 @@ for exp in os.listdir(image_path):
                     img = np.array(Image.open(img_path)).astype(np.float32)
                     img_max = img/img.max()
 
-                    corrected = oc.correct(img_max, img)
+                    corrected = oc.correct(img_max)
 
             for f in os.listdir(well_path):
                 if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
