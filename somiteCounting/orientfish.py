@@ -94,7 +94,7 @@ for exp in os.listdir(image_path):
             for f in os.listdir(well_path):
                 if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
                     img_path = os.path.join(well_path, f)
-                    if "norm" not in f:
+                    if "norm" in f:
                         continue
                     if "BF" not in f:
                         continue
@@ -114,7 +114,6 @@ for exp in os.listdir(image_path):
                     save_file = os.path.join(save_path, f)
 
                     img = np.array(Image.open(img_path))
-                    print(f"      Original image shape: {img.shape}")
                     print(f"      dtype: {img.dtype}, min: {img.min()}, max: {img.max()}")
                     #corrected_img = (corrected * 255).astype(np.uint8)
                     #Image.fromarray(corrected).save(save_file)
