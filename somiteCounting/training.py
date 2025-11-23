@@ -760,11 +760,11 @@ if __name__ == "__main__":
 
     transform = GrayscaleAugment_aggressive(
         resize=(224,224),
-        horizontal_flip=True,
-        vertical_flip=True,
+        horizontal_flip=False,
+        vertical_flip=False,
         rotation=10,
-        brightness=0.3,
-        contrast=0.3
+        brightness=0.15,
+        contrast=0.15
     )
 
     # ------------------------
