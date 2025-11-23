@@ -615,7 +615,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
     cds_labels_dest_2.selected.on_change('indices', lambda attr, old, new: dest_plate_2_visu(attr, old, new))
-    use_corrected_checkbox.on_change("active", lambda attr, old, new: dest_plate_visu(attr, old, new))
+    use_corrected_checkbox.on_change("active", lambda attr, old, new: dest_plate_2_visu(attr, old, new))
 
 
 
