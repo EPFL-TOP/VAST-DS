@@ -37,6 +37,8 @@ class OrientationDataset(Dataset):
                     label_data = json.load(file)
                     if label_data["correct_orientation"] is None:
                         continue
+                    if not label_data["valid"]:
+                        continue
 
                 self.samples.append((img_path, json_path))
 
