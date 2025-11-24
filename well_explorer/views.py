@@ -27,6 +27,7 @@ import bokeh.layouts
 from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug, DestWellProperties
 
 from somiteCounting.training import SomiteCounter_freeze, FishQualityClassifier
+from somiteCounting.training_orientation import OrientationClassifier
 
 def load_and_prepare_image(img_path, resize=(224,224)):
     img_raw = np.array(Image.open(img_path)).astype(np.float32)
@@ -50,10 +51,18 @@ model.eval()
 
 
 model_fish = FishQualityClassifier().to(device)
-checkpoint_path=r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints\fish_quality_best.pth"
-checkpoint_fish = torch.load(checkpoint_path, map_location=device)
+checkpoint_path_fish=r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints\fish_quality_best.pth"
+checkpoint_fish = torch.load(checkpoint_path_fish, map_location=device)
 model_fish.load_state_dict(checkpoint_fish["model_state_dict"])
 model_fish.eval()
+
+model_orientation = OrientationClassifier().to(device)
+checkpoint_path_ori=r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints\orientation_best.pth"
+checkpoint_orientation = torch.load(checkpoint_path_ori, map_location=device)
+model_orientation.load_state_dict(checkpoint_orientation["model_state_dict"])
+model_orientation.eval()
+
+
 
 
 import vast_leica_mapping as vlm
@@ -950,9 +959,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                     pred = model(img_tensor).cpu().numpy().flatten()
                     logit = model_fish(img_tensor.to(device))    # shape [1,1]
                     prob = torch.sigmoid(logit)[0,0].item()
-                
+                    logit_ori = model_orientation(img_tensor.to(device))
+                    prob_ori = torch.sigmoid(logit_ori).item()  # scalar
                 pred_total, pred_def = pred
-                prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {:.1f}  --  defective {:.1f}  --  Valid Fish {}</b>".format(pred_total,pred_def, 'Yes' if prob>0.5 else 'No')
+                prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {:.1f}  --  defective {:.1f}  --  Valid Fish {}  --  Prob orientation {:.2} </b>".format(pred_total,pred_def, 'Yes' if prob>0.5 else 'No', prob_ori)
                 prediction_message.visible = True
 
         predict_button.label = "Predict"
