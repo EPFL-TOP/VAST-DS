@@ -203,7 +203,7 @@ class DestWellProperties(models.Model):
     n_bad_somites_err   = models.IntegerField(default=0, help_text="Number of bad somites error", blank=True, null=True)    
     comments            = models.TextField(blank=True, max_length=2000, help_text="Comments if any", null=True)
     valid               = models.BooleanField(default=True, help_text="should be used for training", blank=True, null=True)
-    correct_orientation = models.BooleanField(help_text="is the fish correctly oriented (head to the left)?", blank=True, null=True)
+    correct_orientation = models.BooleanField(default=True, help_text="is the fish correctly oriented (head to the left)?", blank=True, null=True)
 
     def __str__(self):
         """String for representing the Model object (in Admin site etc.)"""
