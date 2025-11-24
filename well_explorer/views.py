@@ -959,6 +959,12 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                     pred = model(img_tensor).cpu().numpy().flatten()
                     logit = model_fish(img_tensor.to(device))    # shape [1,1]
                     prob = torch.sigmoid(logit)[0,0].item()
+            if 'BF' in f and 'norm' not in f:
+                file_BF = f
+                img_raw, img_tensor = load_and_prepare_image(file_BF)
+                img_tensor = img_tensor.to(device)
+                # Prediction
+                with torch.no_grad():
                     logit_ori = model_orientation(img_tensor.to(device))
                     prob_ori = torch.sigmoid(logit_ori).item()  # scalar
                 pred_total, pred_def = pred
