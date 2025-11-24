@@ -71,7 +71,7 @@ class OrientationCorrector:
 
 
 def orient_fish(data_path=None, experiment_name=None):
-    oc = OrientationCorrector(os.path.join("checkpoints","orientation_best.pth"))
+    oc = OrientationCorrector(os.path.join(r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints","orientation_best.pth"))
 
     #image_path = r"D:\vast\VAST_2025-06-10\VAST images"
     image_path = r"D:\vast"
