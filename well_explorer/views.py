@@ -28,6 +28,7 @@ from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, Sour
 
 from somiteCounting.training import SomiteCounter_freeze, FishQualityClassifier
 from somiteCounting.training_orientation import OrientationClassifier
+import somiteCounting.orientfish as of
 
 def load_and_prepare_image(img_path, resize=(224,224)):
     img_raw = np.array(Image.open(img_path)).astype(np.float32)
@@ -785,6 +786,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             return
         print('Mapping for experiment:', dropdown_exp.value, ' in path:', LOCALPATH)
         vlm.map_well_to_vast(LOCALPATH, dropdown_exp.value)
+        of.orient_fish(LOCALPATH, dropdown_exp.value)
         load_experiment(None, None, dropdown_exp.value)
         well_mapping_button.label = "Well mapping"
         well_mapping_button.button_type = "success"

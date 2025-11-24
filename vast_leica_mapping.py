@@ -9,6 +9,8 @@ from PIL import Image
 import imagej
 from skimage.io import imread
 ij = imagej.init('sc.fiji:fiji')#, mode='interactive')
+from somiteCounting.orientfish import orient_fish
+
 print(f"ImageJ2 version: {ij.getVersion()}")
 
 ImageReader   = jimport('loci.formats.ImageReader')
@@ -180,3 +182,4 @@ if __name__ == '__main__':
     file_path = "data"
     experiment_name = "VAST_2025-07-08"
     map_well_to_vast(file_path, experiment_name)
+    orient_fish(data_path=file_path, experiment_name=experiment_name)
