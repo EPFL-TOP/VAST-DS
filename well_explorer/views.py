@@ -355,9 +355,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     #___________________________________________________________________________________________
     def dest_plate_visu(attr, old, new):
         if len(cds_labels_dest.selected.indices) == 0:
-            source_img_bf.data  = {'img':[]}
-            source_img_yfp.data = {'img':[]}
-            source_img_vast.data = {'img':[]}
+            if len(cds_labels_dest_2.selected.indices) == 0:
+                source_img_bf.data  = {'img':[]}
+                source_img_yfp.data = {'img':[]}
+                source_img_vast.data = {'img':[]}
             return
         cds_labels_dest_2_present.selected.indices = []
         cds_labels_dest_2.selected.indices = []
@@ -495,9 +496,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     #___________________________________________________________________________________________
     def dest_plate_2_visu(attr, old, new):
         if len(cds_labels_dest_2.selected.indices) == 0:
-            source_img_bf.data  = {'img':[]}
-            source_img_yfp.data = {'img':[]}
-            source_img_vast.data = {'img':[]}
+            if len(cds_labels_dest.selected.indices) == 0:
+                source_img_bf.data  = {'img':[]}
+                source_img_yfp.data = {'img':[]}
+                source_img_vast.data = {'img':[]}
             return
         cds_labels_dest_present.selected.indices = []
         cds_labels_dest.selected.indices = []
