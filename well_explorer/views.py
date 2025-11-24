@@ -354,7 +354,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     #___________________________________________________________________________________________
     def dest_plate_visu(attr, old, new):
-        if len(cds_labels_dest.selected.indices) == 0: 
+        if len(cds_labels_dest.selected.indices) == 0:
+            source_img_bf.data  = {'img':[]}
+            source_img_yfp.data = {'img':[]}
+            source_img_vast.data = {'img':[]}
             return
         cds_labels_dest_2_present.selected.indices = []
         cds_labels_dest_2.selected.indices = []
@@ -492,6 +495,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     #___________________________________________________________________________________________
     def dest_plate_2_visu(attr, old, new):
         if len(cds_labels_dest_2.selected.indices) == 0:
+            source_img_bf.data  = {'img':[]}
+            source_img_yfp.data = {'img':[]}
+            source_img_vast.data = {'img':[]}
             return
         cds_labels_dest_present.selected.indices = []
         cds_labels_dest.selected.indices = []
@@ -712,9 +718,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             cds_labels_dest_filled_bad.data = dict(x=[], y=[], size=[])
             cds_labels_dest_2_filled.data = dict(x=[], y=[], size=[])
             cds_labels_dest_2_filled_bad.data = dict(x=[], y=[], size=[])
-            source_img_bf.data  = {'img':[]}
-            source_img_yfp.data = {'img':[]}
-            source_img_vast.data = {'img':[]}
             drug_message.text = ""
             drug_message.visible = False
             image_message.text = "<b style='color:red; font-size:18px;'>No Leica images found for experiment {} need to run mapping</b>".format(new)
@@ -753,6 +756,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         cds_labels_dest_2_present.selected.indices = []
         cds_labels_dest.selected.indices = []
         cds_labels_dest_2.selected.indices = []
+
+        source_img_bf.data  = {'img':[]}
+        source_img_yfp.data = {'img':[]}
+        source_img_vast.data = {'img':[]}
 
     dropdown_exp.on_change("value", load_experiment)
 
