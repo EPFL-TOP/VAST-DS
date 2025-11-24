@@ -50,6 +50,7 @@ class OrientationCorrector:
 
         # Choose best orientation
         scores = [score0, score_h, score_v, score_hv]
+        print("    Orientation scores (no flip, h flip, v flip, hv flip): ", scores)
         best = np.argmax(scores)
 
         if best == 0:
