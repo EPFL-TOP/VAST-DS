@@ -1169,11 +1169,15 @@ def sortable_table(request):
         n_dest_wells = dest_wells.count()
         n_fish_valid = 0
         n_fish_notvalid = 0
+        n_total_somites = 0
+        n_bad_somites = 0
         for dest in dest_wells:
             try:
                 props = dest.dest_well_properties  # reverse OneToOne accessor
                 if props.valid:
                     n_fish_valid +=1
+                    n_total_somites += props.n_total_somites if props.n_total_somites is not None else 0
+                    n_bad_somites   += props.n_bad_somites   if props.n_bad_somites is not None else 0
                 else:
                     n_fish_notvalid +=1
             except DestWellProperties.DoesNotExist:
@@ -1189,8 +1193,9 @@ def sortable_table(request):
             "number_of_fish": n_fish_notvalid+n_fish_valid,
             "number_of_fish_valid": n_fish_valid,
             "number_of_fish_notvalid": n_fish_notvalid,
-            "avg_total_somites": None,
-            "avg_bad_somites": None,
+            "avg_total_somites": n_total_somites / n_fish_valid if n_fish_valid > 0 else None,
+            "avg_bad_somites": n_bad_somites / n_fish_valid if n_fish_valid > 0 else None,
+            "fraction_bad_somites": (n_bad_somites / n_total_somites) if n_total_somites > 0 else None,
             
         }
         if len(well_data["drugs"])>0:  # Only add wells that have drugs
