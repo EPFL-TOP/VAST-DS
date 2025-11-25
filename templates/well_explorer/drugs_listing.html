@@ -24,6 +24,14 @@
             <th>Well</th>
             <th>Drugs</th>
             <th>Concentrations</th>
+            <th>N drugs</th>
+            <th>N dest wells</th>
+            <th>N fish</th>
+            <th>N fish valid</th>
+            <th>N fish not valid</th>
+            <th>avg somites</th>
+            <th>avg bad somites</th>
+
         </tr>
     </thead>
     <tbody>
@@ -45,10 +53,21 @@
                     {{ d.conc }}<br>
                 {% endfor %}
             </td>
+            <td>{{ r.number_of_drugs }}</td>
+            <td>{{ r.number_of_dest_wells }}</td>
+            <td>{{ r.number_of_fish }}</td>
+            <td>{{ r.number_of_fish_valid }}</td>
+            <td>{{ r.number_of_fish_notvalid }}</td>
+            <td>{{ r.avg_total_somites }}</td>
+            <td>{{ r.avg_bad_somites }}</td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+
+
+            
+
 
 <!-- jQuery -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

@@ -1165,27 +1165,35 @@ def sortable_table(request):
     source_wells = SourceWellPosition.objects.all()
     for sw in source_wells:
         #print('Source well:', sw, ' has drugs:', sw.drugs.all())
+        dest_wells = DestWellPosition.objects.filter(source_well=sw)
+        n_dest_wells = dest_wells.count()
+        n_fish_valid = 0
+        n_fish_notvalid = 0
+        for dest in dest_wells:
+            try:
+                props = dest.dest_well_properties  # reverse OneToOne accessor
+                if props.valid:
+                    n_fish_valid +=1
+                else:
+                    n_fish_notvalid +=1
+            except DestWellProperties.DoesNotExist:
+                pass
+
+
         well_data = {
             "exp": sw.well_plate.experiment.name,
             "well": f"{sw.position_row}{sw.position_col}",
             "drugs": [{"name": drug.derivation_name, "conc": f"{drug.concentration} µM"} for drug in sw.drugs.all()],
+            "number_of_drugs": sw.drugs.count(),
+            "number_of_dest_wells": n_dest_wells,
+            "number_of_fish": n_fish_notvalid+n_fish_valid,
+            "number_of_fish_valid": n_fish_valid,
+            "number_of_fish_notvalid": n_fish_notvalid,
+            "avg_total_somites": None,
+            "avg_bad_somites": None,
+            
         }
-        drugs_data.append(well_data)
-    data = [
-        {
-            "well": "A01",
-            "cell_count": 12345,
-            "drugs": [
-                {"name": "DrugA", "conc": "10 µM"},
-                {"name": "DrugB", "conc": "2 µM"},
-            ],
-        },
-        {
-            "well": "A02",
-            "cell_count": 9876,
-            "drugs": [
-                {"name": "DrugC", "conc": "5 µM"},
-            ],
-        },
-    ]
+        if len(well_data["drugs"])>0:  # Only add wells that have drugs
+            drugs_data.append(well_data)
+
     return render(request, "well_explorer/drugs_listing.html", {"rows": drugs_data})
