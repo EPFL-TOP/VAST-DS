@@ -1156,5 +1156,9 @@ def bokeh_dashboard(request: HttpRequest) -> HttpResponse:
 from django.shortcuts import render
 
 def sortable_table(request):
-    #records = Record.objects.all()
-    return render(request, "well_explorer/drugs_listing.html", {"records": []})
+
+    table_data = [
+            {"name": "Alice", "v1": 12, "v2": 4, "v3": 1.1, "category": "A"},
+            {"name": "Bob",   "v1":  9, "v2": 3, "v3": 2.4, "category": "B"},
+        ]
+    return render(request, "sortable_table.html", {"data": table_data})

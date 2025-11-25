@@ -23,13 +23,13 @@
         </tr>
     </thead>
     <tbody>
-        {% for r in records %}
+        {% for row in data %}
         <tr>
-            <td>{{ r.name }}</td>
-            <td>{{ r.value1 }}</td>
-            <td>{{ r.value2 }}</td>
-            <td>{{ r.value3 }}</td>
-            <td>{{ r.category }}</td>
+            <td>{{ row.name }}</td>
+            <td>{{ row.value1 }}</td>
+            <td>{{ row.value2 }}</td>
+            <td>{{ row.value3 }}</td>
+            <td>{{ row.category }}</td>
         </tr>
         {% endfor %}
     </tbody>
