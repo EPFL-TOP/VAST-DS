@@ -1157,8 +1157,25 @@ from django.shortcuts import render
 
 def sortable_table(request):
 
-    table_data = [
-            {"name": "Alice", "v1": 12, "v2": 4, "v3": 1.1, "category": "A"},
-            {"name": "Bob",   "v1":  9, "v2": 3, "v3": 2.4, "category": "B"},
-        ]
-    return render(request, "well_explorer/drugs_listing.html", {"data": table_data})
+    source_wells = SourceWellPosition.objects.all()
+    for sw in source_wells:
+        print('Source well:', sw, ' has drugs:', sw.drugs.all())
+
+    data = [
+        {
+            "well": "A01",
+            "cell_count": 12345,
+            "drugs": [
+                {"name": "DrugA", "conc": "10 µM"},
+                {"name": "DrugB", "conc": "2 µM"},
+            ],
+        },
+        {
+            "well": "A02",
+            "cell_count": 9876,
+            "drugs": [
+                {"name": "DrugC", "conc": "5 µM"},
+            ],
+        },
+    ]
+    return render(request, "well_explorer/drugs_listing.html", {"data": data})
