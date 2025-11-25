@@ -1166,9 +1166,8 @@ def sortable_table(request):
     for sw in source_wells:
         #print('Source well:', sw, ' has drugs:', sw.drugs.all())
         well_data = {
-            "exp": sw.experiment.name,
+            "exp": sw.well_plate.experiment.name,
             "well": f"{sw.position_row}{sw.position_col}",
-            "cell_count": sw.cell_count,
             "drugs": [{"name": drug.derivation_name, "conc": f"{drug.concentration} µM"} for drug in sw.drugs.all()],
         }
         drugs_data.append(well_data)
