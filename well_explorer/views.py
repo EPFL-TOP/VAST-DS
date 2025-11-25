@@ -1139,6 +1139,7 @@ def index(request: HttpRequest) -> HttpResponse:
     return render(request, 'well_explorer/index.html', context=context)
 
 
+
 #___________________________________________________________________________________________
 #@login_required
 def bokeh_dashboard(request: HttpRequest) -> HttpResponse:
@@ -1148,3 +1149,12 @@ def bokeh_dashboard(request: HttpRequest) -> HttpResponse:
     context = {'script': script}
 
     return render(request, 'well_explorer/bokeh_dashboard.html', context=context)
+
+
+
+# views.py
+from django.shortcuts import render
+
+def sortable_table(request):
+    #records = Record.objects.all()
+    return render(request, "drug_listing.html", {"records": []})

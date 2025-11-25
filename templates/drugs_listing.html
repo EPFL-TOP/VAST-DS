@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Drug screening</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; }
+        th { cursor: pointer; background-color: #f3f3f3; }
+    </style>
+</head>
+<body>
+
+<h2>Sortable Table</h2>
+
+<table id="data-table">
+    <thead>
+        <tr>
+            <th onclick="sortTable(0)">Name</th>
+            <th onclick="sortTable(1)">Value 1</th>
+            <th onclick="sortTable(2)">Value 2</th>
+            <th onclick="sortTable(3)">Value 3</th>
+            <th onclick="sortTable(4)">Category</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in records %}
+        <tr>
+            <td>{{ r.name }}</td>
+            <td>{{ r.value1 }}</td>
+            <td>{{ r.value2 }}</td>
+            <td>{{ r.value3 }}</td>
+            <td>{{ r.category }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<script>
+function sortTable(colIndex) {
+    const table = document.getElementById("data-table");
+    let rows = Array.from(table.rows).slice(1);
+    let asc = table.getAttribute("data-sort-dir") !== "asc";
+
+    rows.sort((a, b) => {
+        let x = a.cells[colIndex].innerText;
+        let y = b.cells[colIndex].innerText;
+
+        // numeric sort if both numeric
+        if (!isNaN(x) && !isNaN(y)) {
+            return asc ? x - y : y - x;
+        }
+        return asc ? x.localeCompare(y) : y.localeCompare(x);
+    });
+
+    rows.forEach(r => table.tBodies[0].appendChild(r));
+    table.setAttribute("data-sort-dir", asc ? "asc" : "desc");
+}
+</script>
+
+</body>
+</html>
