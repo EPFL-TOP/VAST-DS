@@ -35,7 +35,7 @@ urlpatterns = [
     path(r"well_mapping/bokeh_dashboard", views_wm.bokeh_dashboard, name="bokeh_dashboard"),
     
     path(r"well_explorer/", views_we.index, name="index"),
-    path(r"well_explorer/", views_we.sortable_table, name="drug_listing"),
+    path(r"", views_we.sortable_table, name="drug_listing"),
     path(r"well_explorer/bokeh_dashboard", views_we.bokeh_dashboard, name="bokeh_dashboard"),
     path('admin/', admin.site.urls),
 ]
