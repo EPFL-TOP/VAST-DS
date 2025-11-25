@@ -1178,4 +1178,4 @@ def sortable_table(request):
             ],
         },
     ]
-    return render(request, "well_explorer/drugs_listing.html", {"data": data})
+    return render(request, "well_explorer/drugs_listing.html", {"rows": data})
