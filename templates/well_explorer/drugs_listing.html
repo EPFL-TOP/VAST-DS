@@ -20,6 +20,7 @@
 <table id="well-table" class="display">
     <thead>
         <tr>
+            <th>Experiment</th>
             <th>Well</th>
             <th>Cell Count</th>
             <th>Drugs</th>
@@ -29,6 +30,7 @@
     <tbody>
         {% for r in rows %}
         <tr>
+            <td>{{ r.exp }}</td>
             <td>{{ r.well }}</td>
             <td>{{ r.cell_count }}</td>
 

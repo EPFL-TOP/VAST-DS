@@ -1157,10 +1157,21 @@ from django.shortcuts import render
 
 def sortable_table(request):
 
+
+#Source well: exp=VAST_2025-07-28, pos=Z6, is_supp=True  has drugs: <QuerySet [<Drug: derivation_name=LY411575 Stock1 slims_id=OA_DS_00022 concentration=0.6 experiment=VAST_2025-07-28>, <Drug: derivation_name=KNK437 - HSP Inhibitor I Stock1 slims_id=OA_DS_00012 concentration=20.0 experiment=VAST_2025-07-28>]>
+#Source well: exp=VAST_2025-07-28, pos=Z7, is_supp=True  has drugs: <QuerySet [<Drug: derivation_name=LY411575 Stock1 slims_id=OA_DS_00022 concentration=0.6 experiment=VAST_2025-07-28>, <Drug: derivation_name=ARV-771 Stock2 slims_id=OA_DS_00058 concentration=50.0 experiment=VAST_2025-07-28>]>
+
+    drugs_data = []
     source_wells = SourceWellPosition.objects.all()
     for sw in source_wells:
-        print('Source well:', sw, ' has drugs:', sw.drugs.all())
-
+        #print('Source well:', sw, ' has drugs:', sw.drugs.all())
+        well_data = {
+            "exp": sw.experiment.name,
+            "well": f"{sw.position_row}{sw.position_col}",
+            "cell_count": sw.cell_count,
+            "drugs": [{"name": drug.derivation_name, "conc": f"{drug.concentration} µM"} for drug in sw.drugs.all()],
+        }
+        drugs_data.append(well_data)
     data = [
         {
             "well": "A01",
@@ -1178,4 +1189,4 @@ def sortable_table(request):
             ],
         },
     ]
-    return render(request, "well_explorer/drugs_listing.html", {"rows": data})
+    return render(request, "well_explorer/drugs_listing.html", {"rows": drugs_data})
