@@ -1157,4 +1157,4 @@ from django.shortcuts import render
 
 def sortable_table(request):
     #records = Record.objects.all()
-    return render(request, "drug_listing.html", {"records": []})
+    return render(request, "drugs_listing.html", {"records": []})
