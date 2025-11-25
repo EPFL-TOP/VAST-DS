@@ -1187,6 +1187,7 @@ def sortable_table(request):
         well_data = {
             "exp": sw.well_plate.experiment.name,
             "well": f"{sw.position_row}{sw.position_col}",
+            "valid": sw.valid,
             "drugs": [{"name": drug.derivation_name, "conc": f"{drug.concentration} µM"} for drug in sw.drugs.all()],
             "number_of_drugs": sw.drugs.count(),
             "number_of_dest_wells": n_dest_wells,
