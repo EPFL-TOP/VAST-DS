@@ -1161,4 +1161,4 @@ def sortable_table(request):
             {"name": "Alice", "v1": 12, "v2": 4, "v3": 1.1, "category": "A"},
             {"name": "Bob",   "v1":  9, "v2": 3, "v3": 2.4, "category": "B"},
         ]
-    return render(request, "sortable_table.html", {"data": table_data})
+    return render(request, "well_explorer/drugs_listing.html", {"data": table_data})
