@@ -100,7 +100,7 @@ if win_path.exists():
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': str(DBPATH / 'db.sqlite3'),  # must be a string
+        'NAME': str(DBPATH / 'db_VAST-DS.sqlite3'),  # must be a string
     }
 }
 
