@@ -69,9 +69,9 @@ model_orientation.eval()
 import vast_leica_mapping as vlm
 
 LOCALPATH_CH = "/Users/helsens/Software/github/EPFL-TOP/VAST-DS/data"
-LOCALPATH_HIVE= r'Y:\raw_data\microscopy\vast'
-LOCALPATH_RAID5 =r'D:\vast'
-LOCALPATH_TRAINING=r'D:\vast\training_data'
+LOCALPATH_HIVE= r'Y:\raw_data\microscopy\vast\VAST-DS'
+LOCALPATH_RAID5 =r'D:\vast\VAST-DS'
+LOCALPATH_TRAINING=r'D:\vast\VAST-DS\training_data'
 
 LOCALPATH = LOCALPATH_HIVE
 if os.path.exists(LOCALPATH_CH):
@@ -1156,10 +1156,6 @@ def bokeh_dashboard(request: HttpRequest) -> HttpResponse:
 from django.shortcuts import render
 
 def sortable_table(request):
-
-
-#Source well: exp=VAST_2025-07-28, pos=Z6, is_supp=True  has drugs: <QuerySet [<Drug: derivation_name=LY411575 Stock1 slims_id=OA_DS_00022 concentration=0.6 experiment=VAST_2025-07-28>, <Drug: derivation_name=KNK437 - HSP Inhibitor I Stock1 slims_id=OA_DS_00012 concentration=20.0 experiment=VAST_2025-07-28>]>
-#Source well: exp=VAST_2025-07-28, pos=Z7, is_supp=True  has drugs: <QuerySet [<Drug: derivation_name=LY411575 Stock1 slims_id=OA_DS_00022 concentration=0.6 experiment=VAST_2025-07-28>, <Drug: derivation_name=ARV-771 Stock2 slims_id=OA_DS_00058 concentration=50.0 experiment=VAST_2025-07-28>]>
 
     drugs_data = []
     source_wells = SourceWellPosition.objects.all()
