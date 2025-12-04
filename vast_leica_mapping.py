@@ -179,7 +179,13 @@ if __name__ == '__main__':
     """
     Main function to execute the mapping.
     """
-    file_path = "data"
-    experiment_name = "VAST_2025-07-08"
+    import argparse
+    parser = argparse.ArgumentParser(description="Map well to VAST files and orient fish images.")
+    parser.add_argument('--data_path', type=str, default="data", help="Path to the data directory.")
+    parser.add_argument('--experiment_name', type=str, default="VAST_2025-07-08", help="Name of the experiment.")
+    args = parser.parse_args()
+
+    file_path = args.data_path
+    experiment_name = args.experiment_name
     map_well_to_vast(file_path, experiment_name)
     orient_fish(data_path=file_path, experiment_name=experiment_name)

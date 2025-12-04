@@ -714,6 +714,11 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         path_plate_1_vast = os.path.join(LOCALPATH, dropdown_exp.value,'VAST images', 'Plate 1', 'Well_*')
         path_plate_2_vast = os.path.join(LOCALPATH, dropdown_exp.value,'VAST images', 'Plate 2', 'Well_*')        
 
+        print('path_plate_1_leica=', path_plate_1_leica)
+        print('path_plate_2_leica=', path_plate_2_leica)
+        print('path_plate_1_vast=', path_plate_1_vast)
+        print('path_plate_2_vast=', path_plate_2_vast)
+
         wells_plate_1_leica = [os.path.split(f)[-1] for f in glob.glob(path_plate_1_leica)]
         wells_plate_2_leica = [os.path.split(f)[-1] for f in glob.glob(path_plate_2_leica)]
 
