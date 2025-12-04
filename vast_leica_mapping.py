@@ -175,6 +175,44 @@ def map_well_to_vast(data_path, experiment_name):
             im_norm8.save(out_path_norm8)
 
 
+def scan_lif(data_path, experiment_name):
+    if not os.path.exists(data_path):
+        print(f"Data path {data_path} does not exist.")
+        return
+    print(f"Processing data path: {data_path}")
+
+    if not os.path.exists(os.path.join(data_path, experiment_name)):
+        print(f"{os.path.join(data_path, experiment_name)} is not a valid file.")
+        return
+    print(f"Processing experiment: {experiment_name}")
+    
+    file_path = os.path.join(data_path, experiment_name, 'Leica', f"{experiment_name}.lif")
+
+    if not os.path.exists(file_path):
+        print(f"Leica file {file_path} does not exist.")
+        return
+    print(f"Using Leica file: {file_path}")
+
+
+    reader = ImageReader()
+    meta   = MetadataTools.createOMEXMLMetadata()
+    DebugTools.enableLogging("OFF")
+
+    reader.setMetadataStore(meta)
+    reader.setId(file_path)
+    meta    = reader.getMetadataStore() # Retrieves the metadata object
+    nSeries = reader.getSeriesCount()
+
+    print('nSeries=', nSeries)
+    for iImage in range(nSeries):
+        reader.setSeries(iImage)
+        imname=str(meta.getImageName(iImage))
+
+        if imname==None or imname=='':
+            print('Image name is empty, skipping this image.')
+            continue
+
+
 if __name__ == '__main__':
     """
     Main function to execute the mapping.
@@ -183,9 +221,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Map well to VAST files and orient fish images.")
     parser.add_argument('--data_path', type=str, default="data", help="Path to the data directory.")
     parser.add_argument('--experiment_name', type=str, default="VAST_2025-07-08", help="Name of the experiment.")
+    parser.add_argument('--scan_lif', action='store_true', help="If set, only scan the LIF file for metadata.")
+
     args = parser.parse_args()
 
     file_path = args.data_path
     experiment_name = args.experiment_name
-    map_well_to_vast(file_path, experiment_name)
-    orient_fish(data_path=file_path, experiment_name=experiment_name)
+    if args.scan_lif:
+        scan_lif(file_path, experiment_name)
+    else:
+        map_well_to_vast(file_path, experiment_name)
+        #orient_fish(data_path=file_path, experiment_name=experiment_name)
