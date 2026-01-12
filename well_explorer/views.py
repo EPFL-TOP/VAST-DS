@@ -1229,8 +1229,8 @@ def experiment_list(request: HttpRequest) -> HttpResponse:
 
             for dest in dest_well_positions:
                 try:
-                    n_wells += 1
                     props = dest.dest_well_properties  # reverse OneToOne accessor
+                    n_wells += 1
                     if props.valid:
                         n_fish_valid +=1
                     else:
