@@ -25,6 +25,7 @@
             <th>Number of Wells</th>
             <th>Number of Valid Fish</th>
             <th>Number of Invalid Fish</th>
+            <th>Number of Fish</th>
             <th>Percentage</th>
             <th>Description</th>
 
@@ -38,12 +39,26 @@
             <td>{{ r.n_wells }}</td>
             <td>{{ r.n_fish_valid }}</td>
             <td>{{ r.n_fish_notvalid }}</td>
+            <td>{{ r.n_fish }}</td>
             <td>{{ r.fraction_valid|floatformat:2 }}%</td>
             <td>{{ r.description }}</td>
 
            
         </tr>
         {% endfor %}
+    </tbody>
+
+    <tbody>
+        <tr>
+            <td>{{ data_total.name }}</td>
+            <td>{{ data_total.date_created }}</td>
+            <td>{{ data_total.n_wells }}</td>
+            <td>{{ data_total.n_fish_valid }}</td>
+            <td>{{ data_total.n_fish_notvalid }}</td>
+            <td>{{ data_total.n_fish }}</td>
+            <td>{{ data_total.fraction_valid|floatformat:2 }}%</td>
+            <td>{{ data_total.description }}</td>
+        </tr>
     </tbody>
     <tfoot>
         <tr>
