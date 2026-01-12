@@ -25,6 +25,7 @@
             <th>Number of Wells</th>
             <th>Number of Valid Fish</th>
             <th>Number of Invalid Fish</th>
+            <th>Percentage</th>
             <th>Description</th>
 
         </tr>
@@ -37,6 +38,7 @@
             <td>{{ r.n_wells }}</td>
             <td>{{ r.n_fish_valid }}</td>
             <td>{{ r.n_fish_notvalid }}</td>
+            <td>{{ r.fraction_valid|floatformat:2 }}%</td>
             <td>{{ r.description }}</td>
 
            

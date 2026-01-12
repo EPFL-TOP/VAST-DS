@@ -1219,10 +1219,9 @@ def experiment_list(request: HttpRequest) -> HttpResponse:
         for plate in dest_well_plates:
             dest_well_positions = DestWellPosition.objects.filter(well_plate=plate)
 
-            n_wells += dest_well_positions.count()
-
             for dest in dest_well_positions:
                 try:
+                    n_wells += 1
                     props = dest.dest_well_properties  # reverse OneToOne accessor
                     if props.valid:
                         n_fish_valid +=1
@@ -1237,4 +1236,5 @@ def experiment_list(request: HttpRequest) -> HttpResponse:
         data[-1]['n_wells'] = n_wells
         data[-1]['n_fish_valid'] = n_fish_valid
         data[-1]['n_fish_notvalid'] = n_fish_notvalid
+        data[-1]['fraction_valid'] = (n_fish_valid / (n_fish_valid + n_fish_notvalid)) * 100 if (n_fish_valid + n_fish_notvalid) > 0 else 0
     return render(request, 'well_explorer/experiment_listing.html', {'rows': data})
