@@ -1160,7 +1160,7 @@ def bokeh_dashboard(request: HttpRequest) -> HttpResponse:
 # views.py
 from django.shortcuts import render
 
-def sortable_table(request):
+def drug_list(request):
 
     drugs_data = []
     source_wells = SourceWellPosition.objects.all()
@@ -1204,3 +1204,12 @@ def sortable_table(request):
             drugs_data.append(well_data)
 
     return render(request, "well_explorer/drugs_listing.html", {"rows": drugs_data})
+
+#___________________________________________________________________________________________
+def experiment_list(request: HttpRequest) -> HttpResponse:
+    data=[]
+    experiments = Experiment.objects.all().order_by('-date_created')
+    for exp in experiments:
+        data.append({'name': exp.name, 'date_created': exp.date_created, 'description': exp.description})
+
+    return render(request, 'well_explorer/experiment_list.html', {'rows': data})

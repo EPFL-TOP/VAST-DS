@@ -23,7 +23,7 @@ DateTimeZone  = jimport('org.joda.time.DateTimeZone')
 
 
 
-def map_well_to_vast(data_path, experiment_name):
+def map_well_to_vast(data_path, experiment_name, use_nplanes=False):
     """
     Maps the well to the VAST file and prints metadata information.
     """
@@ -52,7 +52,7 @@ def map_well_to_vast(data_path, experiment_name):
     plates = glob.glob(os.path.join(data_path, experiment_name, 'VAST images', 'Plate*'))
     print(f"Found plates: {plates}")
     well_dict={}
-
+    plate_dict={}
     for p in plates:
         if not os.path.isdir(p):
             print(f"Skipping {p} as it is not a directory.")
@@ -63,6 +63,7 @@ def map_well_to_vast(data_path, experiment_name):
         if not wells:
             print(f"No wells found in {p}.")
             continue
+        plate_dict[p]=len(wells)
         for w in wells:
             print(f"Processing well: {w}")
             vast_files = glob.glob(os.path.join(w, '*.tiff'))
@@ -105,9 +106,20 @@ def map_well_to_vast(data_path, experiment_name):
             print('Image name is empty, skipping this image.')
             continue
 
-        if 'Plate' not in imname and 'plate' not in imname:
+        if 'Plate' not in imname and 'plate' not in imname and use_nplanes==False:
             print(f"Skipping image {iImage} with name {imname} as it does not contain 'Plate' or 'plate'.")
             continue
+
+        #if use_nplanes==True:
+        #    nPlanes = meta.getPlaneCount(iImage) # Number of Planes within the image
+        #    for p in plate_dict:
+        #        if math.fabs(nPlanes-plate_dict[p])/plate_dict[p]<0.2:
+        #            print(f"Image {iImage} with name {imname} has {nPlanes} planes, which is more than 20% off nPlanes={nPlanes} nwell={plate_dict[p]}.")
+        #            continue
+        #        else:
+        #            print(f"Image {iImage} with name {imname} matched to plate {p} with {plate_dict[p]} wells based on nPlanes={nPlanes}.")
+
+
 
         print(' --->>> Processing Image name:', imname)
         im_type = imname.split('/')[-1]
@@ -137,8 +149,9 @@ def map_well_to_vast(data_path, experiment_name):
                 if delta_t<minDeltaT:
                     sel_well=w
                     minDeltaT=delta_t
-            print("   plane= ", iPlane,"    Acquired at ",meta.getPlaneDeltaT(iImage,iPlane).value().doubleValue(), '  ',dt_object,'  ',sel_well)
-
+            print("   plane= ", iPlane,"    Acquired at ",meta.getPlaneDeltaT(iImage,iPlane).value().doubleValue(), '  ',dt_object,'  ',sel_well, '   delta_t=',minDeltaT)
+            print('   well time= ', well_dict[sel_well],'  ',datetime.fromtimestamp(well_dict[sel_well]))
+            print('   timestamp= ', timestamp)
             #bytes_arr=np.array(reader.openBytes(iPlane), np.uint8)
             bytes_arr=np.array(reader.openBytes(iPlane))
             arr = np.frombuffer(bytes_arr, dtype=np.uint16)  # or dtype='<u2' / '>u2' if needed
@@ -212,6 +225,28 @@ def scan_lif(data_path, experiment_name):
             print('Image name is empty, skipping this image.')
             continue
 
+        print(' --->>> Processing Image name:', imname)
+        im_type = imname.split('/')[-1]
+
+        nPlanes = meta.getPlaneCount(iImage) # Number of Planes within the image
+        
+        print("Image #",iImage,"  imagename=",meta.getImageName(iImage), " nPlanes=",nPlanes)
+        print("acq date =", meta.getImageAcquisitionDate(iImage).asDateTime(DateTimeZone.UTC).getMillis())
+        print("acq date =", meta.getImageAcquisitionDate(iImage).asDateTime(DateTimeZone.UTC))
+        timestamp=int(meta.getImageAcquisitionDate(iImage).asDateTime(DateTimeZone.UTC).getMillis())/1000.
+        dt_object = datetime.fromtimestamp(timestamp)
+        print('datetime=',dt_object)
+        for iPlane in range(nPlanes):
+            zct = reader.getZCTCoords(iPlane)
+            print("Plane C:",zct[0]," Z:",zct[1]," T:",zct[2])
+            if meta.getPlaneDeltaT(iImage,iPlane)==None:
+                print(f"Skipping plane {iPlane} for image {iImage} as PlaneDeltaT is None.")
+                continue
+            dt_object = datetime.fromtimestamp(timestamp+float(meta.getPlaneDeltaT(iImage,iPlane).value().doubleValue()))
+            
+            print("   plane= ", iPlane,"    Acquired at ",meta.getPlaneDeltaT(iImage,iPlane).value().doubleValue(), '  ',dt_object)
+
+
 
 if __name__ == '__main__':
     """
@@ -222,6 +257,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', type=str, default="data", help="Path to the data directory.")
     parser.add_argument('--experiment_name', type=str, default="VAST_2025-07-08", help="Name of the experiment.")
     parser.add_argument('--scan_lif', action='store_true', help="If set, only scan the LIF file for metadata.")
+    parser.add_argument('--use_nplanes', action='store_true', help="If set, use the planes to match.")
 
     args = parser.parse_args()
 
@@ -230,5 +266,5 @@ if __name__ == '__main__':
     if args.scan_lif:
         scan_lif(file_path, experiment_name)
     else:
-        map_well_to_vast(file_path, experiment_name)
+        map_well_to_vast(file_path, experiment_name, use_nplanes=args.use_nplanes)
         #orient_fish(data_path=file_path, experiment_name=experiment_name)
