@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Experiment listing</title>
+
+    <!-- DataTables CSS -->
+    <link rel="stylesheet"
+        href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+
+    <style>
+        table.dataTable tbody td {
+            vertical-align: top;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Well Table</h2>
+
+<table id="well-table" class="display">
+    <thead>
+        <tr>
+            <th>Experiment</th>
+            <th>Date</th>
+            <th>Description</th>
+
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in rows %}
+        <tr>
+            <td>{{ r.name }}</td>
+            <td>{{ r.date_created }}</td>
+            <td>{{ r.description }}</td>
+
+           
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+
+            
+
+
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<!-- DataTables JS -->
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    $('#well-table').DataTable({
+        pageLength: 25,
+        lengthMenu: [10, 25, 50, 100],
+    });
+});
+</script>
+
+</body>
+</html>
