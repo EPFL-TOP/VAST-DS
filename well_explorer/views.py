@@ -1210,6 +1210,24 @@ def experiment_list(request: HttpRequest) -> HttpResponse:
     data=[]
     experiments = Experiment.objects.all()
     for exp in experiments:
-        data.append({'name': exp.name, 'date_created': exp.date_created, 'description': exp.description})
-
+        data.append({'name': exp.name, 'date_created': exp.date, 'description': exp.description})
+        dest_well_plates = DestWellPlate.objects.filter(experiment=exp)
+        for plate in dest_well_plates:
+            dest_well_positions = DestWellPosition.objects.filter(well_plate=plate)
+            n_wells = dest_well_positions.count()
+            n_fish_valid = 0
+            n_fish_notvalid = 0
+            for dest in dest_well_positions:
+                try:
+                    props = dest.dest_well_properties  # reverse OneToOne accessor
+                    if props.valid:
+                        n_fish_valid +=1
+                    else:
+                        n_fish_notvalid +=1
+                except DestWellProperties.DoesNotExist:
+                    pass
+            #data[-1][f'plate_{plate.plate_number}_type'] = plate.plate_type
+            #data[-1][f'plate_{plate.plate_number}_n_wells'] = n_wells
+            #data[-1][f'plate_{plate.plate_number}_n_fish_valid'] = n_fish_valid
+            #data[-1][f'plate_{plate.plate_number}_n_fish_notvalid'] = n_fish_notvalid
     return render(request, 'well_explorer/experiment_listing.html', {'rows': data})
