@@ -1209,12 +1209,20 @@ def drug_list(request):
 def experiment_list(request: HttpRequest) -> HttpResponse:
     data=[]
     experiments = Experiment.objects.all()
+
+    n_fish_valid_total = 0
+    n_fish_notvalid_total = 0
+    n_wells_total  = 0
+    n_fish_total = 0
     for exp in experiments:
 
         data.append({'name': exp.name, 'date_created': exp.date, 'description': exp.description})
         n_fish_valid = 0
         n_fish_notvalid = 0
+        n_fish = 0
         n_wells = 0
+
+
         dest_well_plates = DestWellPlate.objects.filter(experiment=exp)
         for plate in dest_well_plates:
             dest_well_positions = DestWellPosition.objects.filter(well_plate=plate)
@@ -1229,12 +1237,16 @@ def experiment_list(request: HttpRequest) -> HttpResponse:
                         n_fish_notvalid +=1
                 except DestWellProperties.DoesNotExist:
                     pass
-            #data[-1][f'plate_{plate.plate_number}_type'] = plate.plate_type
-            #data[-1][f'plate_{plate.plate_number}_n_wells'] = n_wells
-            #data[-1][f'plate_{plate.plate_number}_n_fish_valid'] = n_fish_valid
-            #data[-1][f'plate_{plate.plate_number}_n_fish_notvalid'] = n_fish_notvalid
+
         data[-1]['n_wells'] = n_wells
         data[-1]['n_fish_valid'] = n_fish_valid
         data[-1]['n_fish_notvalid'] = n_fish_notvalid
         data[-1]['fraction_valid'] = (n_fish_valid / (n_fish_valid + n_fish_notvalid)) * 100 if (n_fish_valid + n_fish_notvalid) > 0 else 0
-    return render(request, 'well_explorer/experiment_listing.html', {'rows': data})
+        n_fish = n_fish_valid + n_fish_notvalid
+        data[-1]['n_fish'] = n_fish
+        n_fish_valid_total += n_fish_valid
+        n_fish_notvalid_total += n_fish_notvalid
+        n_fish_total += n_fish
+        n_wells_total += n_wells
+    data_total = {'name': 'TOTAL', 'date_created': '', 'description': '', 'n_wells': n_wells_total, 'n_fish_valid': n_fish_valid_total, 'n_fish_notvalid': n_fish_notvalid_total, 'fraction_valid': (n_fish_valid_total / (n_fish_valid_total + n_fish_notvalid_total)) * 100 if (n_fish_valid_total + n_fish_notvalid_total) > 0 else 0,  'n_fish': n_fish_total}
+    return render(request, 'well_explorer/experiment_listing.html', {'rows': data, 'data_total': data_total})
