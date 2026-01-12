@@ -1208,7 +1208,7 @@ def drug_list(request):
 #___________________________________________________________________________________________
 def experiment_list(request: HttpRequest) -> HttpResponse:
     data=[]
-    experiments = Experiment.objects.all().order_by('-date_created')
+    experiments = Experiment.objects.all()
     for exp in experiments:
         data.append({'name': exp.name, 'date_created': exp.date_created, 'description': exp.description})
 
