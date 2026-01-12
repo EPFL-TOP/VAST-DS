@@ -1212,4 +1212,4 @@ def experiment_list(request: HttpRequest) -> HttpResponse:
     for exp in experiments:
         data.append({'name': exp.name, 'date_created': exp.date_created, 'description': exp.description})
 
-    return render(request, 'well_explorer/experiment_list.html', {'rows': data})
+    return render(request, 'well_explorer/experiment_listing.html', {'rows': data})
