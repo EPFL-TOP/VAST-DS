@@ -1164,8 +1164,7 @@ def drug_list(request):
 
     drugs_data = []
     source_wells = SourceWellPosition.objects.all()
-    dest_wp_1 = []
-    dest_wp_2 = []
+
     for sw in source_wells:
         #print('Source well:', sw, ' has drugs:', sw.drugs.all())
         dest_wells = DestWellPosition.objects.filter(source_well=sw)
@@ -1174,6 +1173,8 @@ def drug_list(request):
         n_fish_notvalid = 0
         n_total_somites = 0
         n_bad_somites = 0
+        dest_wp_1 = []
+        dest_wp_2 = []
         for dest in dest_wells:
             try:
                 props = dest.dest_well_properties  # reverse OneToOne accessor
