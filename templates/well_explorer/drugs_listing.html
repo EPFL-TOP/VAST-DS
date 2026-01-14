@@ -152,29 +152,30 @@
     <br>
     <button class="toggle-images-row" style="cursor:pointer;">Show images</button>
     
+
+
     <div class="image-content-source" style="display:none;">
-        <div style="padding: 15px; background: #f9f9f9; border: 1px solid #ddd;">
+        <div style="padding: 15px;">
             <strong>Valid Images</strong>
-            <!--div class="image-grid">
-                {% for img in r.images_valid %}
-                    <img src="{{ img }}" width="150" class="zoomable" style="margin:5px; border:1px solid #ccc;">
-                {% endfor %}
-            </div-->
             <div class="image-grid">
-    {% for img in r.images_valid %}
-        <div class="img-container"> <img src="{{ img }}" class="zoomable" width="150">
-        </div>
-    {% endfor %}
-</div>
+                {% for img in r.images_valid %}
+                    <div class="img-container">
+                        <img src="{{ img }}" class="zoomable" width="150">
+                    </div>
+                {% endfor %}
+            </div>
             <br>
             <strong>Invalid Images</strong>
             <div class="image-grid">
                 {% for img in r.images_invalid %}
-                    <img src="{{ img }}" width="150" class="zoomable" style="margin:5px; border:1px solid #ccc;">
+                    <div class="img-container">
+                        <img src="{{ img }}" class="zoomable" width="150">
+                    </div>
                 {% endfor %}
             </div>
         </div>
     </div>
+
 </td>
 
 
@@ -236,62 +237,77 @@
 });*/
 
 $(document).ready(function() {
+    // Initialize DataTable
+    var table = $('#well-table').DataTable({
+        pageLength: 25
+    });
+
     let currentImgElement = null;
 
-    // 1. Open Modal
-    $(document).on("click", ".zoomable", function() {
+    // --- 1. CHILD ROW TOGGLE ---
+    $('#well-table tbody').off('click', '.toggle-images-row').on('click', '.toggle-images-row', function (e) {
+        e.preventDefault();
+        var tr = $(this).closest('tr');
+        var row = table.row(tr);
+
+        if (row.child.isShown()) {
+            row.child.hide();
+            $(this).text('Show images');
+        } else {
+            var content = tr.find('.image-content-source').html();
+            row.child(content).show();
+            $(this).text('Hide images');
+        }
+    });
+
+    // --- 2. ZOOM MODAL OPEN ---
+    $(document).off('click', '.zoomable').on('click', '.zoomable', function(e) {
+        e.stopPropagation();
         currentImgElement = $(this);
-        updateModalContent();
+        updateModal();
         $('#image-modal').fadeIn(200);
     });
 
-    // 2. Update Modal Content & Toggle Buttons
-    function updateModalContent() {
-        if (!currentImgElement) return;
+    // --- 3. MODAL NAVIGATION ---
+    function updateModal() {
+        if (!currentImgElement || currentImgElement.length === 0) return;
 
-        const src = currentImgElement.attr('src');
-        $('#modal-img').attr('src', src);
+        // Set the image source
+        $('#modal-img').attr('src', currentImgElement.attr('src'));
 
-        // Find neighbors in the same .image-grid
-        const hasPrev = currentImgElement.closest('.img-container').prev('.img-container').find('.zoomable').length > 0;
-        const hasNext = currentImgElement.closest('.img-container').next('.img-container').find('.zoomable').length > 0;
+        // Look for siblings within the SAME .image-grid
+        var parentGrid = currentImgElement.closest('.image-grid');
+        var allImages = parentGrid.find('.zoomable');
+        var index = allImages.index(currentImgElement);
 
-        // Show or hide buttons based on availability
-        $('.prev-btn').toggle(hasPrev);
-        $('.next-btn').toggle(hasNext);
+        // Toggle visibility of buttons
+        $('.prev-btn').toggle(index > 0);
+        $('.next-btn').toggle(index < allImages.length - 1);
         
-        // Optional: Show count (e.g., 1 of 5)
-        const parent = currentImgElement.closest('.image-grid');
-        const index = parent.find('.zoomable').index(currentImgElement) + 1;
-        const total = parent.find('.zoomable').length;
-        $('#modal-caption').text("Image " + index + " of " + total);
+        $('#modal-caption').text("Image " + (index + 1) + " of " + allImages.length);
     }
 
-    // 3. Next/Prev Click Events
-    $('.next-btn').on("click", function(e) {
-        e.stopPropagation(); // Don't close the modal
-        currentImgElement = currentImgElement.closest('.img-container').next('.img-container').find('.zoomable');
-        updateModalContent();
+    $('.next-btn').on('click', function(e) {
+        e.stopPropagation();
+        var parentGrid = currentImgElement.closest('.image-grid');
+        var allImages = parentGrid.find('.zoomable');
+        var index = allImages.index(currentImgElement);
+        currentImgElement = allImages.eq(index + 1);
+        updateModal();
     });
 
-    $('.prev-btn').on("click", function(e) {
-        e.stopPropagation(); // Don't close the modal
-        currentImgElement = currentImgElement.closest('.img-container').prev('.img-container').find('.zoomable');
-        updateModalContent();
+    $('.prev-btn').on('click', function(e) {
+        e.stopPropagation();
+        var parentGrid = currentImgElement.closest('.image-grid');
+        var allImages = parentGrid.find('.zoomable');
+        var index = allImages.index(currentImgElement);
+        currentImgElement = allImages.eq(index - 1);
+        updateModal();
     });
 
-    // 4. Close Modal
-    $('#image-modal').on("click", function() {
+    // Close modal
+    $('#image-modal').on('click', function() {
         $(this).fadeOut(200);
-    });
-    
-    // 5. Bonus: Keyboard support (Left/Right arrows)
-    $(document).keydown(function(e) {
-        if ($('#image-modal').is(':visible')) {
-            if (e.keyCode == 37) $('.prev-btn').click(); // Left arrow
-            if (e.keyCode == 39) $('.next-btn').click(); // Right arrow
-            if (e.keyCode == 27) $('#image-modal').click(); // Esc key
-        }
     });
 });
 
