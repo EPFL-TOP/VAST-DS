@@ -158,8 +158,8 @@
 
             <div class="button-group">
                 <button class="nav-btn prev-btn">&#10094; Prev</button>
-                <button id="reset-zoom-btn" title="Reset Zoom">Reset</button>
                 <button class="nav-btn next-btn">Next &#10095;</button>
+                <button id="reset-zoom-btn" title="Reset Zoom">Reset</button>
             </div>
             
             <div style="font-size: 11px; opacity: 0.6; margin-top: 5px;">
@@ -202,7 +202,7 @@
             <div class="image-grid">
                 {% for img in r.images_valid %}
                     <div class="img-container">
-                        <img src="{{ img }}" class="zoomable" width="150">
+                        <img src="{{ img }}" class="zoomable" width="150" data-status="valid">
                     </div>
                 {% endfor %}
             </div>
@@ -211,7 +211,7 @@
             <div class="image-grid">
                 {% for img in r.images_invalid %}
                     <div class="img-container">
-                        <img src="{{ img }}" class="zoomable" width="150">
+                        <img src="{{ img }}" class="zoomable" width="150" data-status="invalid">
                     </div>
                 {% endfor %}
             </div>
@@ -244,39 +244,6 @@
 
 <script>
 
-/*$(document).ready(function() {
-    var table = $('#well-table').DataTable({
-        pageLength: 25
-    });
-
-    // 1. Logic to show/hide the child row
-    $('#well-table tbody').on('click', 'button.toggle-images-row', function () {
-        var tr = $(this).closest('tr');
-        var row = table.row(tr);
-
-        if (row.child.isShown()) {
-            row.child.hide();
-            $(this).text('Show images');
-        } else {
-            var imgHtml = tr.find('.image-content-source').html();
-            row.child(imgHtml).show();
-            $(this).text('Hide images');
-        }
-    });
-
-    // 2. FIXED ZOOM LOGIC: Use event delegation
-    // This listens for clicks on the "body", so it works for dynamic images
-    $(document).on("click", ".zoomable", function() {
-        const src = $(this).attr('src');
-        $('#modal-img').attr('src', src);
-        $('#image-modal').fadeIn(200); // Smooth fade in
-    });
-
-    // 3. Close modal when clicking anywhere on it
-    $('#image-modal').on("click", function() {
-        $(this).fadeOut(200);
-    });
-});*/
 
 $(document).ready(function() {
     var table = $('#well-table').DataTable({ pageLength: 25 });
