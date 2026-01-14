@@ -77,6 +77,15 @@ LOCALPATH = LOCALPATH_HIVE
 if os.path.exists(LOCALPATH_CH):
     LOCALPATH = LOCALPATH_CH
 
+
+from pathlib import Path
+
+def to_media_url(path):
+    p = Path(path)
+    # remove D:\vast
+    rel = p.relative_to(r"D:\vast")
+    return f"/media/{rel.as_posix()}"
+
 #___________________________________________________________________________________________
 def vast_handler(doc: bokeh.document.Document) -> None:
     print('****************************  vast_handler ****************************')
@@ -1216,8 +1225,17 @@ def drug_list(request):
                 pass
 
 
+        image_list_valid = [
+            to_media_url(p) for p in image_list_valid
+        ]
+
+        image_list_not_valid = [
+            to_media_url(p) for p in image_list_not_valid
+        ]
+
         print("image_list_valid=", image_list_valid)
         print("image_list_not_valid=", image_list_not_valid)
+
         dest_plate_info = '' 
         if len(dest_wp_1) > 0:
             dest_plate_info += 'Plate1: ' + ', '.join(dest_wp_1)

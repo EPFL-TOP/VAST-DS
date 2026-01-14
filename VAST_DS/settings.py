@@ -22,6 +22,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
+MEDIA_URL = "/media/"
+MEDIA_ROOT = r"D:\vast"
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-95(dkg@8@7i#ar45)jctudjfdi=k%58ul1+$&)=53_8-mmh45$'
 
