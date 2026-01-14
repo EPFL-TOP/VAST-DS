@@ -75,12 +75,19 @@
         }
 
 
+
         #modal-img {
-            margin-top: 5%;
-            max-width: 90%;
-            max-height: 80%;
-            border: 5px solid white;
-        }
+    /* Prevents the browser's default "ghosting" behavior */
+    user-select: none;
+    -webkit-user-drag: none;
+    display: block;
+    max-width: 80vw;
+    max-height: 70vh;
+    transition: transform 0.1s ease-out;
+    position: relative;
+    left: 0;
+    top: 0;
+}
 
 #image-modal {
     display: none;
@@ -348,8 +355,44 @@
 
 $(document).ready(function() {
 
-    let isDragging = false;
-    let startX, startY, currentX = 0, currentY = 0;
+
+let isDragging = false;
+let startX, startY;
+let currentX = 0, currentY = 0;
+
+// 1. Mousedown (Start)
+$('#zoom-container').on('mousedown', function(e) {
+    if (scale > 1) { 
+        isDragging = true;
+        $(this).css('cursor', 'grabbing');
+        
+        // Calculate the offset of the click relative to the image's current position
+        startX = e.pageX - currentX;
+        startY = e.pageY - currentY;
+        
+        e.preventDefault(); // STOPS THE "LOCKING" BUG
+    }
+});
+
+// 2. Mousemove (Moving - Global)
+$(document).on('mousemove', function(e) {
+    if (isDragging) {
+        currentX = e.pageX - startX;
+        currentY = e.pageY - startY;
+        updateImageTransform();
+    }
+});
+
+// 3. Mouseup (Stop - Global)
+$(document).on('mouseup', function() {
+    if (isDragging) {
+        isDragging = false;
+        $('#zoom-container').css('cursor', 'grab');
+    }
+});
+
+
+
 
     // Update the reset button to also reset position
     $('#reset-zoom-btn').on('click', function() {
@@ -368,27 +411,8 @@ $(document).ready(function() {
         });
     }
 
-    // DRAG LOGIC
-    $('#zoom-container').on('mousedown', function(e) {
-        if (scale > 1) { // Only drag if zoomed in
-            isDragging = true;
-            startX = e.pageX - currentX;
-            startY = e.pageY - currentY;
-        }
-    });
 
-    $(window).on('mousemove', function(e) {
-        if (isDragging) {
-            currentX = e.pageX - startX;
-            currentY = e.pageY - startY;
-            updateImageTransform();
-        }
-    });
 
-    $(window).on('mouseup', function() {
-        isDragging = false;
-    });
-    
     var table = $('#well-table').DataTable({ pageLength: 25 });
     let currentImgElement = null;
     let scale = 1;
@@ -485,9 +509,21 @@ function updateModal() {
     });
 
     // 5. Close on background click
-    $('#image-modal').on('click', function(e) {
-        if (e.target === this) $(this).fadeOut(200);
-    });
+
+// Close modal only if clicking the DARK BACKGROUND (not the image or controls)
+$('#image-modal').on('click', function(e) {
+    if (e.target === this) {
+        $(this).fadeOut(200);
+    }
+});
+
+// If you want a specific way to close it without clicking the background, 
+// use the Escape key or add a "Close" button.
+$(document).keydown(function(e) {
+    if (e.keyCode == 27) $('#image-modal').fadeOut(200); // ESC to close
+});
+
+
 });
 
 $(document).keydown(function(e) {
