@@ -52,15 +52,7 @@
             object-fit: cover;
         }
 
-        /* Simple Modal for Zooming */
-        #image-modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0; top: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.8);
-            text-align: center;
-        }
+
         #modal-img {
             margin-top: 5%;
             max-width: 90%;
@@ -68,66 +60,81 @@
             border: 5px solid white;
         }
 
-/* Modal UI */
+#image-modal {
+    display: none;
+    position: fixed;
+    z-index: 10000;
+    left: 0; top: 0; width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    text-align: center;
+}
+
+#image-modal::before {
+    content: ''; display: inline-block; height: 100%; vertical-align: middle;
+}
+
 .modal-content-wrapper {
     display: inline-block;
     vertical-align: middle;
-    background: #222; /* Dark background for the control area */
-    padding: 10px;
-    border-radius: 8px;
-    position: relative;
+    background: #1a1a1a;
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid #444;
 }
 
 #zoom-container {
-    overflow: hidden; /* Clips the image when zoomed in */
-    cursor: zoom-in;
+    overflow: hidden;
     background: #000;
+    border-radius: 4px;
+    margin-bottom: 10px;
 }
 
 #modal-img {
     display: block;
     max-width: 80vw;
     max-height: 70vh;
-    transition: transform 0.1s ease; /* Smooth zoom transition */
+    transition: transform 0.1s ease-out;
     transform-origin: center;
 }
 
-/* Control Bar */
 .modal-controls {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-top: 15px;
     color: white;
+    font-family: sans-serif;
 }
 
-.nav-btn {
+.button-group {
+    display: inline-flex;
+    gap: 2px;
+    margin: 10px 0;
+}
+
+.nav-btn, #reset-zoom-btn {
     background: #444;
     border: none;
     color: white;
-    padding: 10px 20px;
+    padding: 10px 18px;
     cursor: pointer;
-    border-radius: 4px;
     font-size: 14px;
 }
 
-.nav-btn:hover { background: #666; }
+.nav-btn:hover, #reset-zoom-btn:hover { background: #666; }
 
-.modal-info {
-    text-align: center;
-    flex-grow: 1;
+/* Styling specifically for the Reset button */
+#reset-zoom-btn {
+    background: #007bff;
+    font-weight: bold;
 }
+
+.prev-btn { border-radius: 4px 0 0 4px; }
+.next-btn { border-radius: 0 4px 4px 0; }
 
 #modal-status-badge {
-    display: inline-block;
-    padding: 2px 8px;
+    padding: 3px 10px;
     border-radius: 4px;
     font-weight: bold;
-    text-transform: uppercase;
     font-size: 12px;
-    margin-bottom: 5px;
+    margin-right: 10px;
 }
-
 .status-valid { background: #28a745; }
 .status-invalid { background: #dc3545; }
 
@@ -144,15 +151,20 @@
         </div>
 
         <div class="modal-controls">
-            <button class="nav-btn prev-btn">&#10094; Prev</button>
-            
             <div class="modal-info">
                 <span id="modal-status-badge"></span>
                 <span id="modal-caption"></span>
-                <div style="font-size: 10px; opacity: 0.7;">Scroll to Zoom • Drag to Move</div>
             </div>
 
-            <button class="nav-btn next-btn">Next &#10095;</button>
+            <div class="button-group">
+                <button class="nav-btn prev-btn">&#10094; Prev</button>
+                <button id="reset-zoom-btn" title="Reset Zoom">Reset</button>
+                <button class="nav-btn next-btn">Next &#10095;</button>
+            </div>
+            
+            <div style="font-size: 11px; opacity: 0.6; margin-top: 5px;">
+                Scroll to Zoom • Click Background to Close
+            </div>
         </div>
     </div>
 </div>
@@ -267,70 +279,74 @@
 });*/
 
 $(document).ready(function() {
+    var table = $('#well-table').DataTable({ pageLength: 25 });
     let currentImgElement = null;
     let scale = 1;
 
-    // --- 1. OPEN MODAL & DETECT STATUS ---
+    // 1. Child Row Logic
+    $('#well-table tbody').on('click', '.toggle-images-row', function () {
+        var tr = $(this).closest('tr');
+        var row = table.row(tr);
+        if (row.child.isShown()) {
+            row.child.hide();
+            $(this).text('Show images');
+        } else {
+            row.child(tr.find('.image-content-source').html()).show();
+            $(this).text('Hide images');
+        }
+    });
+
+    // 2. Open Modal
     $(document).on("click", ".zoomable", function(e) {
-        e.stopPropagation();
         currentImgElement = $(this);
-        scale = 1; // Reset zoom
+        scale = 1;
         updateModal();
         $('#image-modal').fadeIn(200);
     });
 
     function updateModal() {
         if (!currentImgElement) return;
+        $('#modal-img').attr('src', currentImgElement.attr('src')).css('transform', `scale(${scale})`);
 
-        const src = currentImgElement.attr('src');
-        $('#modal-img').attr('src', src).css('transform', `scale(${scale})`);
+        // Status Detection: Look for the text in the closest container
+        const isInvalid = currentImgElement.closest('.image-grid').prevAll('strong').first().text().toLowerCase().includes('not valid');
+        $('#modal-status-badge').text(isInvalid ? 'Invalid' : 'Valid')
+                                .attr('class', isInvalid ? 'status-invalid' : 'status-valid');
 
-        // Check which section the image belongs to
-        const isInvalid = currentImgElement.closest('.image-grid').prev('strong').text().toLowerCase().includes('not valid');
-        const badge = $('#modal-status-badge');
-        
-        if (isInvalid) {
-            badge.text('Invalid').attr('class', 'status-invalid');
-        } else {
-            badge.text('Valid').attr('class', 'status-valid');
-        }
-
-        // Navigation logic (same as before)
-        const parentGrid = currentImgElement.closest('.image-grid');
-        const allImages = parentGrid.find('.zoomable');
-        const index = allImages.index(currentImgElement);
-
-        $('.prev-btn').css('visibility', index > 0 ? 'visible' : 'hidden');
-        $('.next-btn').css('visibility', index < allImages.length - 1 ? 'visible' : 'hidden');
-        $('#modal-caption').text(` (${index + 1} / ${allImages.length})`);
+        // Navigation
+        const allImgs = currentImgElement.closest('.image-grid').find('.zoomable');
+        const idx = allImgs.index(currentImgElement);
+        $('.prev-btn').prop('disabled', idx === 0).css('opacity', idx === 0 ? 0.3 : 1);
+        $('.next-btn').prop('disabled', idx === allImgs.length - 1).css('opacity', idx === allImgs.length - 1 ? 0.3 : 1);
+        $('#modal-caption').text(`(${idx + 1} / ${allImgs.length})`);
     }
 
-    // --- 2. SCROLL TO ZOOM LOGIC ---
+    // 3. Zoom Logic
     $('#zoom-container').on('wheel', function(e) {
         e.preventDefault();
-        const delta = e.originalEvent.deltaY;
-        if (delta > 0) {
-            scale = Math.max(1, scale - 0.2); // Zoom out
-        } else {
-            scale = Math.min(5, scale + 0.2); // Zoom in (max 5x)
-        }
+        scale += (e.originalEvent.deltaY < 0 ? 0.2 : -0.2);
+        scale = Math.min(Math.max(1, scale), 5); // Bound scale between 1 and 5
         $('#modal-img').css('transform', `scale(${scale})`);
-        $(this).css('cursor', scale > 1 ? 'grab' : 'zoom-in');
     });
 
-    // --- 3. NAVIGATION ---
-    $('.next-btn, .prev-btn').on('click', function(e) {
+    $('#reset-zoom-btn').on('click', function() {
+        scale = 1;
+        $('#modal-img').css('transform', `scale(1)`);
+    });
+
+    // 4. Grouped Navigation Click
+    $('.nav-btn').on('click', function(e) {
         e.stopPropagation();
-        const direction = $(this).hasClass('next-btn') ? 1 : -1;
-        const allImages = currentImgElement.closest('.image-grid').find('.zoomable');
-        const index = allImages.index(currentImgElement);
-        currentImgElement = allImages.eq(index + direction);
-        scale = 1; // Reset zoom on swap
+        const allImgs = currentImgElement.closest('.image-grid').find('.zoomable');
+        let idx = allImgs.index(currentImgElement);
+        idx += $(this).hasClass('next-btn') ? 1 : -1;
+        currentImgElement = allImgs.eq(idx);
+        scale = 1;
         updateModal();
     });
 
-    // Close modal on background click
-    $('#image-modal').on("click", function(e) {
+    // 5. Close on background click
+    $('#image-modal').on('click', function(e) {
         if (e.target === this) $(this).fadeOut(200);
     });
 });
