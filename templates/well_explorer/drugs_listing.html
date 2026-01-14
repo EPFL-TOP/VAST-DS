@@ -331,6 +331,14 @@ $(document).ready(function() {
     });
 });
 
+$(document).keydown(function(e) {
+    if ($('#image-modal').is(':visible')) {
+        if (e.keyCode == 37) $('.prev-btn').click();  // Left arrow
+        if (e.keyCode == 39) $('.next-btn').click();  // Right arrow
+        if (e.keyCode == 27) $('#image-modal').click(); // Esc to close
+        if (e.keyCode == 82) $('#reset-zoom-btn').click(); // 'R' to reset zoom
+    }
+});
 
 </script>
 </body>
