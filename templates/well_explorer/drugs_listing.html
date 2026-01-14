@@ -61,8 +61,8 @@
             <td>{{ r.number_of_fish }}</td>
             <td>{{ r.number_of_fish_valid }}</td>
             <td>{{ r.number_of_fish_notvalid }}</td>
-            <td>{{ r.avg_total_somites|floatformat:2 }}</td>
-            <td>{{ r.avg_bad_somites|floatformat:2 }}</td>
+            <td>{{ r.avg_total_somites|floatformat:2 }} ± {{ r.total_somites_err|floatformat:2 }}</td>
+            <td>{{ r.avg_bad_somites|floatformat:2 }} ± {{ r.bad_somites_err|floatformat:2 }}</td>
             <td>{{ r.fraction_bad_somites|floatformat:2 }}</td>
         </tr>
         {% endfor %}

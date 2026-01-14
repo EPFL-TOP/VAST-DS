@@ -1171,8 +1171,8 @@ def drug_list(request):
         n_dest_wells = dest_wells.count()
         n_fish_valid = 0
         n_fish_notvalid = 0
-        n_total_somites = 0
-        n_bad_somites = 0
+        n_total_somites = []
+        n_bad_somites = []
         dest_wp_1 = []
         dest_wp_2 = []
         for dest in dest_wells:
@@ -1180,8 +1180,10 @@ def drug_list(request):
                 props = dest.dest_well_properties  # reverse OneToOne accessor
                 if props.valid:
                     n_fish_valid +=1
-                    n_total_somites += props.n_total_somites if props.n_total_somites is not None else 0
-                    n_bad_somites   += props.n_bad_somites   if props.n_bad_somites is not None else 0
+                    if props.n_total_somites is not None:
+                        n_total_somites.append(props.n_total_somites)
+                    if props.n_bad_somites is not None:
+                        n_bad_somites.append(props.n_bad_somites)
                 else:
                     n_fish_notvalid +=1
 
@@ -1193,21 +1195,30 @@ def drug_list(request):
                 pass
 
 
+        dest_plate_info = '' 
+        if len(dest_wp_1) > 0:
+            dest_plate_info += 'Plate1: ' + ', '.join(dest_wp_1)
+        if len(dest_wp_2) > 0:
+            if len(dest_plate_info) > 0:
+                dest_plate_info += ' | '
+            dest_plate_info += 'Plate2: ' + ', '.join(dest_wp_2)
         well_data = {
             "exp": sw.well_plate.experiment.name,
             "well": f"{sw.position_row}{sw.position_col}",
             "valid": sw.valid,
-            "dest_wells": f"Plate1: {', '.join(dest_wp_1)} | Plate2: {', '.join(dest_wp_2)}",
+            "dest_wells": dest_plate_info,
             "drugs": [{"name": drug.derivation_name, "conc": f"{drug.concentration} µM"} for drug in sw.drugs.all()],
             "number_of_drugs": sw.drugs.count(),
             "number_of_dest_wells": n_dest_wells,
             "number_of_fish": n_fish_notvalid+n_fish_valid,
             "number_of_fish_valid": n_fish_valid,
             "number_of_fish_notvalid": n_fish_notvalid,
-            "avg_total_somites": n_total_somites / n_fish_valid if n_fish_valid > 0 else None,
-            "avg_bad_somites": n_bad_somites / n_fish_valid if n_fish_valid > 0 else None,
-            "fraction_bad_somites": (n_bad_somites / n_total_somites) if n_total_somites > 0 else None,
-            
+            "avg_total_somites": np.mean(n_total_somites) if len(n_total_somites) > 0 else None,
+            "avg_bad_somites": np.mean(n_bad_somites) if len(n_bad_somites) > 0 else None,
+            "total_somites_err": np.std(n_total_somites) if len(n_total_somites) > 0 else None,
+            "bad_somites_err": np.std(n_bad_somites) if len(n_bad_somites) > 0 else None,
+            "fraction_bad_somites": (np.mean(n_bad_somites) / np.mean(n_total_somites)) if len(n_total_somites) > 0 else None,
+
         }
         if len(well_data["drugs"])>0:  # Only add wells that have drugs
             drugs_data.append(well_data)
