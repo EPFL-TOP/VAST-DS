@@ -1211,7 +1211,7 @@ def drug_list(request):
                     for tiff_file in tiff_files:
                         png_path = tiff_file.replace('.tiff', '.png')
                         img = Image.open(tiff_file)
-                        imgd = img.ImageDraw.Draw(img)
+                        imgd = ImageDraw.Draw(img)
                         myFont = ImageFont.truetype('FreeMono.ttf', 40)
                         imgd.text((10,10), "Plate {} Well {}{} ".format(dest.well_plate.plate_number, dest.position_row, dest.position_col), font=myFont, fill=(255,255,255))
 
