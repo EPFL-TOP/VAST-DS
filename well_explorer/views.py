@@ -1164,6 +1164,8 @@ def drug_list(request):
 
     drugs_data = []
     source_wells = SourceWellPosition.objects.all()
+    dest_wp_1 = []
+    dest_wp_2 = []
     for sw in source_wells:
         #print('Source well:', sw, ' has drugs:', sw.drugs.all())
         dest_wells = DestWellPosition.objects.filter(source_well=sw)
@@ -1181,6 +1183,11 @@ def drug_list(request):
                     n_bad_somites   += props.n_bad_somites   if props.n_bad_somites is not None else 0
                 else:
                     n_fish_notvalid +=1
+
+                if dest.well_plate.plate_number == 1:
+                    dest_wp_1.append('{}{}'.format(dest.position_row, dest.position_col))
+                if dest.well_plate.plate_number == 2:
+                    dest_wp_2.append('{}{}'.format(dest.position_row, dest.position_col))
             except DestWellProperties.DoesNotExist:
                 pass
 
@@ -1189,6 +1196,7 @@ def drug_list(request):
             "exp": sw.well_plate.experiment.name,
             "well": f"{sw.position_row}{sw.position_col}",
             "valid": sw.valid,
+            "dest_wells": f"Plate1: {', '.join(dest_wp_1)} | Plate2: {', '.join(dest_wp_2)}",
             "drugs": [{"name": drug.derivation_name, "conc": f"{drug.concentration} µM"} for drug in sw.drugs.all()],
             "number_of_drugs": sw.drugs.count(),
             "number_of_dest_wells": n_dest_wells,

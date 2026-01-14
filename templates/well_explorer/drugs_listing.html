@@ -21,7 +21,8 @@
     <thead>
         <tr>
             <th>Experiment</th>
-            <th>Well</th>
+            <th>Source Well</th>
+            <th>Dest Wells</th>
             <th>Valid</th>
             <th>Drugs</th>
             <th>Concentrations</th>
@@ -40,6 +41,7 @@
         <tr>
             <td>{{ r.exp }}</td>
             <td>{{ r.well }}</td>
+            <td>{{ r.dest_wells }}</td>
             <td>{{ r.valid }}</td>
 
             <!-- DRUG NAMES -->
@@ -65,6 +67,26 @@
         </tr>
         {% endfor %}
     </tbody>
+
+    <tfoot>
+        <tr>
+            <th>Experiment</th>
+            <th>Source Well</th>
+            <th>Dest Wells</th>
+            <th>Valid</th>
+            <th>Drugs</th>
+            <th>Concentrations</th>
+            <th>N dest wells</th>
+            <th>N fish</th>
+            <th>N fish valid</th>
+            <th>N fish not valid</th>
+            <th>avg somites</th>
+            <th>avg bad somites</th>
+            <th>fraction</th>
+
+        </tr>
+    </tfoot>
+
 </table>
 
 
