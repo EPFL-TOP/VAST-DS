@@ -132,7 +132,7 @@
 
 <script>
 $(document).on("click", ".toggle-images", function () {
-    $(this).next(".image-panel").toggle();
+    $(this).closest("td").find(".image-panel").toggle();
 });
 </script>
 
