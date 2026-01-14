@@ -2,18 +2,62 @@
 <html>
 <head>
     <title>Drug listing</title>
-
-    <!-- DataTables CSS -->
-    <link rel="stylesheet"
-        href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
 
     <style>
         table.dataTable tbody td {
             vertical-align: top;
         }
+
+        /* Container for images to stay side-by-side */
+        .image-grid {
+            display: flex;
+            flex-wrap: wrap; /* Allows images to move to next line if there are many */
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .img-container {
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        /* Hover effect for a quick preview */
+        .img-container:hover {
+            transform: scale(1.1);
+            z-index: 10;
+        }
+
+        .img-container img {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            object-fit: cover;
+        }
+
+        /* Simple Modal for Zooming */
+        #image-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            text-align: center;
+        }
+        #modal-img {
+            margin-top: 5%;
+            max-width: 90%;
+            max-height: 80%;
+            border: 5px solid white;
+        }
     </style>
 </head>
 <body>
+
+<div id="image-modal" onclick="this.style.display='none'">
+    <img id="modal-img" src="">
+    <div style="color: white; margin-top: 10px;">Click anywhere to close</div>
+</div>
 
 <h2>Well Table</h2>
 
@@ -25,125 +69,74 @@
             <th>Dest Wells</th>
             <th>Valid</th>
             <th>Drugs</th>
-            <th>Concentrations</th>
-            <th>N dest wells</th>
             <th>N fish</th>
-            <th>N fish valid</th>
-            <th>N fish not valid</th>
             <th>avg somites</th>
-            <th>avg bad somites</th>
             <th>fraction</th>
-
         </tr>
     </thead>
     <tbody>
         {% for r in rows %}
         <tr>
-
             <td>
                 {{ r.exp }}
                 <br>
                 <button class="toggle-images">Show images</button>
 
-                <div class="image-panel" style="display:none; margin-top:5px;">
-                <!--div class="image-panel" style="margin-top:5px; border:2px solid red;"></div-->
-                    <div><strong>Valid</strong></div>
-                    <div>
+                <div class="image-panel" style="display:none; margin-top:10px; min-width: 300px;">
+                    <strong>Valid</strong>
+                    <div class="image-grid">
                         {% for img in r.images_valid %}
-                            <img src="{{ img }}" width="120" style="margin:2px;">
+                            <div class="img-container">
+                                <img src="{{ img }}" width="120" class="zoomable">
+                            </div>
                         {% endfor %}
                     </div>
 
-                    <div style="margin-top:4px;"><strong>Not valid</strong></div>
-                    <div>
+                    <strong>Not valid</strong>
+                    <div class="image-grid">
                         {% for img in r.images_invalid %}
-                            <img src="{{ img }}" width="120" style="margin:2px;">
+                            <div class="img-container">
+                                <img src="{{ img }}" width="120" class="zoomable">
+                            </div>
                         {% endfor %}
                     </div>
-
                 </div>
             </td>
-
             <td>{{ r.well }}</td>
             <td>{{ r.dest_wells }}</td>
             <td>{{ r.valid }}</td>
-
-            <!-- DRUG NAMES -->
             <td>
                 {% for d in r.drugs %}
                     <strong>{{ d.name }}</strong> ({{ d.conc }})<br>
                 {% endfor %}
             </td>
-
-
-      
-
-
-            <!-- DRUG CONCENTRATIONS -->
-            <td>
-                {% for d in r.drugs %}
-                    {{ d.conc }}<br>
-                {% endfor %}
-            </td>
-            <td>{{ r.number_of_dest_wells }}</td>
             <td>{{ r.number_of_fish }}</td>
-            <td>{{ r.number_of_fish_valid }}</td>
-            <td>{{ r.number_of_fish_notvalid }}</td>
-            <td>{{ r.avg_total_somites|floatformat:2 }} ± {{ r.total_somites_err|floatformat:2 }}</td>
-            <td>{{ r.avg_bad_somites|floatformat:2 }} ± {{ r.bad_somites_err|floatformat:2 }}</td>
+            <td>{{ r.avg_total_somites|floatformat:2 }}</td>
             <td>{{ r.fraction_bad_somites|floatformat:2 }}</td>
         </tr>
         {% endfor %}
     </tbody>
-
-    <tfoot>
-        <tr>
-            <th>Experiment</th>
-            <th>Source Well</th>
-            <th>Dest Wells</th>
-            <th>Valid</th>
-            <th>Drugs</th>
-            <th>Concentrations</th>
-            <th>N dest wells</th>
-            <th>N fish</th>
-            <th>N fish valid</th>
-            <th>N fish not valid</th>
-            <th>avg somites</th>
-            <th>avg bad somites</th>
-            <th>fraction</th>
-
-        </tr>
-    </tfoot>
-
 </table>
 
-
-            
-
-
-<!-- jQuery -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
-<!-- DataTables JS -->
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
-
-
-
-
-<script>
-$(document).on("click", ".toggle-images", function () {
-    $(this).closest("td").find(".image-panel").toggle();
-});
-</script>
 
 <script>
 $(document).ready(function() {
-    $('#well-table').DataTable({
-        pageLength: 25,
-        lengthMenu: [10, 25, 50, 100],
+    $('#well-table').DataTable({ pageLength: 25 });
+
+    // Toggle panel
+    $(document).on("click", ".toggle-images", function () {
+        $(this).closest("td").find(".image-panel").toggle();
+    });
+
+    // Zoom Click Handler
+    $(document).on("click", ".zoomable", function() {
+        const src = $(this).attr('src');
+        $('#modal-img').attr('src', src);
+        $('#image-modal').fadeIn();
     });
 });
 </script>
-
 </body>
 </html>
