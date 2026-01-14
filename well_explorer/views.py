@@ -1202,7 +1202,14 @@ def drug_list(request):
                 if int(dest.position_col) < 10:
                     path_leica = os.path.join(LOCALPATH, sw.well_plate.experiment.name,'Leica images', 'Plate {}'.format(dest.well_plate.plate_number), 'Well_{}0{}'.format(dest.position_row, dest.position_col), 'corrected_orientation')  
                 print('path_leica=', path_leica)
-                files = glob.glob(os.path.join(path_leica, '*YFP*_norm8.tiff'))
+                files = glob.glob(os.path.join(path_leica, '*YFP*_norm8.png'))
+                if len(files) == 0:
+                    tiff_path = os.path.join(path_leica, '*YFP*_norm8.tiff')
+                    tiff_files = glob.glob(tiff_path)
+                    for tiff_file in tiff_files:
+                        png_path = tiff_file.replace('.tiff', '.png')
+                        img = Image.open(tiff_file)
+                        img.save(png_path)
                 if props.valid:
                     n_fish_valid +=1
                     if props.n_total_somites is not None:
