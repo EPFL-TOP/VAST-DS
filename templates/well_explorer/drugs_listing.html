@@ -139,9 +139,38 @@
 .status-invalid { background: #dc3545; }
 
 
+/* Thumbnail Overlay */
+.img-container {
+    position: relative;
+}
+
+.well-badge {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: bold;
+    pointer-events: none; /* Allows clicks to pass through to the image */
+}
+
+/* Modal Label Styling */
+#modal-well-display {
+    display: block;
+    font-size: 18px;
+    font-weight: bold;
+    color: #ffc107; /* Gold color to stand out */
+    margin-bottom: 5px;
+}
+
     </style>
 </head>
 <body>
+
+
 
 
 <div id="image-modal">
@@ -152,7 +181,7 @@
 
         <div class="modal-controls">
             <div class="modal-info">
-                <span id="modal-status-badge"></span>
+                <div id="modal-well-display"></div> <span id="modal-status-badge"></span>
                 <span id="modal-caption"></span>
             </div>
 
@@ -202,7 +231,7 @@
             <div class="image-grid">
                 {% for img in r.images_valid %}
                     <div class="img-container">
-                        <img src="{{ img }}" class="zoomable" width="300" data-status="valid">
+                        <img src="{{ img }}" class="zoomable" width="300" data-status="valid" data-well="{{ r.well_name }}">
                     </div>
                 {% endfor %}
             </div>
@@ -211,7 +240,7 @@
             <div class="image-grid">
                 {% for img in r.images_invalid %}
                     <div class="img-container">
-                        <img src="{{ img }}" class="zoomable" width="300" data-status="invalid">
+                        <img src="{{ img }}" class="zoomable" width="300" data-status="invalid" data-well="{{ r.well_name }}">
                     </div>
                 {% endfor %}
             </div>
@@ -275,29 +304,33 @@ $(document).ready(function() {
     });
 
 
-    function updateModal() {
-        if (!currentImgElement) return;
-        
-        // 1. Update Image and Zoom
-        $('#modal-img').attr('src', currentImgElement.attr('src')).css('transform', `scale(${scale})`);
+function updateModal() {
+    if (!currentImgElement || currentImgElement.length === 0) return;
+    
+    // 1. Update Image & Zoom
+    $('#modal-img').attr('src', currentImgElement.attr('src')).css('transform', `scale(${scale})`);
 
-        // 2. FIXED Status Detection using Data Attribute
-        const status = currentImgElement.attr('data-status'); // 'valid' or 'invalid'
-        
-        if (status === 'invalid') {
-            $('#modal-status-badge').text('Invalid').attr('class', 'status-invalid');
-        } else {
-            $('#modal-status-badge').text('Valid').attr('class', 'status-valid');
-        }
+    // 2. Update Well Number Overlay
+    const wellNum = currentImgElement.attr('data-well');
+    $('#modal-well-display').text("Well: " + wellNum);
 
-        // 3. Navigation Logic
-        const allImgs = currentImgElement.closest('.image-grid').find('.zoomable');
-        const idx = allImgs.index(currentImgElement);
-        
-        $('.prev-btn').prop('disabled', idx === 0).css('opacity', idx === 0 ? 0.3 : 1);
-        $('.next-btn').prop('disabled', idx === allImgs.length - 1).css('opacity', idx === allImgs.length - 1 ? 0.3 : 1);
-        $('#modal-caption').text(`(${idx + 1} / ${allImgs.length})`);
+    // 3. Status Detection
+    const status = currentImgElement.attr('data-status');
+    if (status === 'invalid') {
+        $('#modal-status-badge').text('Invalid').attr('class', 'status-invalid');
+    } else {
+        $('#modal-status-badge').text('Valid').attr('class', 'status-valid');
     }
+
+    // 4. Navigation Logic
+    const allImgs = currentImgElement.closest('.image-grid').find('.zoomable');
+    const idx = allImgs.index(currentImgElement);
+    const total = allImgs.length;
+
+    $('.prev-btn').prop('disabled', idx === 0).css('opacity', idx === 0 ? 0.3 : 1);
+    $('.next-btn').prop('disabled', idx === total - 1).css('opacity', idx === total - 1 ? 0.3 : 1);
+    $('#modal-caption').text(`(${idx + 1} / ${total})`);
+}
 
 
 
