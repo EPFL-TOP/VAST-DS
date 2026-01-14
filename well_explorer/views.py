@@ -1212,8 +1212,10 @@ def drug_list(request):
                         png_path = tiff_file.replace('.tiff', '.png')
                         img = Image.open(tiff_file)
                         imgd = ImageDraw.Draw(img)
-                        myFont = ImageFont.truetype('FreeMono.ttf', 40)
-                        imgd.text((10,10), "Plate {} Well {}{} ".format(dest.well_plate.plate_number, dest.position_row, dest.position_col), font=myFont, fill=(255,255,255))
+                        #myFont = ImageFont.truetype('FreeMono.ttf', 40)
+                        #mf = ImageFont.truetype('font.ttf', 25)
+                        myfont = ImageFont.truetype("sans-serif.ttf", 40)
+                        imgd.text((10,10), "Plate {} Well {}{} ".format(dest.well_plate.plate_number, dest.position_row, dest.position_col), font=myfont, fill=(255,255,255))
 
                         img.save(png_path)
                     files = glob.glob(os.path.join(path_leica, '*YFP*_norm8.png'))
