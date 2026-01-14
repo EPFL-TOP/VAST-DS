@@ -218,6 +218,9 @@
         </div>
     </div>
 
+
+
+
 </td>
 
 
@@ -271,22 +274,32 @@ $(document).ready(function() {
         $('#image-modal').fadeIn(200);
     });
 
+
     function updateModal() {
         if (!currentImgElement) return;
+        
+        // 1. Update Image and Zoom
         $('#modal-img').attr('src', currentImgElement.attr('src')).css('transform', `scale(${scale})`);
 
-        // Status Detection: Look for the text in the closest container
-        const isInvalid = currentImgElement.closest('.image-grid').prevAll('strong').first().text().toLowerCase().includes('not valid');
-        $('#modal-status-badge').text(isInvalid ? 'Invalid' : 'Valid')
-                                .attr('class', isInvalid ? 'status-invalid' : 'status-valid');
+        // 2. FIXED Status Detection using Data Attribute
+        const status = currentImgElement.attr('data-status'); // 'valid' or 'invalid'
+        
+        if (status === 'invalid') {
+            $('#modal-status-badge').text('Invalid').attr('class', 'status-invalid');
+        } else {
+            $('#modal-status-badge').text('Valid').attr('class', 'status-valid');
+        }
 
-        // Navigation
+        // 3. Navigation Logic
         const allImgs = currentImgElement.closest('.image-grid').find('.zoomable');
         const idx = allImgs.index(currentImgElement);
+        
         $('.prev-btn').prop('disabled', idx === 0).css('opacity', idx === 0 ? 0.3 : 1);
         $('.next-btn').prop('disabled', idx === allImgs.length - 1).css('opacity', idx === allImgs.length - 1 ? 0.3 : 1);
         $('#modal-caption').text(`(${idx + 1} / ${allImgs.length})`);
     }
+
+
 
     // 3. Zoom Logic
     $('#zoom-container').on('wheel', function(e) {
