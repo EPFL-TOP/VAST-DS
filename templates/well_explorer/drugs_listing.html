@@ -195,7 +195,7 @@
 
 
 
-<div id="image-modal">
+<!--div id="image-modal">
     <div class="modal-content-wrapper">
         <div id="zoom-container">
             <img id="modal-img" src="">
@@ -216,6 +216,34 @@
             <div style="font-size: 11px; opacity: 0.6; margin-top: 5px;">
                 Scroll to Zoom • Click Background to Close
             </div>
+        </div>
+    </div>
+</div-->
+
+
+<div id="image-modal">
+    <div class="modal-content-wrapper">
+        <div id="zoom-container" style="position: relative; overflow: hidden;">
+            <div id="modal-well-display" class="well-overlay" style="font-size: 20px; padding: 8px 15px; z-index: 100;"></div>
+            
+            <img id="modal-img" src="">
+        </div>
+
+        <div class="modal-controls">
+            <div class="modal-info">
+                <span id="modal-status-badge"></span>
+                <span id="modal-caption"></span>
+            </div>
+
+            <div class="button-group">
+                <button class="nav-btn prev-btn">&#10094; Prev</button>
+                <button id="reset-zoom-btn">Reset</button>
+                <button class="nav-btn next-btn">Next &#10095;</button>
+            </div>
+            <div style="font-size: 11px; opacity: 0.6; margin-top: 5px;">
+                Scroll to Zoom • Click Background to Close
+            </div>
+
         </div>
     </div>
 </div>
