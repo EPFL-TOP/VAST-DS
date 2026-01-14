@@ -319,10 +319,15 @@ $(document).ready(function() {
         e.stopPropagation();
         const allImgs = currentImgElement.closest('.image-grid').find('.zoomable');
         let idx = allImgs.index(currentImgElement);
-        idx += $(this).hasClass('next-btn') ? 1 : -1;
-        currentImgElement = allImgs.eq(idx);
-        scale = 1;
-        updateModal();
+        const direction = $(this).hasClass('next-btn') ? 1 : -1;
+        const newIdx = idx + direction;
+
+        // Check if the next/prev image actually exists
+        if (newIdx >= 0 && newIdx < allImgs.length) {
+            currentImgElement = allImgs.eq(newIdx);
+            scale = 1; // Reset zoom when switching images
+            updateModal();
+        }
     });
 
     // 5. Close on background click
