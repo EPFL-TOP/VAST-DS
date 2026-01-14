@@ -1189,9 +1189,9 @@ def drug_list(request):
         for dest in dest_wells:
             try:
                 props = dest.dest_well_properties  # reverse OneToOne accessor
-                path_leica = os.path.join(LOCALPATH, sw.well_plate.experiment.name,'Leica images', 'Plate {}', 'Well_{}{}'.format(dest.well_plate.plate_number,dest.position_row, dest.position_col), 'corrected_orientation')
+                path_leica = os.path.join(LOCALPATH, sw.well_plate.experiment.name,'Leica images', 'Plate {}'.format(dest.well_plate.plate_number), 'Well_{}{}'.format(dest.position_row, dest.position_col), 'corrected_orientation')
                 if int(dest.position_col) < 10:
-                    path_leica = os.path.join(LOCALPATH, sw.well_plate.experiment.name,'Leica images', 'Plate {}', 'Well_{}0{}'.format(dest.well_plate.plate_number, dest.position_row, dest.position_col), 'corrected_orientation')  
+                    path_leica = os.path.join(LOCALPATH, sw.well_plate.experiment.name,'Leica images', 'Plate {}'.format(dest.well_plate.plate_number), 'Well_{}0{}'.format(dest.position_row, dest.position_col), 'corrected_orientation')  
                 print('path_leica=', path_leica)
                 files = glob.glob(os.path.join(path_leica, '*YFP*_norm8.tiff'))
                 if props.valid:
