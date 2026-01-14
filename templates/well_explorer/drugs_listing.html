@@ -145,25 +145,32 @@ $(document).ready(function() {
         pageLength: 25
     });
 
-    // Event listener for the "Show images" button
+    // 1. Logic to show/hide the child row
     $('#well-table tbody').on('click', 'button.toggle-images-row', function () {
         var tr = $(this).closest('tr');
         var row = table.row(tr);
 
         if (row.child.isShown()) {
-            // This row is already open - close it
             row.child.hide();
-            tr.removeClass('shown');
             $(this).text('Show images');
         } else {
-            // Get the image HTML from the hidden div in the same row
             var imgHtml = tr.find('.image-content-source').html();
-            
-            // Open this row and inject the HTML
             row.child(imgHtml).show();
-            tr.addClass('shown');
             $(this).text('Hide images');
         }
+    });
+
+    // 2. FIXED ZOOM LOGIC: Use event delegation
+    // This listens for clicks on the "body", so it works for dynamic images
+    $(document).on("click", ".zoomable", function() {
+        const src = $(this).attr('src');
+        $('#modal-img').attr('src', src);
+        $('#image-modal').fadeIn(200); // Smooth fade in
+    });
+
+    // 3. Close modal when clicking anywhere on it
+    $('#image-modal').on("click", function() {
+        $(this).fadeOut(200);
     });
 });
 
