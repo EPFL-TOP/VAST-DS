@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('agg')
 from PIL import Image
+from PIL import ImageFont
+from PIL import ImageDraw
 import random
 
 import bokeh.models
@@ -1203,12 +1205,16 @@ def drug_list(request):
                     path_leica = os.path.join(LOCALPATH, sw.well_plate.experiment.name,'Leica images', 'Plate {}'.format(dest.well_plate.plate_number), 'Well_{}0{}'.format(dest.position_row, dest.position_col), 'corrected_orientation')  
                 print('path_leica=', path_leica)
                 files = glob.glob(os.path.join(path_leica, '*YFP*_norm8.png'))
-                if len(files) == 0:
+                if len(files) == 0 or len(files) != 0:
                     tiff_path = os.path.join(path_leica, '*YFP*_norm8.tiff')
                     tiff_files = glob.glob(tiff_path)
                     for tiff_file in tiff_files:
                         png_path = tiff_file.replace('.tiff', '.png')
                         img = Image.open(tiff_file)
+                        imgd = img.ImageDraw.Draw(img)
+                        myFont = ImageFont.truetype('FreeMono.ttf', 40)
+                        imgd.text((10,10), "Plate {} Well {}{} ".format(dest.well_plate.plate_number, dest.position_row, dest.position_col), font=myFont, fill=(255,255,255))
+
                         img.save(png_path)
                     files = glob.glob(os.path.join(path_leica, '*YFP*_norm8.png'))
                 if props.valid:
