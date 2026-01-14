@@ -39,29 +39,27 @@
     <tbody>
         {% for r in rows %}
         <tr>
-            <td>
-                {{ r.exp }}
-                <br>
+            <td>{{ r.exp }}</td>
+
                 <button class="toggle-images">Show images</button>
 
                 <div class="image-panel" style="display:none; margin-top:5px;">
 
-                    <div><strong>Valid</strong></div>
-                    <div>
+                <div><strong>Valid</strong></div>
+                <div>
                     {% for img in r.images_valid %}
-                        <img src="{{ img }}" width="120" style="margin:2px;">
+                    <img src="{{ img }}" width="120" style="margin:2px;">
                     {% endfor %}
-                    </div>
+                </div>
 
-                    <div style="margin-top:4px;"><strong>Not valid</strong></div>
-                    <div>
+                <div style="margin-top:4px;"><strong>Not valid</strong></div>
+                <div>
                     {% for img in r.images_invalid %}
-                        <img src="{{ img }}" width="120" style="margin:2px;">
+                    <img src="{{ img }}" width="120" style="margin:2px;">
                     {% endfor %}
-                    </div>
+                </div>
 
                 </div>
-            </td>
 
             <td>{{ r.well }}</td>
             <td>{{ r.dest_wells }}</td>
