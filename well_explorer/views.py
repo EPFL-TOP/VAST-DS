@@ -1215,6 +1215,8 @@ def drug_list(request):
                 pass
 
 
+        print("image_list_valid=", image_list_valid)
+        print("image_list_not_valid=", image_list_not_valid)
         dest_plate_info = '' 
         if len(dest_wp_1) > 0:
             dest_plate_info += 'Plate1: ' + ', '.join(dest_wp_1)
