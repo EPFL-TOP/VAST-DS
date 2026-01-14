@@ -45,10 +45,32 @@
             <td>{{ r.valid }}</td>
 
             <!-- DRUG NAMES -->
-            <td>
+            <!--<td>
                 {% for d in r.drugs %}
                     {{ d.name }}<br>
                 {% endfor %}
+            </td>-->
+
+            <td>
+            {% for d in r.drugs %}
+                <div style="margin-bottom: 6px;">
+                    <strong>{{ d.name }}</strong>
+                    ({{ d.conc }})
+                    <button class="show-images"
+                            data-valid="{{ d.images_valid|join:',' }}"
+                            data-invalid="{{ d.images_invalid|join:',' }}">
+                        Show images
+                    </button>
+
+                    <div class="image-panel" style="display:none; margin-top:5px;">
+                        <div><strong>Valid</strong></div>
+                        <div class="valid-images"></div>
+
+                        <div style="margin-top:4px;"><strong>Not valid</strong></div>
+                        <div class="invalid-images"></div>
+                    </div>
+                </div>
+            {% endfor %}
             </td>
 
             <!-- DRUG CONCENTRATIONS -->
@@ -98,6 +120,33 @@
 
 <!-- DataTables JS -->
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+
+<script>
+$(document).on("click", ".show-images", function () {
+    const panel = $(this).next(".image-panel");
+    panel.toggle();
+
+    if (panel.data("loaded")) return;
+
+    const valid = $(this).data("valid").split(",");
+    const invalid = $(this).data("invalid").split(",");
+
+    valid.forEach(src => {
+        panel.find(".valid-images").append(
+            `<img src="${src}" width="120" style="margin:2px;">`
+        );
+    });
+
+    invalid.forEach(src => {
+        panel.find(".invalid-images").append(
+            `<img src="${src}" width="120" style="margin:2px;">`
+        );
+    });
+
+    panel.data("loaded", true);
+});
+</script>
+
 
 <script>
 $(document).ready(function() {

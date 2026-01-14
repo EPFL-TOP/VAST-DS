@@ -1175,17 +1175,37 @@ def drug_list(request):
         n_bad_somites = []
         dest_wp_1 = []
         dest_wp_2 = []
+        image_list_valid = []
+        image_list_not_valid = []
+
+
+        LOCALPATH = LOCALPATH_HIVE
+        if os.path.exists(os.path.join(LOCALPATH_RAID5, sw.well_plate.experiment.name)):
+            LOCALPATH = LOCALPATH_RAID5
+
+        print('=======================LOCALPATH drug list page =', LOCALPATH)
+
+
         for dest in dest_wells:
             try:
                 props = dest.dest_well_properties  # reverse OneToOne accessor
+                path_leica = os.path.join(LOCALPATH, sw.well_plate.experiment.name,'Leica images', 'Plate {}', 'Well_{}{}'.format(dest.well_plate.plate_number,dest.position_row, dest.position_col), 'corrected_orientation')
+                if int(dest.position_col) < 10:
+                    path_leica = os.path.join(LOCALPATH, sw.well_plate.experiment.name,'Leica images', 'Plate {}', 'Well_{}0{}'.format(dest.well_plate.plate_number, dest.position_row, dest.position_col), 'corrected_orientation')  
+                files = glob.glob(os.path.join(path_leica, '*YFP*_norm8.tiff'))
                 if props.valid:
                     n_fish_valid +=1
                     if props.n_total_somites is not None:
                         n_total_somites.append(props.n_total_somites)
                     if props.n_bad_somites is not None:
                         n_bad_somites.append(props.n_bad_somites)
+                    for f in files:
+                        image_list_valid.append(f)
+
                 else:
                     n_fish_notvalid +=1
+                    for f in files:
+                        image_list_not_valid.append(f)
 
                 if dest.well_plate.plate_number == 1:
                     dest_wp_1.append('{}{}'.format(dest.position_row, dest.position_col))
@@ -1218,6 +1238,8 @@ def drug_list(request):
             "total_somites_err": np.std(n_total_somites) if len(n_total_somites) > 0 else None,
             "bad_somites_err": np.std(n_bad_somites) if len(n_bad_somites) > 0 else None,
             "fraction_bad_somites": (np.mean(n_bad_somites) / np.mean(n_total_somites)) if len(n_total_somites) > 0 else None,
+            "images_valid": image_list_valid,
+            "images_invalid": image_list_not_valid
 
         }
         if len(well_data["drugs"])>0:  # Only add wells that have drugs
