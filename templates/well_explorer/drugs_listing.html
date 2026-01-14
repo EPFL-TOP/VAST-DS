@@ -9,6 +9,23 @@
             vertical-align: top;
         }
 
+
+        .image-grid {
+            display: flex;
+            flex-wrap: wrap; /* Images will stay side-by-side until they hit the screen edge */
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .image-grid img {
+            transition: transform 0.2s;
+            border-radius: 4px;
+        }
+
+        .image-grid img:hover {
+            transform: scale(1.05);
+        }
+
         /* Container for images to stay side-by-side */
         .image-grid {
             display: flex;
@@ -77,31 +94,31 @@
     <tbody>
         {% for r in rows %}
         <tr>
-            <td>
-                {{ r.exp }}
-                <br>
-                <button class="toggle-images">Show images</button>
 
-                <div class="image-panel" style="display:none; margin-top:10px; min-width: 300px;">
-                    <strong>Valid</strong>
-                    <div class="image-grid">
-                        {% for img in r.images_valid %}
-                            <div class="img-container">
-                                <img src="{{ img }}" width="120" class="zoomable">
-                            </div>
-                        {% endfor %}
-                    </div>
+<td>
+    {{ r.exp }}
+    <br>
+    <button class="toggle-images-row" style="cursor:pointer;">Show images</button>
+    
+    <div class="image-content-source" style="display:none;">
+        <div style="padding: 15px; background: #f9f9f9; border: 1px solid #ddd;">
+            <strong>Valid Images</strong>
+            <div class="image-grid">
+                {% for img in r.images_valid %}
+                    <img src="{{ img }}" width="150" class="zoomable" style="margin:5px; border:1px solid #ccc;">
+                {% endfor %}
+            </div>
+            <br>
+            <strong>Invalid Images</strong>
+            <div class="image-grid">
+                {% for img in r.images_invalid %}
+                    <img src="{{ img }}" width="150" class="zoomable" style="margin:5px; border:1px solid #ccc;">
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</td>
 
-                    <strong>Not valid</strong>
-                    <div class="image-grid">
-                        {% for img in r.images_invalid %}
-                            <div class="img-container">
-                                <img src="{{ img }}" width="120" class="zoomable">
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </td>
             <td>{{ r.well }}</td>
             <td>{{ r.dest_wells }}</td>
             <td>{{ r.valid }}</td>
@@ -122,21 +139,36 @@
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 
 <script>
-$(document).ready(function() {
-    $('#well-table').DataTable({ pageLength: 25 });
 
-    // Toggle panel
-    $(document).on("click", ".toggle-images", function () {
-        $(this).closest("td").find(".image-panel").toggle();
+$(document).ready(function() {
+    var table = $('#well-table').DataTable({
+        pageLength: 25
     });
 
-    // Zoom Click Handler
-    $(document).on("click", ".zoomable", function() {
-        const src = $(this).attr('src');
-        $('#modal-img').attr('src', src);
-        $('#image-modal').fadeIn();
+    // Event listener for the "Show images" button
+    $('#well-table tbody').on('click', 'button.toggle-images-row', function () {
+        var tr = $(this).closest('tr');
+        var row = table.row(tr);
+
+        if (row.child.isShown()) {
+            // This row is already open - close it
+            row.child.hide();
+            tr.removeClass('shown');
+            $(this).text('Show images');
+        } else {
+            // Get the image HTML from the hidden div in the same row
+            var imgHtml = tr.find('.image-content-source').html();
+            
+            // Open this row and inject the HTML
+            row.child(imgHtml).show();
+            tr.addClass('shown');
+            $(this).text('Hide images');
+        }
     });
 });
+
+
+
 </script>
 </body>
 </html>
