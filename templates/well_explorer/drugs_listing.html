@@ -56,9 +56,15 @@
                 <div style="margin-bottom: 6px;">
                     <strong>{{ d.name }}</strong>
                     ({{ d.conc }})
-                    <button class="show-images"
+                    <!--<button class="show-images"
                             data-valid="{{ d.images_valid|join:',' }}"
                             data-invalid="{{ d.images_invalid|join:',' }}">
+                        Show images
+                    </button>-->
+
+                    <button class="show-images"
+                            data-valid="{{ d.images_valid|join:','|escapejs }}"
+                            data-invalid="{{ d.images_invalid|join:','|escapejs }}">
                         Show images
                     </button>
 
