@@ -121,12 +121,27 @@
 </head>
 <body>
 
+
 <div id="image-modal">
-    <span class="nav-btn prev-btn">&#10094;</span>
-    <img id="modal-img" src="">
-    <span class="nav-btn next-btn">&#10095;</span>
-    <div id="modal-caption"></div>
+    <div class="modal-content-wrapper">
+        <div id="zoom-container">
+            <img id="modal-img" src="">
+        </div>
+
+        <div class="modal-controls">
+            <button class="nav-btn prev-btn">&#10094; Prev</button>
+            
+            <div class="modal-info">
+                <span id="modal-status-badge"></span>
+                <span id="modal-caption"></span>
+                <div style="font-size: 10px; opacity: 0.7;">Scroll to Zoom • Drag to Move</div>
+            </div>
+
+            <button class="nav-btn next-btn">Next &#10095;</button>
+        </div>
+    </div>
 </div>
+
 
 <h2>Well Table</h2>
 
