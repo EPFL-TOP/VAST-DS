@@ -1261,6 +1261,17 @@ def drug_list(request):
             if len(dest_plate_info) > 0:
                 dest_plate_info += ' | '
             dest_plate_info += 'Plate2: ' + ', '.join(dest_wp_2)
+
+        image_list_valid_pairs = []
+        for img, name in zip(image_list_valid, well_name_valid):
+            image_list_valid_pairs.append((img, name))
+
+        image_list_invalid_pairs = []
+        for img, name in zip(image_list_not_valid, well_name_invalid):
+            image_list_invalid_pairs.append((img, name))    
+
+       
+
         well_data = {
             "exp": sw.well_plate.experiment.name,
             "well": f"{sw.position_row}{sw.position_col}",
@@ -1277,8 +1288,8 @@ def drug_list(request):
             "total_somites_err": np.std(n_total_somites) if len(n_total_somites) > 0 else None,
             "bad_somites_err": np.std(n_bad_somites) if len(n_bad_somites) > 0 else None,
             "fraction_bad_somites": (np.mean(n_bad_somites) / np.mean(n_total_somites)) if len(n_total_somites) > 0 else None,
-            "images_valid": zip(image_list_valid, well_name_valid),
-            "images_invalid": zip(image_list_not_valid, well_name_invalid),
+            "images_valid": image_list_valid_pairs,
+            "images_invalid": image_list_invalid_pairs,
 
         }
         if len(well_data["drugs"])>0:  # Only add wells that have drugs
