@@ -1189,7 +1189,8 @@ def drug_list(request):
         image_list_valid = []
         image_list_not_valid = []
 
-        well_name =[]
+        well_name_valid =[]
+        well_name_invalid =[]
 
         LOCALPATH = LOCALPATH_HIVE
         if os.path.exists(os.path.join(LOCALPATH_RAID5, sw.well_plate.experiment.name)):
@@ -1220,7 +1221,6 @@ def drug_list(request):
 
                         img.save(png_path)
                     files = glob.glob(os.path.join(path_leica, '*YFP*_norm8.png'))
-                well_name.append('Plate {} Well {}{}'.format(dest.well_plate.plate_number, dest.position_row, dest.position_col))  
                 if props.valid:
                     n_fish_valid +=1
                     if props.n_total_somites is not None:
@@ -1229,12 +1229,12 @@ def drug_list(request):
                         n_bad_somites.append(props.n_bad_somites)
                     for f in files:
                         image_list_valid.append(f)
-
+                    well_name_valid.append('Plate {} Well {}{}'.format(dest.well_plate.plate_number, dest.position_row, dest.position_col))
                 else:
                     n_fish_notvalid +=1
                     for f in files:
                         image_list_not_valid.append(f)
-
+                    well_name_invalid.append('Plate {} Well {}{}'.format(dest.well_plate.plate_number, dest.position_row, dest.position_col))
                 if dest.well_plate.plate_number == 1:
                     dest_wp_1.append('{}{}'.format(dest.position_row, dest.position_col))
                 if dest.well_plate.plate_number == 2:
@@ -1277,9 +1277,8 @@ def drug_list(request):
             "total_somites_err": np.std(n_total_somites) if len(n_total_somites) > 0 else None,
             "bad_somites_err": np.std(n_bad_somites) if len(n_bad_somites) > 0 else None,
             "fraction_bad_somites": (np.mean(n_bad_somites) / np.mean(n_total_somites)) if len(n_total_somites) > 0 else None,
-            "images_valid": image_list_valid,
-            "images_invalid": image_list_not_valid,
-            "well_name": well_name
+            "images_valid": zip(image_list_valid, well_name_valid),
+            "images_invalid": zip(image_list_not_valid, well_name_invalid),
 
         }
         if len(well_data["drugs"])>0:  # Only add wells that have drugs
