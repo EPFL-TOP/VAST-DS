@@ -267,79 +267,74 @@
 });*/
 
 $(document).ready(function() {
-    // Initialize DataTable
-    var table = $('#well-table').DataTable({
-        pageLength: 25
-    });
-
     let currentImgElement = null;
+    let scale = 1;
 
-    // --- 1. CHILD ROW TOGGLE ---
-    $('#well-table tbody').off('click', '.toggle-images-row').on('click', '.toggle-images-row', function (e) {
-        e.preventDefault();
-        var tr = $(this).closest('tr');
-        var row = table.row(tr);
-
-        if (row.child.isShown()) {
-            row.child.hide();
-            $(this).text('Show images');
-        } else {
-            var content = tr.find('.image-content-source').html();
-            row.child(content).show();
-            $(this).text('Hide images');
-        }
-    });
-
-    // --- 2. ZOOM MODAL OPEN ---
-    $(document).off('click', '.zoomable').on('click', '.zoomable', function(e) {
+    // --- 1. OPEN MODAL & DETECT STATUS ---
+    $(document).on("click", ".zoomable", function(e) {
         e.stopPropagation();
         currentImgElement = $(this);
+        scale = 1; // Reset zoom
         updateModal();
         $('#image-modal').fadeIn(200);
     });
 
-    // --- 3. MODAL NAVIGATION ---
     function updateModal() {
-        if (!currentImgElement || currentImgElement.length === 0) return;
+        if (!currentImgElement) return;
 
-        // Set the image source
-        $('#modal-img').attr('src', currentImgElement.attr('src'));
+        const src = currentImgElement.attr('src');
+        $('#modal-img').attr('src', src).css('transform', `scale(${scale})`);
 
-        // Look for siblings within the SAME .image-grid
-        var parentGrid = currentImgElement.closest('.image-grid');
-        var allImages = parentGrid.find('.zoomable');
-        var index = allImages.index(currentImgElement);
-
-        // Toggle visibility of buttons
-        $('.prev-btn').toggle(index > 0);
-        $('.next-btn').toggle(index < allImages.length - 1);
+        // Check which section the image belongs to
+        const isInvalid = currentImgElement.closest('.image-grid').prev('strong').text().toLowerCase().includes('not valid');
+        const badge = $('#modal-status-badge');
         
-        $('#modal-caption').text("Image " + (index + 1) + " of " + allImages.length);
+        if (isInvalid) {
+            badge.text('Invalid').attr('class', 'status-invalid');
+        } else {
+            badge.text('Valid').attr('class', 'status-valid');
+        }
+
+        // Navigation logic (same as before)
+        const parentGrid = currentImgElement.closest('.image-grid');
+        const allImages = parentGrid.find('.zoomable');
+        const index = allImages.index(currentImgElement);
+
+        $('.prev-btn').css('visibility', index > 0 ? 'visible' : 'hidden');
+        $('.next-btn').css('visibility', index < allImages.length - 1 ? 'visible' : 'hidden');
+        $('#modal-caption').text(` (${index + 1} / ${allImages.length})`);
     }
 
-    $('.next-btn').on('click', function(e) {
+    // --- 2. SCROLL TO ZOOM LOGIC ---
+    $('#zoom-container').on('wheel', function(e) {
+        e.preventDefault();
+        const delta = e.originalEvent.deltaY;
+        if (delta > 0) {
+            scale = Math.max(1, scale - 0.2); // Zoom out
+        } else {
+            scale = Math.min(5, scale + 0.2); // Zoom in (max 5x)
+        }
+        $('#modal-img').css('transform', `scale(${scale})`);
+        $(this).css('cursor', scale > 1 ? 'grab' : 'zoom-in');
+    });
+
+    // --- 3. NAVIGATION ---
+    $('.next-btn, .prev-btn').on('click', function(e) {
         e.stopPropagation();
-        var parentGrid = currentImgElement.closest('.image-grid');
-        var allImages = parentGrid.find('.zoomable');
-        var index = allImages.index(currentImgElement);
-        currentImgElement = allImages.eq(index + 1);
+        const direction = $(this).hasClass('next-btn') ? 1 : -1;
+        const allImages = currentImgElement.closest('.image-grid').find('.zoomable');
+        const index = allImages.index(currentImgElement);
+        currentImgElement = allImages.eq(index + direction);
+        scale = 1; // Reset zoom on swap
         updateModal();
     });
 
-    $('.prev-btn').on('click', function(e) {
-        e.stopPropagation();
-        var parentGrid = currentImgElement.closest('.image-grid');
-        var allImages = parentGrid.find('.zoomable');
-        var index = allImages.index(currentImgElement);
-        currentImgElement = allImages.eq(index - 1);
-        updateModal();
-    });
-
-    // Close modal
-    $('#image-modal').on('click', function() {
-        $(this).fadeOut(200);
+    // Close modal on background click
+    $('#image-modal').on("click", function(e) {
+        if (e.target === this) $(this).fadeOut(200);
     });
 });
+
 
 </script>
 </body>
