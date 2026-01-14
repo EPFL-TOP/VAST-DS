@@ -220,32 +220,6 @@
 
 
 
-<!--div id="image-modal">
-    <div class="modal-content-wrapper">
-        <div id="zoom-container">
-            <img id="modal-img" src="">
-        </div>
-
-        <div class="modal-controls">
-            <div class="modal-info">
-                <div id="modal-well-display"></div> <span id="modal-status-badge"></span>
-                <span id="modal-caption"></span>
-            </div>
-
-            <div class="button-group">
-                <button class="nav-btn prev-btn">&#10094; Prev</button>
-                <button class="nav-btn next-btn">Next &#10095;</button>
-                <button id="reset-zoom-btn" title="Reset Zoom">Reset</button>
-            </div>
-            
-            <div style="font-size: 11px; opacity: 0.6; margin-top: 5px;">
-                Scroll to Zoom • Click Background to Close
-            </div>
-        </div>
-    </div>
-</div-->
-
-
 <div id="image-modal">
     <div class="modal-content-wrapper">
         <div id="zoom-container" style="position: relative; overflow: hidden;">
@@ -284,9 +258,16 @@
             <th>Dest Wells</th>
             <th>Valid</th>
             <th>Drugs</th>
-            <th>N fish</th>
-            <th>avg somites</th>
-            <th>fraction</th>
+  
+
+ <th>N dest wells</th>
+<th>N fish</th>
+<th>N fish valid</th>
+<th>N fish invalid</th>
+<th>avg somites</th>
+<th>avg defective somites</th>
+<th>fraction defective somites</th> 
+
         </tr>
     </thead>
     <tbody>
@@ -329,8 +310,6 @@
 </td>
 
 
-
-
             <td>{{ r.well }}</td>
             <td>{{ r.dest_wells }}</td>
             <td>{{ r.valid }}</td>
@@ -339,9 +318,18 @@
                     <strong>{{ d.name }}</strong> ({{ d.conc }})<br>
                 {% endfor %}
             </td>
-            <td>{{ r.number_of_fish }}</td>
-            <td>{{ r.avg_total_somites|floatformat:2 }}</td>
-            <td>{{ r.fraction_bad_somites|floatformat:2 }}</td>
+
+
+ <td>{{ r.number_of_dest_wells }}</td>
+<td>{{ r.number_of_fish }}</td>
+<td>{{ r.number_of_fish_valid }}</td>
+<td>{{ r.number_of_fish_notvalid }}</td>
+<td>{{ r.avg_total_somites|floatformat:2 }} ± {{ r.total_somites_err|floatformat:2 }}</td>
+<td>{{ r.avg_bad_somites|floatformat:2 }} ± {{ r.bad_somites_err|floatformat:2 }}</td>
+<td>{{ r.fraction_bad_somites|floatformat:2 }}</td>
+
+</tr> 
+
         </tr>
         {% endfor %}
     </tbody>
