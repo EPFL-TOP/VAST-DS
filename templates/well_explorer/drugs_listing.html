@@ -67,6 +67,56 @@
             max-height: 80%;
             border: 5px solid white;
         }
+
+#image-modal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    user-select: none; /* Prevents text selection on double click */
+}
+
+#modal-img {
+    margin: auto;
+    display: block;
+    max-width: 85%;
+    max-height: 85%;
+    position: relative;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 3px solid white;
+}
+
+/* Navigation Buttons */
+.nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    color: white;
+    font-size: 60px;
+    font-weight: bold;
+    padding: 20px;
+    cursor: pointer;
+    background: rgba(0,0,0,0.3);
+    border-radius: 5px;
+    transition: 0.3s;
+}
+
+.nav-btn:hover { background: rgba(255,255,255,0.2); }
+.prev-btn { left: 20px; }
+.next-btn { right: 20px; }
+
+#modal-caption {
+    position: absolute;
+    bottom: 20px;
+    width: 100%;
+    text-align: center;
+    color: white;
+    font-family: sans-serif;
+}
+
     </style>
 </head>
 <body>
@@ -143,36 +193,62 @@
 <script>
 
 $(document).ready(function() {
-    var table = $('#well-table').DataTable({
-        pageLength: 25
-    });
+    let currentImgElement = null;
 
-    // 1. Logic to show/hide the child row
-    $('#well-table tbody').on('click', 'button.toggle-images-row', function () {
-        var tr = $(this).closest('tr');
-        var row = table.row(tr);
-
-        if (row.child.isShown()) {
-            row.child.hide();
-            $(this).text('Show images');
-        } else {
-            var imgHtml = tr.find('.image-content-source').html();
-            row.child(imgHtml).show();
-            $(this).text('Hide images');
-        }
-    });
-
-    // 2. FIXED ZOOM LOGIC: Use event delegation
-    // This listens for clicks on the "body", so it works for dynamic images
+    // 1. Open Modal
     $(document).on("click", ".zoomable", function() {
-        const src = $(this).attr('src');
-        $('#modal-img').attr('src', src);
-        $('#image-modal').fadeIn(200); // Smooth fade in
+        currentImgElement = $(this);
+        updateModalContent();
+        $('#image-modal').fadeIn(200);
     });
 
-    // 3. Close modal when clicking anywhere on it
+    // 2. Update Modal Content & Toggle Buttons
+    function updateModalContent() {
+        if (!currentImgElement) return;
+
+        const src = currentImgElement.attr('src');
+        $('#modal-img').attr('src', src);
+
+        // Find neighbors in the same .image-grid
+        const hasPrev = currentImgElement.closest('.img-container').prev('.img-container').find('.zoomable').length > 0;
+        const hasNext = currentImgElement.closest('.img-container').next('.img-container').find('.zoomable').length > 0;
+
+        // Show or hide buttons based on availability
+        $('.prev-btn').toggle(hasPrev);
+        $('.next-btn').toggle(hasNext);
+        
+        // Optional: Show count (e.g., 1 of 5)
+        const parent = currentImgElement.closest('.image-grid');
+        const index = parent.find('.zoomable').index(currentImgElement) + 1;
+        const total = parent.find('.zoomable').length;
+        $('#modal-caption').text("Image " + index + " of " + total);
+    }
+
+    // 3. Next/Prev Click Events
+    $('.next-btn').on("click", function(e) {
+        e.stopPropagation(); // Don't close the modal
+        currentImgElement = currentImgElement.closest('.img-container').next('.img-container').find('.zoomable');
+        updateModalContent();
+    });
+
+    $('.prev-btn').on("click", function(e) {
+        e.stopPropagation(); // Don't close the modal
+        currentImgElement = currentImgElement.closest('.img-container').prev('.img-container').find('.zoomable');
+        updateModalContent();
+    });
+
+    // 4. Close Modal
     $('#image-modal').on("click", function() {
         $(this).fadeOut(200);
+    });
+    
+    // 5. Bonus: Keyboard support (Left/Right arrows)
+    $(document).keydown(function(e) {
+        if ($('#image-modal').is(':visible')) {
+            if (e.keyCode == 37) $('.prev-btn').click(); // Left arrow
+            if (e.keyCode == 39) $('.next-btn').click(); // Right arrow
+            if (e.keyCode == 27) $('#image-modal').click(); // Esc key
+        }
     });
 });
 
