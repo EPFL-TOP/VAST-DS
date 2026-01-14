@@ -201,7 +201,7 @@
 
 <script>
 
-$(document).ready(function() {
+/*$(document).ready(function() {
     var table = $('#well-table').DataTable({
         pageLength: 25
     });
@@ -233,9 +233,67 @@ $(document).ready(function() {
     $('#image-modal').on("click", function() {
         $(this).fadeOut(200);
     });
+});*/
+
+$(document).ready(function() {
+    let currentImgElement = null;
+
+    // 1. Open Modal
+    $(document).on("click", ".zoomable", function() {
+        currentImgElement = $(this);
+        updateModalContent();
+        $('#image-modal').fadeIn(200);
+    });
+
+    // 2. Update Modal Content & Toggle Buttons
+    function updateModalContent() {
+        if (!currentImgElement) return;
+
+        const src = currentImgElement.attr('src');
+        $('#modal-img').attr('src', src);
+
+        // Find neighbors in the same .image-grid
+        const hasPrev = currentImgElement.closest('.img-container').prev('.img-container').find('.zoomable').length > 0;
+        const hasNext = currentImgElement.closest('.img-container').next('.img-container').find('.zoomable').length > 0;
+
+        // Show or hide buttons based on availability
+        $('.prev-btn').toggle(hasPrev);
+        $('.next-btn').toggle(hasNext);
+        
+        // Optional: Show count (e.g., 1 of 5)
+        const parent = currentImgElement.closest('.image-grid');
+        const index = parent.find('.zoomable').index(currentImgElement) + 1;
+        const total = parent.find('.zoomable').length;
+        $('#modal-caption').text("Image " + index + " of " + total);
+    }
+
+    // 3. Next/Prev Click Events
+    $('.next-btn').on("click", function(e) {
+        e.stopPropagation(); // Don't close the modal
+        currentImgElement = currentImgElement.closest('.img-container').next('.img-container').find('.zoomable');
+        updateModalContent();
+    });
+
+    $('.prev-btn').on("click", function(e) {
+        e.stopPropagation(); // Don't close the modal
+        currentImgElement = currentImgElement.closest('.img-container').prev('.img-container').find('.zoomable');
+        updateModalContent();
+    });
+
+    // 4. Close Modal
+    $('#image-modal').on("click", function() {
+        $(this).fadeOut(200);
+    });
+    
+    // 5. Bonus: Keyboard support (Left/Right arrows)
+    $(document).keydown(function(e) {
+        if ($('#image-modal').is(':visible')) {
+            if (e.keyCode == 37) $('.prev-btn').click(); // Left arrow
+            if (e.keyCode == 39) $('.next-btn').click(); // Right arrow
+            if (e.keyCode == 27) $('#image-modal').click(); // Esc key
+        }
+    });
 });
-
-
 
 </script>
 </body>
