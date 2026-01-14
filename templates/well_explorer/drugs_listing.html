@@ -155,11 +155,17 @@
     <div class="image-content-source" style="display:none;">
         <div style="padding: 15px; background: #f9f9f9; border: 1px solid #ddd;">
             <strong>Valid Images</strong>
-            <div class="image-grid">
+            <!--div class="image-grid">
                 {% for img in r.images_valid %}
                     <img src="{{ img }}" width="150" class="zoomable" style="margin:5px; border:1px solid #ccc;">
                 {% endfor %}
-            </div>
+            </div-->
+            <div class="image-grid">
+    {% for img in r.images_valid %}
+        <div class="img-container"> <img src="{{ img }}" class="zoomable" width="150">
+        </div>
+    {% endfor %}
+</div>
             <br>
             <strong>Invalid Images</strong>
             <div class="image-grid">
@@ -170,6 +176,9 @@
         </div>
     </div>
 </td>
+
+
+
 
             <td>{{ r.well }}</td>
             <td>{{ r.dest_wells }}</td>
