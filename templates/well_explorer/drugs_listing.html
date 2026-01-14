@@ -34,11 +34,33 @@
             margin-bottom: 10px;
         }
 
-        .img-container {
-            position: relative;
-            cursor: pointer;
-            transition: transform 0.2s;
+/*        .img-container {
+//            position: relative;
+//            cursor: pointer;
+//            transition: transform 0.2s;
+*/
         }
+.img-container {
+    position: relative; /* Essential for the absolute positioning of the badge */
+    display: inline-block;
+    margin: 5px;
+}
+
+.well-overlay {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.7); /* Dark background for readability */
+    color: white;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 14px;
+    pointer-events: none; /* Let clicks pass through to the image */
+    z-index: 10;
+    text-shadow: 1px 1px 2px black;
+}
+
 
         /* Hover effect for a quick preview */
         .img-container:hover {
@@ -228,22 +250,36 @@
     <div class="image-content-source" style="display:none;">
         <div style="padding: 15px;">
             <strong>Valid Images</strong>
+
             <div class="image-grid">
-                {% for img in r.images_valid %}
+                {% for img_url, well_name in r.images_valid %}
                     <div class="img-container">
-                        <img src="{{ img }}" class="zoomable" width="300" data-status="valid" data-well="{{ r.well_name }}">
+                        <img src="{{ img_url }}" 
+                            class="zoomable" 
+                            width="300" 
+                            data-status="valid" 
+                            data-well="{{ well_name }}">
+                        
+                        <div class="well-overlay">{{ well_name }}</div>
                     </div>
                 {% endfor %}
             </div>
+
             <br>
             <strong>Invalid Images</strong>
             <div class="image-grid">
-                {% for img in r.images_invalid %}
+                {% for img_url, well_name in r.images_invalid %}
                     <div class="img-container">
-                        <img src="{{ img }}" class="zoomable" width="300" data-status="invalid" data-well="{{ r.well_name }}">
+                        <img src="{{ img_url }}" 
+                            class="zoomable" 
+                            width="300" 
+                            data-status="invalid" 
+                            data-well="{{ well_name }}">
+                        
+                        <div class="well-overlay">{{ well_name }}</div>
                     </div>
                 {% endfor %}
-            </div>
+
         </div>
     </div>
 
@@ -305,14 +341,19 @@ $(document).ready(function() {
 
 
 function updateModal() {
-    if (!currentImgElement || currentImgElement.length === 0) return;
-    
-    // 1. Update Image & Zoom
-    $('#modal-img').attr('src', currentImgElement.attr('src')).css('transform', `scale(${scale})`);
 
-    // 2. Update Well Number Overlay
-    const wellNum = currentImgElement.attr('data-well');
-    $('#modal-well-display').text("Well: " + wellNum);
+
+function updateModal() {
+    if (!currentImgElement) return;
+
+    // Grab the name from the data-well attribute we set in the loop
+    const wellName = currentImgElement.attr('data-well');
+    
+    // Set the image and the overlay text in the modal
+    $('#modal-img').attr('src', currentImgElement.attr('src')).css('transform', `scale(${scale})`);
+    
+    // Assuming you have an element with this ID inside your modal info area
+    $('#modal-well-display').text("Well: " + wellName);
 
     // 3. Status Detection
     const status = currentImgElement.attr('data-status');
