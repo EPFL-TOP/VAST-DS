@@ -193,62 +193,36 @@
 <script>
 
 $(document).ready(function() {
-    let currentImgElement = null;
+    var table = $('#well-table').DataTable({
+        pageLength: 25
+    });
 
-    // 1. Open Modal
+    // 1. Logic to show/hide the child row
+    $('#well-table tbody').on('click', 'button.toggle-images-row', function () {
+        var tr = $(this).closest('tr');
+        var row = table.row(tr);
+
+        if (row.child.isShown()) {
+            row.child.hide();
+            $(this).text('Show images');
+        } else {
+            var imgHtml = tr.find('.image-content-source').html();
+            row.child(imgHtml).show();
+            $(this).text('Hide images');
+        }
+    });
+
+    // 2. FIXED ZOOM LOGIC: Use event delegation
+    // This listens for clicks on the "body", so it works for dynamic images
     $(document).on("click", ".zoomable", function() {
-        currentImgElement = $(this);
-        updateModalContent();
-        $('#image-modal').fadeIn(200);
-    });
-
-    // 2. Update Modal Content & Toggle Buttons
-    function updateModalContent() {
-        if (!currentImgElement) return;
-
-        const src = currentImgElement.attr('src');
+        const src = $(this).attr('src');
         $('#modal-img').attr('src', src);
-
-        // Find neighbors in the same .image-grid
-        const hasPrev = currentImgElement.closest('.img-container').prev('.img-container').find('.zoomable').length > 0;
-        const hasNext = currentImgElement.closest('.img-container').next('.img-container').find('.zoomable').length > 0;
-
-        // Show or hide buttons based on availability
-        $('.prev-btn').toggle(hasPrev);
-        $('.next-btn').toggle(hasNext);
-        
-        // Optional: Show count (e.g., 1 of 5)
-        const parent = currentImgElement.closest('.image-grid');
-        const index = parent.find('.zoomable').index(currentImgElement) + 1;
-        const total = parent.find('.zoomable').length;
-        $('#modal-caption').text("Image " + index + " of " + total);
-    }
-
-    // 3. Next/Prev Click Events
-    $('.next-btn').on("click", function(e) {
-        e.stopPropagation(); // Don't close the modal
-        currentImgElement = currentImgElement.closest('.img-container').next('.img-container').find('.zoomable');
-        updateModalContent();
+        $('#image-modal').fadeIn(200); // Smooth fade in
     });
 
-    $('.prev-btn').on("click", function(e) {
-        e.stopPropagation(); // Don't close the modal
-        currentImgElement = currentImgElement.closest('.img-container').prev('.img-container').find('.zoomable');
-        updateModalContent();
-    });
-
-    // 4. Close Modal
+    // 3. Close modal when clicking anywhere on it
     $('#image-modal').on("click", function() {
         $(this).fadeOut(200);
-    });
-    
-    // 5. Bonus: Keyboard support (Left/Right arrows)
-    $(document).keydown(function(e) {
-        if ($('#image-modal').is(':visible')) {
-            if (e.keyCode == 37) $('.prev-btn').click(); // Left arrow
-            if (e.keyCode == 39) $('.next-btn').click(); // Right arrow
-            if (e.keyCode == 27) $('#image-modal').click(); // Esc key
-        }
     });
 });
 
