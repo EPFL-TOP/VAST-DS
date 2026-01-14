@@ -104,8 +104,10 @@
     border: 1px solid #444;
 }
 
+
+
 #zoom-container {
-    overflow: hidden;
+    position: relative;
     background: #000;
     border-radius: 4px;
     margin-bottom: 10px;
@@ -181,11 +183,16 @@
 
 /* Modal Label Styling */
 #modal-well-display {
-    display: block;
-    font-size: 18px;
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border-radius: 4px;
     font-weight: bold;
-    color: #ffc107; /* Gold color to stand out */
-    margin-bottom: 5px;
+    pointer-events: none; /* Let the scroll-wheel zoom pass through to the image */
+    text-shadow: 1px 1px 2px black;
+    border: 1px solid rgba(255,255,255,0.2);
 }
 
     </style>
@@ -357,20 +364,20 @@ $(document).ready(function() {
 
 
 
+
 function updateModal() {
     if (!currentImgElement) return;
 
-    // Grab the name from the data-well attribute we set in the loop
+    const src = currentImgElement.attr('src');
     const wellName = currentImgElement.attr('data-well');
-    
-    // Set the image and the overlay text in the modal
-    $('#modal-img').attr('src', currentImgElement.attr('src')).css('transform', `scale(${scale})`);
-    
-    // Assuming you have an element with this ID inside your modal info area
-    $('#modal-well-display').text(wellName);
-
-    // 3. Status Detection
     const status = currentImgElement.attr('data-status');
+
+    $('#modal-img').attr('src', src).css('transform', `scale(${scale})`);
+    
+    // This will now update the badge inside the zoom container
+    $('#modal-well-display').text(wellName);
+    
+    // 3. Status Detection
     if (status === 'invalid') {
         $('#modal-status-badge').text('Invalid').attr('class', 'status-invalid');
     } else {
