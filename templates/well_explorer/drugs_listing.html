@@ -39,27 +39,30 @@
     <tbody>
         {% for r in rows %}
         <tr>
-            <td>{{ r.exp }}</td>
 
-                <button class="toggle-images">Show images</button>
+            <td>
+    {{ r.exp }}
+    <br>
+    <button class="toggle-images">Show images</button>
 
-                <div class="image-panel" style="display:none; margin-top:5px;">
+    <div class="image-panel" style="display:none; margin-top:5px;">
 
-                <div><strong>Valid</strong></div>
-                <div>
-                    {% for img in r.images_valid %}
-                    <img src="{{ img }}" width="120" style="margin:2px;">
-                    {% endfor %}
-                </div>
+        <div><strong>Valid</strong></div>
+        <div>
+            {% for img in r.images_valid %}
+                <img src="{{ img }}" width="120" style="margin:2px;">
+            {% endfor %}
+        </div>
 
-                <div style="margin-top:4px;"><strong>Not valid</strong></div>
-                <div>
-                    {% for img in r.images_invalid %}
-                    <img src="{{ img }}" width="120" style="margin:2px;">
-                    {% endfor %}
-                </div>
+        <div style="margin-top:4px;"><strong>Not valid</strong></div>
+        <div>
+            {% for img in r.images_invalid %}
+                <img src="{{ img }}" width="120" style="margin:2px;">
+            {% endfor %}
+        </div>
 
-                </div>
+    </div>
+</td>
 
             <td>{{ r.well }}</td>
             <td>{{ r.dest_wells }}</td>
@@ -72,57 +75,8 @@
                 {% endfor %}
             </td>>
 
-            <!--td>
-            {% for d in r.drugs %}
-                <div style="margin-bottom: 6px;">
-                    <strong>{{ d.name }}</strong>
-                    ({{ d.conc }})
 
-
-                    <button class="show-images"
-                            data-valid="{{ d.images_valid|join:','|escapejs }}"
-                            data-invalid="{{ d.images_invalid|join:','|escapejs }}">
-                        Show images
-                    </button>
-
-                    <div class="image-panel" style="display:none; margin-top:5px;">
-                        <div><strong>Valid</strong></div>
-                        <div class="valid-images"></div>
-
-                        <div style="margin-top:4px;"><strong>Not valid</strong></div>
-                        <div class="invalid-images"></div>
-                    </div>
-                </div>
-            {% endfor %}
-            </td-->
-
-            <!--td>
-            {% for d in r.drugs %}
-            <div style="margin-bottom:8px;">
-
-                <strong>{{ d.name }}</strong> ({{ d.conc }})
-                <button class="toggle-images">Show images</button>
-
-                <div class="image-panel" style="display:none; margin-top:5px;">
-
-                <div><strong>Valid</strong></div>
-                <div>
-                    {% for img in d.images_valid %}
-                    <img src="{{ img }}" width="120" style="margin:2px;">
-                    {% endfor %}
-                </div>
-
-                <div style="margin-top:4px;"><strong>Not valid</strong></div>
-                <div>
-                    {% for img in d.images_invalid %}
-                    <img src="{{ img }}" width="120" style="margin:2px;">
-                    {% endfor %}
-                </div>
-
-                </div>
-            </div>
-            {% endfor %}
-            </td-->
+      
 
 
             <!-- DRUG CONCENTRATIONS -->
