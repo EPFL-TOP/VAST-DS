@@ -1210,6 +1210,7 @@ def drug_list(request):
                         png_path = tiff_file.replace('.tiff', '.png')
                         img = Image.open(tiff_file)
                         img.save(png_path)
+                    files = glob.glob(os.path.join(path_leica, '*YFP*_norm8.png'))
                 if props.valid:
                     n_fish_valid +=1
                     if props.n_total_somites is not None:
