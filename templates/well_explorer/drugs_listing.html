@@ -41,28 +41,28 @@
         <tr>
 
             <td>
-    {{ r.exp }}
-    <br>
-    <button class="toggle-images">Show images</button>
+                {{ r.exp }}
+                <br>
+                <button class="toggle-images">Show images</button>
 
-    <div class="image-panel" style="display:none; margin-top:5px;">
+                <!--div class="image-panel" style="display:none; margin-top:5px;"-->
+                <div class="image-panel" style="margin-top:5px; border:2px solid red;"></div>
+                    <div><strong>Valid</strong></div>
+                    <div>
+                        {% for img in r.images_valid %}
+                            <img src="{{ img }}" width="120" style="margin:2px;">
+                        {% endfor %}
+                    </div>
 
-        <div><strong>Valid</strong></div>
-        <div>
-            {% for img in r.images_valid %}
-                <img src="{{ img }}" width="120" style="margin:2px;">
-            {% endfor %}
-        </div>
+                    <div style="margin-top:4px;"><strong>Not valid</strong></div>
+                    <div>
+                        {% for img in r.images_invalid %}
+                            <img src="{{ img }}" width="120" style="margin:2px;">
+                        {% endfor %}
+                    </div>
 
-        <div style="margin-top:4px;"><strong>Not valid</strong></div>
-        <div>
-            {% for img in r.images_invalid %}
-                <img src="{{ img }}" width="120" style="margin:2px;">
-            {% endfor %}
-        </div>
-
-    </div>
-</td>
+                </div>
+            </td>
 
             <td>{{ r.well }}</td>
             <td>{{ r.dest_wells }}</td>
