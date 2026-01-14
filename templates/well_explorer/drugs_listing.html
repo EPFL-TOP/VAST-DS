@@ -106,20 +106,31 @@
 
 
 
+
 #zoom-container {
     position: relative;
+    overflow: hidden; /* Important: crops the image as you move it */
+    cursor: grab;     /* Hand icon */
     background: #000;
-    border-radius: 4px;
-    margin-bottom: 10px;
+}
+
+#zoom-container:active {
+    cursor: grabbing; /* Closed hand icon when clicking */
 }
 
 #modal-img {
     display: block;
     max-width: 80vw;
     max-height: 70vh;
-    transition: transform 0.1s ease-out;
+    transition: transform 0.1s ease-out; /* Smooth movement */
     transform-origin: center;
+    position: relative; /* Allows left/top movement */
+    left: 0;
+    top: 0;
 }
+
+
+
 
 .modal-controls {
     color: white;
@@ -336,6 +347,48 @@
 
 
 $(document).ready(function() {
+
+    let isDragging = false;
+    let startX, startY, currentX = 0, currentY = 0;
+
+    // Update the reset button to also reset position
+    $('#reset-zoom-btn').on('click', function() {
+        scale = 1;
+        currentX = 0;
+        currentY = 0;
+        updateImageTransform();
+    });
+
+    // Helper to apply both Zoom and Pan
+    function updateImageTransform() {
+        $('#modal-img').css({
+            'transform': `scale(${scale})`,
+            'left': currentX + 'px',
+            'top': currentY + 'px'
+        });
+    }
+
+    // DRAG LOGIC
+    $('#zoom-container').on('mousedown', function(e) {
+        if (scale > 1) { // Only drag if zoomed in
+            isDragging = true;
+            startX = e.pageX - currentX;
+            startY = e.pageY - currentY;
+        }
+    });
+
+    $(window).on('mousemove', function(e) {
+        if (isDragging) {
+            currentX = e.pageX - startX;
+            currentY = e.pageY - startY;
+            updateImageTransform();
+        }
+    });
+
+    $(window).on('mouseup', function() {
+        isDragging = false;
+    });
+    
     var table = $('#well-table').DataTable({ pageLength: 25 });
     let currentImgElement = null;
     let scale = 1;
@@ -368,12 +421,17 @@ $(document).ready(function() {
 function updateModal() {
     if (!currentImgElement) return;
 
+    // Reset position for the new image
+    currentX = 0;
+    currentY = 0;
+
     const src = currentImgElement.attr('src');
     const wellName = currentImgElement.attr('data-well');
     const status = currentImgElement.attr('data-status');
 
-    $('#modal-img').attr('src', src).css('transform', `scale(${scale})`);
-    
+    $('#modal-img').attr('src', src);
+    updateImageTransform(); // Apply reset scale/pos
+
     // This will now update the badge inside the zoom container
     $('#modal-well-display').text(wellName);
     
@@ -396,13 +454,14 @@ function updateModal() {
 
 
 
-    // 3. Zoom Logic
+
+
     $('#zoom-container').on('wheel', function(e) {
-        e.preventDefault();
-        scale += (e.originalEvent.deltaY < 0 ? 0.2 : -0.2);
-        scale = Math.min(Math.max(1, scale), 5); // Bound scale between 1 and 5
-        $('#modal-img').css('transform', `scale(${scale})`);
-    });
+    e.preventDefault();
+    scale += (e.originalEvent.deltaY < 0 ? 0.2 : -0.2);
+    scale = Math.min(Math.max(1, scale), 5);
+    updateImageTransform();
+});
 
     $('#reset-zoom-btn').on('click', function() {
         scale = 1;
