@@ -246,42 +246,29 @@
     <button class="toggle-images-row" style="cursor:pointer;">Show images</button>
     
 
-
-    <div class="image-content-source" style="display:none;">
-        <div style="padding: 15px;">
-            <strong>Valid Images</strong>
-
-            <div class="image-grid">
-                {% for img_url, well_name in r.images_valid %}
-                    <div class="img-container">
-                        <img src="{{ img_url }}" 
-                            class="zoomable" 
-                            width="300" 
-                            data-status="valid" 
-                            data-well="{{ well_name }}">
-                        
-                        <div class="well-overlay">{{ well_name }}</div>
-                    </div>
-                {% endfor %}
-            </div>
-
-            <br>
-            <strong>Invalid Images</strong>
-            <div class="image-grid">
-                {% for img_url, well_name in r.images_invalid %}
-                    <div class="img-container">
-                        <img src="{{ img_url }}" 
-                            class="zoomable" 
-                            width="300" 
-                            data-status="invalid" 
-                            data-well="{{ well_name }}">
-                        
-                        <div class="well-overlay">{{ well_name }}</div>
-                    </div>
-                {% endfor %}
-
+<div class="image-content-source" style="display:none;">
+    <div style="padding: 15px;">
+        <strong>Valid Images</strong>
+        <div class="image-grid">
+            {% for img_url, well_name in r.images_valid %}
+                <div class="img-container" style="position:relative; display:inline-block; margin:5px;">
+                    <img src="{{ img_url }}" class="zoomable" width="300" data-status="valid" data-well="{{ well_name }}">
+                    <div class="well-overlay">{{ well_name }}</div>
+                </div>
+            {% endfor %}
+        </div>
+        <br>
+        <strong>Invalid Images</strong>
+        <div class="image-grid">
+            {% for img_url, well_name in r.images_invalid %}
+                <div class="img-container" style="position:relative; display:inline-block; margin:5px;">
+                    <img src="{{ img_url }}" class="zoomable" width="300" data-status="invalid" data-well="{{ well_name }}">
+                    <div class="well-overlay">{{ well_name }}</div>
+                </div>
+            {% endfor %}
         </div>
     </div>
+</div>
 
 
 
@@ -340,7 +327,6 @@ $(document).ready(function() {
     });
 
 
-function updateModal() {
 
 
 function updateModal() {

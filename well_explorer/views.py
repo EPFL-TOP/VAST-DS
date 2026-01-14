@@ -1262,6 +1262,8 @@ def drug_list(request):
                 dest_plate_info += ' | '
             dest_plate_info += 'Plate2: ' + ', '.join(dest_wp_2)
 
+
+
         image_list_valid_pairs = []
         for img, name in zip(image_list_valid, well_name_valid):
             image_list_valid_pairs.append((img, name))
