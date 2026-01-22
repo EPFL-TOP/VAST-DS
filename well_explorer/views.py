@@ -1106,12 +1106,12 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     data_img_bf   = {'img':[]}
     source_img_bf = bokeh.models.ColumnDataSource(data=data_img_bf)
-    plot_img_bf   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="box_select,wheel_zoom,box_zoom,reset,undo",width=550, height=550)
+    plot_img_bf   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="box_select,wheel_zoom,box_zoom,pan,xwheel_pan,reset,undo",width=550, height=550)
     plot_img_bf.image(image='img', x=0, y=0, dw=im_size, dh=im_size, source=source_img_bf, color_mapper=color_mapper)
 
     data_img_yfp   = {'img':[]}
     source_img_yfp = bokeh.models.ColumnDataSource(data=data_img_yfp)
-    plot_img_yfp   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="box_select,wheel_zoom,box_zoom,reset,undo",width=550, height=550)
+    plot_img_yfp   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="box_select,wheel_zoom,box_zoom,pan,xwheel_pan,reset,undo",width=550, height=550)
     plot_img_yfp.image(image='img', x=0, y=0, dw=im_size, dh=im_size, source=source_img_yfp, color_mapper=color_mapper)
 
     data_img_vast   = {'img':[]}
