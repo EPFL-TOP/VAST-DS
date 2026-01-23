@@ -760,21 +760,21 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 plot_wellplate_dest.x_range.factors = x_96
                 plot_wellplate_dest.y_range.factors = y_96
                 plot_wellplate_dest.title.text = "96 well plate"
-                cds_labels_dest.data = dict(source_labels_96.data, size=[50]*len(source_labels_96.data['x']))
+                cds_labels_dest.data = dict(source_labels_96.data, size=[50]*len(source_labels_96.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
                 plot_wellplate_dest.axis.visible = True
 
             elif dest_well_plate.plate_type == '48':
                 plot_wellplate_dest.x_range.factors = x_48
                 plot_wellplate_dest.y_range.factors = y_48
                 plot_wellplate_dest.title.text = "48 well plate"
-                cds_labels_dest.data = dict(source_labels_48.data, size=[65]*len(source_labels_48.data['x']))
+                cds_labels_dest.data = dict(source_labels_48.data, size=[65]*len(source_labels_48.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
                 plot_wellplate_dest.axis.visible = True
 
             elif dest_well_plate.plate_type == '24':
                 plot_wellplate_dest.x_range.factors = x_24
                 plot_wellplate_dest.y_range.factors = y_24
                 plot_wellplate_dest.title.text = "24 well plate"
-                cds_labels_dest.data = dict(source_labels_24.data, size=[80]*len(source_labels_24.data['x']))
+                cds_labels_dest.data = dict(source_labels_24.data, size=[80]*len(source_labels_24.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
                 plot_wellplate_dest.axis.visible = True
 
         if n_plates==2:
@@ -783,21 +783,21 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 plot_wellplate_dest_2.x_range.factors = x_96
                 plot_wellplate_dest_2.y_range.factors = y_96
                 plot_wellplate_dest_2.title.text = "96 well plate"
-                cds_labels_dest_2.data = dict(source_labels_96.data, size=[50]*len(source_labels_96.data['x']))
+                cds_labels_dest_2.data = dict(source_labels_96.data, size=[50]*len(source_labels_96.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
                 plot_wellplate_dest_2.axis.visible = True
 
             elif dest_well_plate_2.plate_type == '48':
                 plot_wellplate_dest_2.x_range.factors = x_48
                 plot_wellplate_dest_2.y_range.factors = y_48
                 plot_wellplate_dest_2.title.text = "48 well plate"
-                cds_labels_dest_2.data = dict(source_labels_48.data, size=[65]*len(source_labels_48.data['x']))
+                cds_labels_dest_2.data = dict(source_labels_48.data, size=[65]*len(source_labels_48.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
                 plot_wellplate_dest_2.axis.visible = True
 
             elif dest_well_plate_2.plate_type == '24':
                 plot_wellplate_dest_2.x_range.factors = x_24
                 plot_wellplate_dest_2.y_range.factors = y_24
                 plot_wellplate_dest_2.title.text = "24 well plate"
-                cds_labels_dest_2.data = dict(source_labels_24.data, size=[80]*len(source_labels_24.data['x']))
+                cds_labels_dest_2.data = dict(source_labels_24.data, size=[80]*len(source_labels_24.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
                 plot_wellplate_dest_2.axis.visible = True
 
         LOCALPATH = LOCALPATH_HIVE
