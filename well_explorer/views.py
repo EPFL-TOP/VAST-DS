@@ -302,6 +302,17 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         plot_wellplate_dest_2.width  = int(plot_wellplate_dest_2.width * 1.2)
         plot_wellplate_dest_2.height = int(plot_wellplate_dest_2.height * 1.2)
 
+        if len(cds_labels_dest.data['size'])>0:
+            new_size = int(cds_labels_dest.data['size'][0] * 1.2)
+            data = dict(cds_labels_dest.data)
+            data["size"] = [new_size] * len(data["x"])
+            cds_labels_dest.data = data
+        if len(cds_labels_dest_2.data['size'])>0:
+            new_size = int(cds_labels_dest_2.data['size'][0] * 1.2)
+            data = dict(cds_labels_dest_2.data)
+            data["size"] = [new_size] * len(data["x"])
+            cds_labels_dest_2.data = data
+
     #___________________________________________________________________________________________
     def zoom_out_cb():
         #zoom(1.25, plot_img_bf)
@@ -317,6 +328,16 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         plot_wellplate_dest.height = int(plot_wellplate_dest.height / 1.2)
         plot_wellplate_dest_2.width  = int(plot_wellplate_dest_2.width / 1.2)
         plot_wellplate_dest_2.height = int(plot_wellplate_dest_2.height / 1.2)
+        if len(cds_labels_dest.data['size'])>0:
+            new_size = int(cds_labels_dest.data['size'][0] / 1.2)
+            data = dict(cds_labels_dest.data)
+            data["size"] = [new_size] * len(data["x"])
+            cds_labels_dest.data = data
+        if len(cds_labels_dest_2.data['size'])>0:
+            new_size = int(cds_labels_dest_2.data['size'][0] / 1.2)
+            data = dict(cds_labels_dest_2.data)
+            data["size"] = [new_size] * len(data["x"])
+            cds_labels_dest_2.data = data
 
     zoom_in.on_click(zoom_in_cb)
     zoom_out.on_click(zoom_out_cb)
