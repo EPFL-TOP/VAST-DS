@@ -290,12 +290,17 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         #zoom(0.8, plot_img_bf)
         #zoom(0.8, plot_img_yfp)
         #zoom(0.8, plot_img_vast)
+
         plot_img_bf.width  = int(plot_img_bf.width * 1.2)
         plot_img_bf.height = int(plot_img_bf.height * 1.2)
         plot_img_yfp.width  = int(plot_img_yfp.width * 1.2)
         plot_img_yfp.height = int(plot_img_yfp.height * 1.2)
         plot_img_vast.width  = int(plot_img_vast.width * 1.2)
         plot_img_vast.height = int(plot_img_vast.height * 1.2)
+        plot_wellplate_dest.width  = int(plot_wellplate_dest.width * 1.2)
+        plot_wellplate_dest.height = int(plot_wellplate_dest.height * 1.2)
+        plot_wellplate_dest_2.width  = int(plot_wellplate_dest_2.width * 1.2)
+        plot_wellplate_dest_2.height = int(plot_wellplate_dest_2.height * 1.2)
 
     #___________________________________________________________________________________________
     def zoom_out_cb():
@@ -308,6 +313,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         plot_img_yfp.height = int(plot_img_yfp.height / 1.2)
         plot_img_vast.width  = int(plot_img_vast.width / 1.2)
         plot_img_vast.height = int(plot_img_vast.height / 1.2)
+        plot_wellplate_dest.width  = int(plot_wellplate_dest.width / 1.2)
+        plot_wellplate_dest.height = int(plot_wellplate_dest.height / 1.2)
+        plot_wellplate_dest_2.width  = int(plot_wellplate_dest_2.width / 1.2)
+        plot_wellplate_dest_2.height = int(plot_wellplate_dest_2.height / 1.2)
 
     zoom_in.on_click(zoom_in_cb)
     zoom_out.on_click(zoom_out_cb)
@@ -1210,7 +1219,11 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button, create_training_button), bokeh.models.Spacer(width=20),  bokeh.layouts.column(zoom_in,zoom_out), bokeh.layouts.column(image_message,drug_message)),
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
-                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), bokeh.layouts.column(contrast_slider,predict_button, use_corrected_checkbox), dropdown_total_somites, dropdown_total_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, dropdown_good_orientation, saveimages_button,images_comments),
+                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), bokeh.layouts.column(contrast_slider,predict_button, use_corrected_checkbox), 
+                                                                                                bokeh.layouts.column(dropdown_total_somites, dropdown_total_somites_err), 
+                                                                                                bokeh.layouts.column(dropdown_bad_somites, dropdown_bad_somites_err), 
+                                                                                                bokeh.layouts.column(dropdown_good_image, dropdown_good_orientation), 
+                                                                                                bokeh.layouts.column(saveimages_button,images_comments)),
                                                                               bokeh.layouts.row(prediction_message),
                                                                               bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
                                                                               bokeh.layouts.row(plot_img_vast))))
