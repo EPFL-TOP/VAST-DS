@@ -287,15 +287,27 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     #___________________________________________________________________________________________
     def zoom_in_cb():
-        zoom(0.8, plot_img_bf)
-        zoom(0.8, plot_img_yfp)
-        zoom(0.8, plot_img_vast)
+        #zoom(0.8, plot_img_bf)
+        #zoom(0.8, plot_img_yfp)
+        #zoom(0.8, plot_img_vast)
+        plot_img_bf.width  = int(plot_img_bf.width * 1.2)
+        plot_img_bf.height = int(plot_img_bf.height * 1.2)
+        plot_img_yfp.width  = int(plot_img_yfp.width * 1.2)
+        plot_img_yfp.height = int(plot_img_yfp.height * 1.2)
+        plot_img_vast.width  = int(plot_img_vast.width * 1.2)
+        plot_img_vast.height = int(plot_img_vast.height * 1.2)
 
     #___________________________________________________________________________________________
     def zoom_out_cb():
-        zoom(1.25, plot_img_bf)
-        zoom(1.25, plot_img_yfp)
-        zoom(1.25, plot_img_vast)
+        #zoom(1.25, plot_img_bf)
+        #zoom(1.25, plot_img_yfp)
+        #zoom(1.25, plot_img_vast)
+        plot_img_bf.width  = int(plot_img_bf.width / 1.2)
+        plot_img_bf.height = int(plot_img_bf.height / 1.2)
+        plot_img_yfp.width  = int(plot_img_yfp.width / 1.2)
+        plot_img_yfp.height = int(plot_img_yfp.height / 1.2)
+        plot_img_vast.width  = int(plot_img_vast.width / 1.2)
+        plot_img_vast.height = int(plot_img_vast.height / 1.2)
 
     zoom_in.on_click(zoom_in_cb)
     zoom_out.on_click(zoom_out_cb)
