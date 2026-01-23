@@ -1172,13 +1172,13 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     data_img_bf   = {'img':[]}
     source_img_bf = bokeh.models.ColumnDataSource(data=data_img_bf)
     plot_img_bf   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="box_select,wheel_zoom,box_zoom,pan,reset,undo",
-                                          width=550, height=550)
+                                          width=550, height=550,match_aspect=True)
     plot_img_bf.image(image='img', x=0, y=0, dw=im_size, dh=im_size, source=source_img_bf, color_mapper=color_mapper)
 
     data_img_yfp   = {'img':[]}
     source_img_yfp = bokeh.models.ColumnDataSource(data=data_img_yfp)
     plot_img_yfp   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="box_select,wheel_zoom,box_zoom,pan,reset,undo",
-                                           width=550, height=550)
+                                           width=550, height=550,match_aspect=True)
     plot_img_yfp.image(image='img', x=0, y=0, dw=im_size, dh=im_size, source=source_img_yfp, color_mapper=color_mapper)
 
     data_img_vast   = {'img':[]}
@@ -1186,7 +1186,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     x_range_2 = bokeh.models.Range1d(start=0, end=1024)
     y_range_2 = bokeh.models.Range1d(start=0, end=200*4)
     plot_img_vast   = bokeh.plotting.figure(x_range=x_range_2, y_range=y_range_2, tools="box_select,wheel_zoom,box_zoom,reset,undo",
-                                            width=1110, height=217*4)
+                                            width=1110, height=217*4,match_aspect=True)
     #plot_img_vast   = bokeh.plotting.figure(tools="box_select,wheel_zoom,box_zoom,reset,undo",width=1024, height=200)
     plot_img_vast.image_rgba(image='img', x=0, y=0, dw=1024, dh=200*4, source=source_img_vast)
 
