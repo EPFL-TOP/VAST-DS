@@ -287,11 +287,15 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     #___________________________________________________________________________________________
     def zoom_in_cb():
-        zoom(0.8, plot_wellplate_dest)
+        zoom(0.8, plot_img_bf)
+        zoom(0.8, plot_img_yfp)
+        zoom(0.8, plot_img_vast)
 
     #___________________________________________________________________________________________
     def zoom_out_cb():
-        zoom(1.25, plot_wellplate_dest)
+        zoom(1.25, plot_img_bf)
+        zoom(1.25, plot_img_yfp)
+        zoom(1.25, plot_img_vast)
 
     zoom_in.on_click(zoom_in_cb)
     zoom_out.on_click(zoom_out_cb)
