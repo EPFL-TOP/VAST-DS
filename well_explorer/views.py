@@ -285,17 +285,18 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     #___________________________________________________________________________________________
     def make_zoom_cb_wells(factor):
         def zoom_cb():
-            plot_img_bf.width  = int(plot_img_bf.width * factor)
-            plot_img_bf.height = int(plot_img_bf.height * factor)
-            plot_img_yfp.width  = int(plot_img_yfp.width * factor)
-            plot_img_yfp.height = int(plot_img_yfp.height * factor)
-            plot_img_vast.width  = int(plot_img_vast.width * factor)
-            plot_img_vast.height = int(plot_img_vast.height * factor)
             plot_wellplate_dest.width  = int(plot_wellplate_dest.width * factor)
             plot_wellplate_dest.height = int(plot_wellplate_dest.height * factor)
             plot_wellplate_dest_2.width  = int(plot_wellplate_dest_2.width * factor)
             plot_wellplate_dest_2.height = int(plot_wellplate_dest_2.height * factor)
-
+            zoom_size(factor, cds_labels_dest)
+            zoom_size(factor, cds_labels_dest_2)
+            zoom_size(factor, cds_labels_dest_present)
+            zoom_size(factor, cds_labels_dest_2_present)
+            zoom_size(factor, cds_labels_dest_filled)
+            zoom_size(factor, cds_labels_dest_2_filled)
+            zoom_size(factor, cds_labels_dest_filled_bad)
+            zoom_size(factor, cds_labels_dest_2_filled_bad)
         return zoom_cb
 
 
