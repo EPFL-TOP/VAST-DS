@@ -270,77 +270,43 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     zoom_out = bokeh.models.Button(label="Zoom out")
 
     #___________________________________________________________________________________________
-    def zoom(factor, fig):
-        xr = fig.x_range
-        yr = fig.y_range
+    def zoom_size(factor, cds):
 
-        cx = (xr.start + xr.end) / 2
-        cy = (yr.start + yr.end) / 2
+        if len(cds.data['size'])>0:
+            new_size = int(cds.data['size'][0] * factor)
+            data = dict(cds.data)
+            data["size"] = [new_size] * len(data["x"])
+            cds.data = data
 
-        w = (xr.end - xr.start) * factor
-        h = (yr.end - yr.start) * factor
-
-        xr.start = cx - w / 2
-        xr.end   = cx + w / 2
-        yr.start = cy - h / 2
-        yr.end   = cy + h / 2
 
     #___________________________________________________________________________________________
-    def zoom_in_cb():
-        #zoom(0.8, plot_img_bf)
-        #zoom(0.8, plot_img_yfp)
-        #zoom(0.8, plot_img_vast)
+    def make_zoom_cb(factor):
+        def zoom_cb():
+            plot_img_bf.width  = int(plot_img_bf.width * factor)
+            plot_img_bf.height = int(plot_img_bf.height * factor)
+            plot_img_yfp.width  = int(plot_img_yfp.width * factor)
+            plot_img_yfp.height = int(plot_img_yfp.height * factor)
+            plot_img_vast.width  = int(plot_img_vast.width * factor)
+            plot_img_vast.height = int(plot_img_vast.height * factor)
+            plot_wellplate_dest.width  = int(plot_wellplate_dest.width * factor)
+            plot_wellplate_dest.height = int(plot_wellplate_dest.height * factor)
+            plot_wellplate_dest_2.width  = int(plot_wellplate_dest_2.width * factor)
+            plot_wellplate_dest_2.height = int(plot_wellplate_dest_2.height * factor)
 
-        plot_img_bf.width  = int(plot_img_bf.width * 1.2)
-        plot_img_bf.height = int(plot_img_bf.height * 1.2)
-        plot_img_yfp.width  = int(plot_img_yfp.width * 1.2)
-        plot_img_yfp.height = int(plot_img_yfp.height * 1.2)
-        plot_img_vast.width  = int(plot_img_vast.width * 1.2)
-        plot_img_vast.height = int(plot_img_vast.height * 1.2)
-        plot_wellplate_dest.width  = int(plot_wellplate_dest.width * 1.2)
-        plot_wellplate_dest.height = int(plot_wellplate_dest.height * 1.2)
-        plot_wellplate_dest_2.width  = int(plot_wellplate_dest_2.width * 1.2)
-        plot_wellplate_dest_2.height = int(plot_wellplate_dest_2.height * 1.2)
+            zoom_size(factor, cds_labels_dest)
+            zoom_size(factor, cds_labels_dest_2)
+            zoom_size(factor, cds_labels_dest_present)
+            zoom_size(factor, cds_labels_dest_2_present)
+            zoom_size(factor, cds_labels_dest_filled)
+            zoom_size(factor, cds_labels_dest_2_filled)
+            zoom_size(factor, cds_labels_dest_filled_bad)
+            zoom_size(factor, cds_labels_dest_2_filled_bad)
+            
+        return zoom_cb
 
-        if len(cds_labels_dest.data['size'])>0:
-            new_size = int(cds_labels_dest.data['size'][0] * 1.2)
-            data = dict(cds_labels_dest.data)
-            data["size"] = [new_size] * len(data["x"])
-            cds_labels_dest.data = data
-        if len(cds_labels_dest_2.data['size'])>0:
-            new_size = int(cds_labels_dest_2.data['size'][0] * 1.2)
-            data = dict(cds_labels_dest_2.data)
-            data["size"] = [new_size] * len(data["x"])
-            cds_labels_dest_2.data = data
 
-    #___________________________________________________________________________________________
-    def zoom_out_cb():
-        #zoom(1.25, plot_img_bf)
-        #zoom(1.25, plot_img_yfp)
-        #zoom(1.25, plot_img_vast)
-        plot_img_bf.width  = int(plot_img_bf.width / 1.2)
-        plot_img_bf.height = int(plot_img_bf.height / 1.2)
-        plot_img_yfp.width  = int(plot_img_yfp.width / 1.2)
-        plot_img_yfp.height = int(plot_img_yfp.height / 1.2)
-        plot_img_vast.width  = int(plot_img_vast.width / 1.2)
-        plot_img_vast.height = int(plot_img_vast.height / 1.2)
-        plot_wellplate_dest.width  = int(plot_wellplate_dest.width / 1.2)
-        plot_wellplate_dest.height = int(plot_wellplate_dest.height / 1.2)
-        plot_wellplate_dest_2.width  = int(plot_wellplate_dest_2.width / 1.2)
-        plot_wellplate_dest_2.height = int(plot_wellplate_dest_2.height / 1.2)
-        if len(cds_labels_dest.data['size'])>0:
-            new_size = int(cds_labels_dest.data['size'][0] / 1.2)
-            data = dict(cds_labels_dest.data)
-            data["size"] = [new_size] * len(data["x"])
-            cds_labels_dest.data = data
-        if len(cds_labels_dest_2.data['size'])>0:
-            new_size = int(cds_labels_dest_2.data['size'][0] / 1.2)
-            data = dict(cds_labels_dest_2.data)
-            data["size"] = [new_size] * len(data["x"])
-            cds_labels_dest_2.data = data
-
-    zoom_in.on_click(zoom_in_cb)
-    zoom_out.on_click(zoom_out_cb)
+    zoom_in.on_click(make_zoom_cb(1.2))
+    zoom_out.on_click(make_zoom_cb(0.8))
 
     #___________________________________________________________________________________________
     def get_well_mapping(indices):
