@@ -148,17 +148,15 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     image_message    = bokeh.models.Div(visible=False)
     prediction_message    = bokeh.models.Div(visible=False)
 
-    plot_wellplate_dest   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title=''
-                                                  , match_aspect=True, sizing_mode="stretch_width", #width=900, height=600
-                                                  tools="box_select,box_zoom,reset,undo")
+    plot_wellplate_dest   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title='',
+                                                  width=900, height=600, tools="box_select,box_zoom,reset,undo")
     plot_wellplate_dest.xaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest.yaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest.grid.visible = False
     plot_wellplate_dest.axis.visible = False
 
     plot_wellplate_dest_2   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title='',
-                                                    match_aspect=True, sizing_mode="stretch_width", #width=900, height=600
-                                                    tools="box_select,box_zoom,reset,undo")
+                                                    width=900, height=600, tools="box_select,box_zoom,reset,undo")
     plot_wellplate_dest_2.xaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest_2.yaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest_2.grid.visible = False
@@ -267,6 +265,36 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             y_labels.append(yi)
 
 
+
+    zoom_in = bokeh.models.Button(label="Zoom in")
+    zoom_out = bokeh.models.Button(label="Zoom out")
+
+    #___________________________________________________________________________________________
+    def zoom(factor, fig):
+        xr = fig.x_range
+        yr = fig.y_range
+
+        cx = (xr.start + xr.end) / 2
+        cy = (yr.start + yr.end) / 2
+
+        w = (xr.end - xr.start) * factor
+        h = (yr.end - yr.start) * factor
+
+        xr.start = cx - w / 2
+        xr.end   = cx + w / 2
+        yr.start = cy - h / 2
+        yr.end   = cy + h / 2
+
+    #___________________________________________________________________________________________
+    def zoom_in_cb():
+        zoom(0.8, plot_wellplate_dest)
+
+    #___________________________________________________________________________________________
+    def zoom_out_cb():
+        zoom(1.25, plot_wellplate_dest)
+
+    zoom_in.on_click(zoom_in_cb)
+    zoom_out.on_click(zoom_out_cb)
 
     #___________________________________________________________________________________________
     def get_well_mapping(indices):
@@ -1140,13 +1168,13 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     data_img_bf   = {'img':[]}
     source_img_bf = bokeh.models.ColumnDataSource(data=data_img_bf)
     plot_img_bf   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="box_select,wheel_zoom,box_zoom,pan,reset,undo",
-                                          match_aspect=True, sizing_mode="stretch_width")#,width=550, height=550)
+                                          width=550, height=550)
     plot_img_bf.image(image='img', x=0, y=0, dw=im_size, dh=im_size, source=source_img_bf, color_mapper=color_mapper)
 
     data_img_yfp   = {'img':[]}
     source_img_yfp = bokeh.models.ColumnDataSource(data=data_img_yfp)
     plot_img_yfp   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="box_select,wheel_zoom,box_zoom,pan,reset,undo",
-                                           match_aspect=True, sizing_mode="stretch_width")#,width=550, height=550)
+                                           width=550, height=550)
     plot_img_yfp.image(image='img', x=0, y=0, dw=im_size, dh=im_size, source=source_img_yfp, color_mapper=color_mapper)
 
     data_img_vast   = {'img':[]}
@@ -1154,7 +1182,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     x_range_2 = bokeh.models.Range1d(start=0, end=1024)
     y_range_2 = bokeh.models.Range1d(start=0, end=200*4)
     plot_img_vast   = bokeh.plotting.figure(x_range=x_range_2, y_range=y_range_2, tools="box_select,wheel_zoom,box_zoom,reset,undo",
-                                            match_aspect=True, sizing_mode="stretch_width")#,width=1110, height=217*4)
+                                            width=1110, height=217*4)
     #plot_img_vast   = bokeh.plotting.figure(tools="box_select,wheel_zoom,box_zoom,reset,undo",width=1024, height=200)
     plot_img_vast.image_rgba(image='img', x=0, y=0, dw=1024, dh=200*4, source=source_img_vast)
 
@@ -1163,14 +1191,13 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     indent = bokeh.models.Spacer(width=30)
 
-    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button, create_training_button), bokeh.models.Spacer(width=20),    bokeh.layouts.column(image_message,drug_message)),
+    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button, create_training_button), bokeh.models.Spacer(width=20),  bokeh.layouts.column(zoom_in,zoom_out), bokeh.layouts.column(image_message,drug_message)),
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
                                                          bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), bokeh.layouts.column(contrast_slider,predict_button, use_corrected_checkbox), dropdown_total_somites, dropdown_total_somites_err, dropdown_bad_somites, dropdown_bad_somites_err, dropdown_good_image, dropdown_good_orientation, saveimages_button,images_comments),
                                                                               bokeh.layouts.row(prediction_message),
                                                                               bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
-                                                                              bokeh.layouts.row(plot_img_vast)))
-                                        ,sizing_mode="stretch_width")
+                                                                              bokeh.layouts.row(plot_img_vast))))
 
     plot_img_bf.axis.visible   = False
     plot_img_bf.grid.visible   = False
