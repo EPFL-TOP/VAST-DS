@@ -1214,7 +1214,11 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     indent = bokeh.models.Spacer(width=30)
 
-    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button, create_training_button), bokeh.models.Spacer(width=20),  bokeh.layouts.column(zoom_in_wells,zoom_out_wells), bokeh.layouts.column(zoom_in_fish,zoom_out_fish), bokeh.layouts.column(image_message,drug_message)),
+    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button, create_training_button), 
+                                                         bokeh.models.Spacer(width=20),  
+                                                         bokeh.layouts.column(zoom_in_wells,zoom_out_wells), 
+                                                         bokeh.layouts.column(zoom_in_fish,zoom_out_fish), 
+                                                         bokeh.layouts.column(image_message,drug_message)),
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
                                                          bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), bokeh.layouts.column(contrast_slider,predict_button, use_corrected_checkbox), 
@@ -1223,7 +1227,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                                                                                 bokeh.layouts.column(dropdown_good_image, dropdown_good_orientation), 
                                                                                                 bokeh.layouts.column(saveimages_button,images_comments)),
                                                                               bokeh.layouts.row(prediction_message),
-                                                                              bokeh.layouts.row(plot_img_bf, bokeh.layouts.Spacer(width=10),plot_img_yfp),
+                                                                              bokeh.layouts.row(plot_img_yfp, bokeh.layouts.Spacer(width=10),plot_img_bf),
                                                                               bokeh.layouts.row(plot_img_vast))))
 
     plot_img_bf.axis.visible   = False
