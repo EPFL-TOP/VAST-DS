@@ -229,11 +229,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     plot_wellplate_source.add_layout(labels)
 
-    hover_grid = bokeh.models.HoverTool(tooltips=[("ID", "@id"), ("(X,Y)", "(@x{0.1f}, @y{0.1f})")])
+    hover_grid = bokeh.models.HoverTool(tooltips=[("ID", "@id"), ("(Row,Col)", "(@x{}, @y{})")])
     hover_grid.mode = 'mouse' 
     hover_grid.point_policy = 'snap_to_data'
     plot_wellplate_source.add_tools(hover_grid)
-
 
     plot_wellplate_source_supp.circle('x', 'y', 
                                  size='size',
@@ -396,7 +395,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
         plot_wellplate_source_supp.axis.visible = True
         plot_wellplate_source_supp.title.text = "Supplementary plate"
-        cds_labels_source_supp.data = dict(x=x_supp, y=y_supp, size=[50]*len(x_supp))
+        cds_labels_source_supp.data = dict(x=x_supp, y=y_supp, size=[50*NZOOM_WELLS_SOURCE]*len(x_supp))
         plot_wellplate_source_supp.x_range.factors = x_supp
         plot_wellplate_source_supp.y_range.factors = ['Z']
 
@@ -1958,7 +1957,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     well_layout = bokeh.layouts.row(indent, bokeh.layouts.column(plot_wellplate_source,plot_wellplate_source_supp), bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2))
     
-    exp_layout = bokeh.layouts.column(bokeh.layouts.row(indent,zoom_in_wells_source, zoom_out_wells_source),
+    exp_layout = bokeh.layouts.column(bokeh.layouts.row(zoom_in_wells_source, zoom_out_wells_source),
                                       bokeh.layouts.row(dropdown_exp, dropdown_well_plate_source,dropdown_n_supp_sourcewell, dropdown_well_plate_dest, dropdown_n_dest_wellplates),
                                       bokeh.layouts.row(experiment_name, experiment_date, pyrat_id),
                                       bokeh.layouts.row(experiment_description), 
