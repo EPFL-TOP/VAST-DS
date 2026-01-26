@@ -229,7 +229,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     plot_wellplate_source.add_layout(labels)
 
-    hover_grid = bokeh.modelsHoverTool(tooltips=[("ID", "@id"), ("(X,Y)", "(@x{0.1f}, @y{0.1f})")])
+    hover_grid = bokeh.models.HoverTool(tooltips=[("ID", "@id"), ("(X,Y)", "(@x{0.1f}, @y{0.1f})")])
     hover_grid.mode = 'mouse' 
     hover_grid.point_policy = 'snap_to_data'
     plot_wellplate_source.add_tools(hover_grid)
