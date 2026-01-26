@@ -214,7 +214,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                     x_offset = 0, y_offset = 0,
                                     text_align = 'center',
                                     text_baseline = 'middle',
-                                    text_font_size = '14px',
+                                    text_font_size = '10px',
                                     text_color = 'navy'
     )
 
