@@ -232,13 +232,22 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     hover_grid = bokeh.models.HoverTool(#tooltips=[("Drugs", "@drug"), ("(Col,Row)", "(@x, @y)")])
 
     tooltips="""
-    <div>
-        <div><b>Drugs</b></div>
-        <div>@drug</div>
-        <div style="margin-top:5px;">
-            <b>Position</b>: (@x, @y)
+    <div style="font-size:14px;">
+        <div style="color:#2563eb; font-weight:bold; font-size:15px;">
+            Drugs
+        </div>
+        <div style="color:#16a34a; margin-left:5px;">
+            @drug
+        </div>
+
+        <div style="margin-top:6px; color:#dc2626; font-weight:bold;">
+            Position
+        </div>
+        <div style="margin-left:5px; font-size:13px;">
+            (@x, @y)
         </div>
     </div>
+
     """
     )
 
@@ -884,8 +893,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 x_filled.append(well_pos.position_col)
                 y_filled.append(well_pos.position_row)
                 size_filled.append(cds_labels_source.data['size'][cds_labels_source.data['x'].index(well_pos.position_col)])
-                drug_filled.append('\n '.join([f'{str(d.derivation_name)}\n{d.concentration}µM' for d in drug]))
-                drug_filled.append('<br>'.join([f'{str(d.derivation_name)} - {d.concentration}µM' for d in drug]))
+                #drug_filled.append('\n '.join([f'{str(d.derivation_name)}\n{d.concentration}µMol' for d in drug]))
+                drug_filled.append('<br>'.join([f'{str(d.derivation_name)} - {d.concentration}µMol' for d in drug]))
 
         cds_labels_source_drug.data={'x':x_filled, 'y':y_filled, 'size':size_filled, 'drug':drug_filled}
 
@@ -899,7 +908,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 x_supp.append(well_pos.position_col)
                 y_supp.append(well_pos.position_row)
                 size_supp.append(cds_labels_source_supp.data['size'][cds_labels_source_supp.data['x'].index(well_pos.position_col)])
-                drug_supp.append('\n '.join([f'{str(d.derivation_name)}\n{d.concentration}muMol' for d in drug]))
+                #drug_supp.append('\n '.join([f'{str(d.derivation_name)}\n{d.concentration}µMol' for d in drug]))
+                drug_supp.append('<br>'.join([f'{str(d.derivation_name)} - {d.concentration}µMol' for d in drug]))
 
         cds_labels_source_supp_drug.data={'x':x_supp, 'y':y_supp, 'size':size_supp,'drug':drug_supp}
 
