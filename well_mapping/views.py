@@ -884,7 +884,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 x_filled.append(well_pos.position_col)
                 y_filled.append(well_pos.position_row)
                 size_filled.append(cds_labels_source.data['size'][cds_labels_source.data['x'].index(well_pos.position_col)])
-                drug_filled.append('\n '.join([f'{str(d.derivation_name)}\n{d.concentration}muMol' for d in drug]))
+                drug_filled.append('\n '.join([f'{str(d.derivation_name)}\n{d.concentration}µM' for d in drug]))
+                drug_filled.append('<br>'.join([f'{str(d.derivation_name)} - {d.concentration}µM' for d in drug]))
+
         cds_labels_source_drug.data={'x':x_filled, 'y':y_filled, 'size':size_filled, 'drug':drug_filled}
 
         x_supp = []
