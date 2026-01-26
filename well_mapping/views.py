@@ -214,7 +214,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                     x_offset = 0, y_offset = 0,
                                     text_align = 'center',
                                     text_baseline = 'middle',
-                                    text_font_size = '10px',
+                                    text_font_size = '12px',
                                     text_color = 'navy'
     )
 
@@ -223,11 +223,17 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                     x_offset = 0, y_offset = 0,
                                     text_align = 'center',
                                     text_baseline = 'middle',
-                                    text_font_size = '14px',
+                                    text_font_size = '12px',
                                     text_color = 'navy'
     )
 
     plot_wellplate_source.add_layout(labels)
+
+    hover_grid = bokeh.modelsHoverTool(tooltips=[("ID", "@id"), ("(X,Y)", "(@x{0.1f}, @y{0.1f})")])
+    hover_grid.mode = 'mouse' 
+    hover_grid.point_policy = 'snap_to_data'
+    plot_wellplate_source.add_tools(hover_grid)
+
 
     plot_wellplate_source_supp.circle('x', 'y', 
                                  size='size',
