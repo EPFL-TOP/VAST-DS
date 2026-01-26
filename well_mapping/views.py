@@ -41,7 +41,8 @@ api_url_crossings = base_url + 'tanks/crossings'
 api_url_strains   = base_url + 'strains'
 
 _programmatic_change = False
-
+global NZOOM_WELLS
+NZOOM_WELLS = 1
 #___________________________________________________________________________________________
 def vast_handler(doc: bokeh.document.Document) -> None:
     print('****************************  vast_handler ****************************')
@@ -1772,89 +1773,60 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         bokeh.io.curdoc().add_next_tick_callback(unmap_drugs_to_wellplate)
     unmap_drug_button.on_click(unmap_drugs_to_wellplate_short)
 
+
+    zoom_in_wells_source = bokeh.models.Button(label="Zoom in wells source")
+    zoom_out_wells_source = bokeh.models.Button(label="Zoom out wells source")
+
+    zoom_in_wells_dest = bokeh.models.Button(label="Zoom in wells dest")
+    zoom_out_wells_dest = bokeh.models.Button(label="Zoom out wells dest")
+
     #___________________________________________________________________________________________
-    def connect_drug_to_wellplate():
-        print('------------------->>>>>>>>> connect_drug_to_wellplate')
-        add_drug_button.label = "Processing"
+    def zoom_size(factor, cds):
+
+        if len(cds.data['size'])>0:
+            new_size = int(cds.data['size'][0] * factor)
+            data = dict(cds.data)
+            data["size"] = [new_size] * len(data["x"])
+            cds.data = data
 
 
-        return
-        if len(source_labels_96.selected.indices)>0:
-            drug_message.text = f"<b style='color:red; ; font-size:18px;'> Error: Can not add drug to 96 well plate directly.</b>"
-            drug_message.visible = True
-            return
-        if len(source_labels_24.selected.indices)>0:
-            well_names = ''
-            for i in range(len(source_labels_24.selected.indices)):
-                if i==0:
-                    well_names='{}{}'.format(x_labels_24[source_labels_24.selected.indices[i]], y_labels_24[source_labels_24.selected.indices[i]])
-                else:
-                    well_names+=', {}{}'.format(x_labels_24[source_labels_24.selected.indices[i]], y_labels_24[source_labels_24.selected.indices[i]])
+    #___________________________________________________________________________________________
+    def make_zoom_cb_wells(factor):
+        def zoom_cb():
+            global NZOOM_WELLS
+            NZOOM_WELLS *= factor
+            plot_wellplate_dest.width  = int(plot_wellplate_dest.width * factor)
+            plot_wellplate_dest.height = int(plot_wellplate_dest.height * factor)
+            plot_wellplate_dest_2.width  = int(plot_wellplate_dest_2.width * factor)
+            plot_wellplate_dest_2.height = int(plot_wellplate_dest_2.height * factor)
+            plot_wellplate_source.width  = int(plot_wellplate_source.width * factor)
+            plot_wellplate_source.height = int(plot_wellplate_source.height * factor)
+            plot_wellplate_source_supp.width  = int(plot_wellplate_source_supp.width * factor)
+            plot_wellplate_source_supp.height = int(plot_wellplate_source_supp.height * factor)
+            zoom_size(factor, cds_labels_dest)
+            zoom_size(factor, cds_labels_dest_2)
+            zoom_size(factor, cds_labels_source)
+            zoom_size(factor, cds_labels_source_supp)
+            zoom_size(factor, cds_labels_source_drug)
+            zoom_size(factor, cds_labels_source_supp_drug)
+            zoom_size(factor, cds_labels_dest_1_drug)
+            zoom_size(factor, cds_labels_dest_2_drug)
+            zoom_size(factor,cds_labels_dest_mapping)
+            zoom_size(factor,cds_labels_dest_2_mapping)
+            zoom_size(factor,cds_labels_dest_1_drug_control)
+            zoom_size(factor,cds_labels_dest_2_drug_control)
 
-            try:
-                experiment        = Experiment.objects.get(name=experiment_name.value)
-                drugderivation_wp = DrugDerivationWellPlate.objects.select_related().get(experiment=experiment)
-                records = slims.fetch("Content", slims_cr.equals("cntn_id", slimsid_name.value))
-                if len(records)==0:
-                    drug_message.text = f"<b style='color:red; ; font-size:18px;'> Error: Enter a valid slims ID.</b>"
-                    drug_message.visible = True
-                    return
-                if len(records)>1:
-                    drug_message.text = f"<b style='color:red; ; font-size:18px;'> Error: More than one drug for this ID. Check</b>"
-                    drug_message.visible = True
-                    return
-                try:
-                    concentration = float(drug_concentration.value)
-                except ValueError:
-                    drug_message.text = f"<b style='color:red; ; font-size:18px;'> Error: Concentration should a numeric value.</b>"
-                    drug_message.visible = True
-                    return
-                
-                drug_json = records[0].json_entity['columns']
-                drug_name = ''
-                for i in drug_json:
-                    if i['name']=='cntn_cf_name':#cntn_cf_reference
-                        drug_name=i['value']
-                print('exp=',experiment)
-                print('ddwp=',drugderivation_wp)
-                print('slims id=',slimsid_name.value)
-                print('drug name = ',drug_name)
-                drug_derivation_wc = DrugDerivationWellCluster(well_plate=drugderivation_wp, slims_id=slimsid_name.value, concentration=drug_concentration.value)
-                drug_derivation_wc.save()
+        return zoom_cb
 
 
-                x_filled=source_filled_24.data['x']
-                y_filled=source_filled_24.data['y']
-                for i in range(len(source_labels_24.selected.indices)):
 
-                    if x_labels_24[source_labels_24.selected.indices[i]] in x_filled and y_labels_24[source_labels_24.selected.indices[i]] in y_filled:
-                        drug_message.text = f"<b style='color:red; ; font-size:18px;'> Error: Can not add an other drug on the same well, use modify drug.</b>"
-                        drug_message.visible = True
-                        print('x_labels_24[source_labels_24.selected.indices[i]]' ,x_labels_24[source_labels_24.selected.indices[i]])
-                        print('y_labels_24[source_labels_24.selected.indices[i]]' ,y_labels_24[source_labels_24.selected.indices[i]])
-                        print('x_filled=', x_filled)
-                        print('y_filled=', y_filled)
-                        continue
+    zoom_in_wells_source.on_click(make_zoom_cb_wells(1.2))
+    zoom_out_wells_source.on_click(make_zoom_cb_wells(1./1.2))
 
-                    drug_derivation_wp = DrugDerivationWellPosition(cluster=drug_derivation_wc, 
-                                                                    position_col=x_labels_24[source_labels_24.selected.indices[i]],
-                                                                    position_row=y_labels_24[source_labels_24.selected.indices[i]])
-                    
-                    drug_derivation_wp.save()
-                    x_filled.append(x_labels_24[source_labels_24.selected.indices[i]])
-                    y_filled.append(y_labels_24[source_labels_24.selected.indices[i]])
-                source_filled_24.data={'x':x_filled, 'y':y_filled}
-            except Experiment.DoesNotExist:
-                drug_message.text = f"<b style='color:red; ; font-size:18px;'> Error: Need to select or create an experiment first.</b>"
-                drug_message.visible = True
+    zoom_in_wells_dest.on_click(make_zoom_cb_wells(1.2))
+    zoom_out_wells_dest.on_click(make_zoom_cb_wells(1./1.2))
 
-            if len(source_labels_24.selected.indices)==1: drug_message.text = f"<b style='color:green; ; font-size:18px;'> Adding drug '{drug_name}' to well {well_names}.</b>"
-            else: drug_message.text = f"<b style='color:green; ; font-size:18px;'> Adding drug '{drug_name}' to wells {well_names}.</b>"
-            drug_message.visible = True
-
-        else:
-            drug_message.text = f"<b style='color:red; ; font-size:18px;'> Error: Need to select a least one big well.</b>"
-            drug_message.visible = True
+ 
 
 
     #_______________________________________________________
@@ -1981,7 +1953,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
    
 
-    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,exp_layout, bokeh.layouts.Spacer(width=50), drug_layout, text_layout),
+    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,zoom_in_wells_source, zoom_out_wells_source, bokeh.layouts.Spacer(width=200), zoom_in_wells_dest, zoom_out_wells_dest),
+                                    bokeh.layouts.row(indent,exp_layout, bokeh.layouts.Spacer(width=50), drug_layout, text_layout),
                                        bokeh.layouts.row(bokeh.layouts.Spacer(height=50)),
                                        well_layout,
                                        bokeh.layouts.row(bokeh.layouts.Spacer(height=50)))
