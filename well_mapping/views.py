@@ -41,8 +41,11 @@ api_url_crossings = base_url + 'tanks/crossings'
 api_url_strains   = base_url + 'strains'
 
 _programmatic_change = False
-global NZOOM_WELLS
-NZOOM_WELLS = 1
+global NZOOM_WELLS_SOURCE
+global NZOOM_WELLS_DEST
+
+NZOOM_WELLS_SOURCE = 1
+NZOOM_WELLS_DEST   = 1
 #___________________________________________________________________________________________
 def vast_handler(doc: bokeh.document.Document) -> None:
     print('****************************  vast_handler ****************************')
@@ -700,14 +703,14 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             plot_wellplate_source.x_range.factors = x_96
             plot_wellplate_source.y_range.factors = y_96
             plot_wellplate_source.title.text = "96 well plate"
-            cds_labels_source.data = dict(source_labels_96.data, size=[50]*len(source_labels_96.data['x']))
+            cds_labels_source.data = dict(source_labels_96.data, size=[50*NZOOM_WELLS_SOURCE]*len(source_labels_96.data['x']))
             plot_wellplate_source.axis.visible = True
 
         elif '48' in new:
             plot_wellplate_source.x_range.factors = x_48
             plot_wellplate_source.y_range.factors = y_48
             plot_wellplate_source.title.text = "48 well plate"
-            cds_labels_source.data = dict(source_labels_48.data, size=[65]*len(source_labels_48.data['x']))
+            cds_labels_source.data = dict(source_labels_48.data, size=[65*NZOOM_WELLS_SOURCE]*len(source_labels_48.data['x']))
             plot_wellplate_source.axis.visible = True
 
         elif '24' in new:
@@ -715,7 +718,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             plot_wellplate_source.x_range.factors = x_24
             plot_wellplate_source.y_range.factors = y_24
             plot_wellplate_source.title.text = "24 well plate"
-            cds_labels_source.data = dict(source_labels_24.data, size=[80]*len(source_labels_24.data['x']))
+            cds_labels_source.data = dict(source_labels_24.data, size=[80*NZOOM_WELLS_SOURCE]*len(source_labels_24.data['x']))
             plot_wellplate_source.axis.visible = True
 
         else:
@@ -732,21 +735,21 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             plot_wellplate_dest.x_range.factors = x_96
             plot_wellplate_dest.y_range.factors = y_96
             plot_wellplate_dest.title.text = "96 well plate"
-            cds_labels_dest.data = dict(source_labels_96.data, size=[50]*len(source_labels_96.data['x']))
+            cds_labels_dest.data = dict(source_labels_96.data, size=[50*NZOOM_WELLS_DEST]*len(source_labels_96.data['x']))
             plot_wellplate_dest.axis.visible = True
 
         elif '48' in new:
             plot_wellplate_dest.x_range.factors = x_48
             plot_wellplate_dest.y_range.factors = y_48
             plot_wellplate_dest.title.text = "48 well plate"
-            cds_labels_dest.data = dict(source_labels_48.data, size=[65]*len(source_labels_48.data['x']))
+            cds_labels_dest.data = dict(source_labels_48.data, size=[65*NZOOM_WELLS_DEST]*len(source_labels_48.data['x']))
             plot_wellplate_dest.axis.visible = True
 
         elif '24' in new:
             plot_wellplate_dest.x_range.factors = x_24
             plot_wellplate_dest.y_range.factors = y_24
             plot_wellplate_dest.title.text = "24 well plate"
-            cds_labels_dest.data = dict(source_labels_24.data, size=[80]*len(source_labels_24.data['x']))
+            cds_labels_dest.data = dict(source_labels_24.data, size=[80*NZOOM_WELLS_DEST]*len(source_labels_24.data['x']))
             plot_wellplate_dest.axis.visible = True
 
         else:
@@ -765,21 +768,21 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 plot_wellplate_dest_2.x_range.factors = x_96
                 plot_wellplate_dest_2.y_range.factors = y_96
                 plot_wellplate_dest_2.title.text = "96 well plate"
-                cds_labels_dest_2.data = dict(source_labels_96.data, size=[50]*len(source_labels_96.data['x']))
+                cds_labels_dest_2.data = dict(source_labels_96.data, size=[50*NZOOM_WELLS_DEST]*len(source_labels_96.data['x']))
                 plot_wellplate_dest_2.axis.visible = True
 
             elif '48' in dropdown_well_plate_dest.value:
                 plot_wellplate_dest_2.x_range.factors = x_48
                 plot_wellplate_dest_2.y_range.factors = y_48
                 plot_wellplate_dest_2.title.text = "48 well plate"
-                cds_labels_dest_2.data = dict(source_labels_48.data, size=[65]*len(source_labels_48.data['x']))
+                cds_labels_dest_2.data = dict(source_labels_48.data, size=[65*NZOOM_WELLS_DEST]*len(source_labels_48.data['x']))
                 plot_wellplate_dest_2.axis.visible = True
 
             elif '24' in dropdown_well_plate_dest.value:
                 plot_wellplate_dest_2.x_range.factors = x_24
                 plot_wellplate_dest_2.y_range.factors = y_24
                 plot_wellplate_dest_2.title.text = "24 well plate"
-                cds_labels_dest_2.data = dict(source_labels_24.data, size=[80]*len(source_labels_24.data['x']))
+                cds_labels_dest_2.data = dict(source_labels_24.data, size=[80*NZOOM_WELLS_DEST]*len(source_labels_24.data['x']))
                 plot_wellplate_dest_2.axis.visible = True
 
             else:
@@ -1791,24 +1794,36 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
     #___________________________________________________________________________________________
-    def make_zoom_cb_wells(factor):
+    def make_zoom_cb_wells_source(factor):
         def zoom_cb():
-            global NZOOM_WELLS
-            NZOOM_WELLS *= factor
-            plot_wellplate_dest.width  = int(plot_wellplate_dest.width * factor)
-            plot_wellplate_dest.height = int(plot_wellplate_dest.height * factor)
-            plot_wellplate_dest_2.width  = int(plot_wellplate_dest_2.width * factor)
-            plot_wellplate_dest_2.height = int(plot_wellplate_dest_2.height * factor)
+            global NZOOM_WELLS_SOURCE
+            NZOOM_WELLS_SOURCE *= factor
+
             plot_wellplate_source.width  = int(plot_wellplate_source.width * factor)
             plot_wellplate_source.height = int(plot_wellplate_source.height * factor)
             plot_wellplate_source_supp.width  = int(plot_wellplate_source_supp.width * factor)
             plot_wellplate_source_supp.height = int(plot_wellplate_source_supp.height * factor)
-            zoom_size(factor, cds_labels_dest)
-            zoom_size(factor, cds_labels_dest_2)
+
             zoom_size(factor, cds_labels_source)
             zoom_size(factor, cds_labels_source_supp)
             zoom_size(factor, cds_labels_source_drug)
             zoom_size(factor, cds_labels_source_supp_drug)
+
+
+        return zoom_cb
+
+    #___________________________________________________________________________________________
+    def make_zoom_cb_wells_dest(factor):
+        def zoom_cb():
+            global NZOOM_WELLS_DEST
+            NZOOM_WELLS_DEST *= factor
+            plot_wellplate_dest.width  = int(plot_wellplate_dest.width * factor)
+            plot_wellplate_dest.height = int(plot_wellplate_dest.height * factor)
+            plot_wellplate_dest_2.width  = int(plot_wellplate_dest_2.width * factor)
+            plot_wellplate_dest_2.height = int(plot_wellplate_dest_2.height * factor)
+         
+            zoom_size(factor, cds_labels_dest)
+            zoom_size(factor, cds_labels_dest_2)
             zoom_size(factor, cds_labels_dest_1_drug)
             zoom_size(factor, cds_labels_dest_2_drug)
             zoom_size(factor,cds_labels_dest_mapping)
@@ -1818,14 +1833,11 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
         return zoom_cb
 
+    zoom_in_wells_source.on_click(make_zoom_cb_wells_source(1.2))
+    zoom_out_wells_source.on_click(make_zoom_cb_wells_source(1./1.2))
 
-
-    zoom_in_wells_source.on_click(make_zoom_cb_wells(1.2))
-    zoom_out_wells_source.on_click(make_zoom_cb_wells(1./1.2))
-
-    zoom_in_wells_dest.on_click(make_zoom_cb_wells(1.2))
-    zoom_out_wells_dest.on_click(make_zoom_cb_wells(1./1.2))
-
+    zoom_in_wells_dest.on_click(make_zoom_cb_wells_dest(1.2))
+    zoom_out_wells_dest.on_click(make_zoom_cb_wells_dest(1./1.2))
  
 
 
@@ -1940,21 +1952,22 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     well_layout = bokeh.layouts.row(indent, bokeh.layouts.column(plot_wellplate_source,plot_wellplate_source_supp), bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2))
     
-    exp_layout = bokeh.layouts.column(bokeh.layouts.row(dropdown_exp, dropdown_well_plate_source,dropdown_n_supp_sourcewell, dropdown_well_plate_dest, dropdown_n_dest_wellplates),
+    exp_layout = bokeh.layouts.column(bokeh.layouts.row(indent,zoom_in_wells_source, zoom_out_wells_source),
+                                      bokeh.layouts.row(dropdown_exp, dropdown_well_plate_source,dropdown_n_supp_sourcewell, dropdown_well_plate_dest, dropdown_n_dest_wellplates),
                                       bokeh.layouts.row(experiment_name, experiment_date, pyrat_id),
                                       bokeh.layouts.row(experiment_description), 
                                       bokeh.layouts.row(create_experiment_button, delete_experiment_button, check_pyrat_id_button, modify_experiment_button))
     
 
-    drug_layout = bokeh.layouts.column(bokeh.layouts.row(slimsid_name, drug_concentration),
+    drug_layout = bokeh.layouts.column(bokeh.layouts.row(zoom_in_wells_dest, zoom_out_wells_dest),
+                                       bokeh.layouts.row(slimsid_name, drug_concentration),
                                        bokeh.layouts.row(add_drug_button, add_drug_other_wells_button, force_add_drug_button, remove_drug_button),
                                        bokeh.layouts.row(wellcluster_comment,bokeh.layouts.column(valid_wellcluster,valid_wellcluster_button)),
                                        bokeh.layouts.row(map_drug_button, unmap_drug_button),)
 
    
 
-    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,zoom_in_wells_source, zoom_out_wells_source, bokeh.layouts.Spacer(width=200), zoom_in_wells_dest, zoom_out_wells_dest),
-                                    bokeh.layouts.row(indent,exp_layout, bokeh.layouts.Spacer(width=50), drug_layout, text_layout),
+    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,exp_layout, bokeh.layouts.Spacer(width=50), drug_layout, text_layout),
                                        bokeh.layouts.row(bokeh.layouts.Spacer(height=50)),
                                        well_layout,
                                        bokeh.layouts.row(bokeh.layouts.Spacer(height=50)))
