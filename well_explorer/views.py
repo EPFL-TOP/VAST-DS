@@ -1278,6 +1278,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                                                                                 bokeh.layouts.column(dropdown_good_image, dropdown_good_orientation), 
                                                                                                 bokeh.layouts.column(saveimages_button,images_comments)),
                                                                               bokeh.layouts.row(prediction_message),
+                                                                                bokeh.layouts.row(plot_img_yfp_cropped),
                                                                               bokeh.layouts.row(plot_img_yfp, bokeh.layouts.Spacer(width=10),plot_img_bf),
                                                                               bokeh.layouts.row(plot_img_vast))))
 
