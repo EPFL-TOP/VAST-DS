@@ -1167,8 +1167,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                         #if props.valid and props.n_total_somites>=0 and props.n_bad_somites >=0:
                         #Add false to train other model
                         if props.n_total_somites>=0 and props.n_bad_somites >=0:
-                            if True:
-                            #if props.use_for_training is False and props.use_for_validation is False:
+                            if props.use_for_training is False and props.use_for_validation is False:
                                 rand=random.uniform(0,1)
                                 if rand>0.2: 
                                     outdir=os.path.join(LOCALPATH_TRAINING,'train')
