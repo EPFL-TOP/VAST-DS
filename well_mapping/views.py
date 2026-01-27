@@ -173,7 +173,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     wellvalid_message = bokeh.models.Div(visible=False)   
 
     slimsid_name        = bokeh.models.TextInput(title="Slims ID: (eg: OA_DS_00024)", value='' )
-    drug_concentration  = bokeh.models.TextInput(title="Concentration (uM) or Percentage (%)", value='', width=200)
+    drug_concentration  = bokeh.models.TextInput(title="Concentration (µMol) or Percentage (%)", value='', width=200)
     valid_wellcluster   = bokeh.models.Select(value='True', title='Valid well cluster', options=['True','False'])
     wellcluster_comment = bokeh.models.widgets.TextAreaInput(title="Comment:", value='', rows=7, width=300, css_classes=["font-size:18px"])
 
@@ -1025,19 +1025,23 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         drugs = Drug.objects.filter(position__in=source_well_positions)
         print("--------source_well_positions ",source_well_positions)
 
-        items_html = "".join(
-            f"<li style='color:navy; font-size:14px; "
-            f"margin-bottom:4px;'>{drug}</li>"
-            for drug in drugs)
+        if len(drugs) == 0:
+            drug_message.text = f"<b style='color:red; ; font-size:18px;'> No drug in selected well {well_position[0][1]}{well_position[0][0]}.</b>"
 
-        drug_message.text = f"""
-        <b style='color:green; font-size:18px;'>
-            Drug(s) in selected well {well_position[0][1]}{well_position[0][0]}:
-        </b>
-        <ul style='margin-top:0;'>
-            {items_html} <br> <b style='color:black; font-size:14px;'> comments={source_well_positions[0].comments}, valid well={source_well_positions[0].valid}</b>
-        </ul>
-        """
+        else:
+            items_html = "".join(
+                f"<li style='color:navy; font-size:14px; "
+                f"margin-bottom:4px;'>{drug}</li>"
+                for drug in drugs)
+
+            drug_message.text = f"""
+            <b style='color:green; font-size:18px;'>
+                Drug(s) in selected well {well_position[0][1]}{well_position[0][0]}:
+            </b>
+            <ul style='margin-top:0;'>
+                {items_html} <br> <b style='color:black; font-size:14px;'> comments={source_well_positions[0].comments}, valid well={source_well_positions[0].valid}</b>
+            </ul>
+            """
 
         drug_message.visible = True
         add_drug_button.label = "Add drug"
