@@ -254,34 +254,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     hover_grid_source.mode = 'mouse' 
     hover_grid_source.point_policy = 'snap_to_data'
     plot_wellplate_source.add_tools(hover_grid_source)
-    plot_wellplate_source_supp.add_tools(hover_grid_source)
+    #plot_wellplate_source_supp.add_tools(hover_grid_source)
 
-    hover_grid_dest = bokeh.models.HoverTool(
-
-    tooltips="""
-    <div style="font-size:14px;">
-        <div style="color:#2563eb; font-weight:bold; font-size:15px;">
-            Drugs
-        </div>
-        <div style="margin-left:5px; font-size:13px;">
-            @drug
-        </div>
-
-        <div style="margin-top:6px; color:#2563eb; font-weight:bold; font-size:15px;">
-            Position
-        </div>
-        <div style="margin-left:5px; font-size:13px;">
-            (@x, @y)
-        </div>
-    </div>
-
-    """
-    )    
-
-    #hover_grid_dest.mode = 'mouse' 
-    #hover_grid_dest.point_policy = 'snap_to_data'
-    #plot_wellplate_dest.add_tools(hover_grid_dest)
-    #plot_wellplate_dest_2.add_tools(hover_grid_dest)
 
     plot_wellplate_source_supp.circle('x', 'y', 
                                  size='size',
