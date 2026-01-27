@@ -115,7 +115,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     cds_labels_source = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
     cds_labels_source_supp = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
 
-    cds_labels_source_drug = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[], drug=[]))
+    cds_labels_source_drug = bokeh.models.ColumnDataSource(data=dict(x_drug=[], y_drug=[], size=[], drug=[]))
     cds_labels_source_supp_drug = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[], drug=[]))
 
 
@@ -197,7 +197,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                  nonselection_fill_color="white",
                                  nonselection_line_color="blue",)
     
-    plot_wellplate_source.circle('x', 'y', 
+    plot_wellplate_source.circle('x_drug', 'y_drug', 
                                  size='size',
                                  source=cds_labels_source_drug, 
                                  fill_alpha=0.5,line_width=3,
@@ -209,7 +209,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                  nonselection_fill_color="black",
                                  nonselection_line_color="black",)
 
-    labels = bokeh.models.LabelSet(x = 'x',y = 'y', text = 'drug',
+    labels = bokeh.models.LabelSet(x = 'x_drug',y = 'y_drug', text = 'drug',
                                    source = cds_labels_source_drug,
                                     x_offset = 0, y_offset = 0,
                                     text_align = 'center',
@@ -244,7 +244,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             Position
         </div>
         <div style="margin-left:5px; font-size:13px;">
-            (@x, @y)
+            (@x_drug, @y_drug)
         </div>
     </div>
 
@@ -700,7 +700,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             cds_labels_dest_2.data = {'x':[], 'y':[], 'size':[], 'drugs':[]}
             cds_labels_source.data = {'x':[], 'y':[], 'size':[]}
             cds_labels_source_supp.data = {'x':[], 'y':[], 'size':[]}
-            cds_labels_source_drug.data = {'x':[], 'y':[], 'size':[], 'drug':[]}
+            cds_labels_source_drug.data = {'x_drug':[], 'y_drug':[], 'size':[], 'drug':[]}
             cds_labels_source_supp_drug.data = {'x':[], 'y':[], 'size':[], 'drug':[]}
             cds_labels_dest_1_drug.data = {'x':[], 'y':[], 'size':[]}
             cds_labels_dest_2_drug.data = {'x':[], 'y':[], 'size':[]}
@@ -870,7 +870,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     #___________________________________________________________________________________________
     def display_drugs_source_wellplate():
         print('------------------->>>>>>>>> display_drugs_source_wellplate')
-        cds_labels_source_drug.data = {'x':[], 'y':[], 'size':[], 'drug':[]}
+        cds_labels_source_drug.data = {'x_drug':[], 'y_drug':[], 'size':[], 'drug':[]}
         cds_labels_source_supp_drug.data = {'x':[], 'y':[], 'size':[], 'drug':[]}
 
         experiment = Experiment.objects.filter(name=dropdown_exp.value).first()
@@ -897,7 +897,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 #drug_filled.append('\n '.join([f'{str(d.derivation_name)}\n{d.concentration}µMol' for d in drug]))
                 drug_filled.append('<br>'.join([f'{str(d.derivation_name)} - {d.concentration}µMol' for d in drug]))
 
-        cds_labels_source_drug.data={'x':x_filled, 'y':y_filled, 'size':size_filled, 'drug':drug_filled}
+        cds_labels_source_drug.data={'x_drug':x_filled, 'y_drug':y_filled, 'size':size_filled, 'drug':drug_filled}
 
         x_supp = []
         y_supp = []
