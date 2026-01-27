@@ -122,8 +122,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     cds_labels_dest_1_drug = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
     cds_labels_dest_2_drug = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
 
-    cds_labels_dest   = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
-    cds_labels_dest_2 = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
+    cds_labels_dest   = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[], drugs=[]))
+    cds_labels_dest_2 = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[], drugs=[]))
 
     cds_labels_dest_mapping   = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
     cds_labels_dest_2_mapping = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], size=[]))
@@ -227,20 +227,20 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                     text_color = 'navy'
     )
 
-    plot_wellplate_source.add_layout(labels)
+    #plot_wellplate_source.add_layout(labels)
 
-    hover_grid = bokeh.models.HoverTool(#tooltips=[("Drugs", "@drug"), ("(Col,Row)", "(@x, @y)")])
+    hover_grid_source = bokeh.models.HoverTool(
 
     tooltips="""
     <div style="font-size:14px;">
         <div style="color:#2563eb; font-weight:bold; font-size:15px;">
             Drugs
         </div>
-        <div style="color:#16a34a; margin-left:5px;">
+        <div style="margin-left:5px; font-size:13px;">
             @drug
         </div>
 
-        <div style="margin-top:6px; color:#dc2626; font-weight:bold;">
+        <div style="margin-top:6px; color:#2563eb; font-weight:bold; font-size:15px;">
             Position
         </div>
         <div style="margin-left:5px; font-size:13px;">
@@ -251,10 +251,37 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     """
     )
 
-    hover_grid.mode = 'mouse' 
-    hover_grid.point_policy = 'snap_to_data'
-    plot_wellplate_source.add_tools(hover_grid)
-    plot_wellplate_source_supp.add_tools(hover_grid)
+    hover_grid_source.mode = 'mouse' 
+    hover_grid_source.point_policy = 'snap_to_data'
+    plot_wellplate_source.add_tools(hover_grid_source)
+    plot_wellplate_source_supp.add_tools(hover_grid_source)
+
+    hover_grid_dest = bokeh.models.HoverTool(
+
+    tooltips="""
+    <div style="font-size:14px;">
+        <div style="color:#2563eb; font-weight:bold; font-size:15px;">
+            Drugs
+        </div>
+        <div style="margin-left:5px; font-size:13px;">
+            @drug
+        </div>
+
+        <div style="margin-top:6px; color:#2563eb; font-weight:bold; font-size:15px;">
+            Position
+        </div>
+        <div style="margin-left:5px; font-size:13px;">
+            (@x, @y)
+        </div>
+    </div>
+
+    """
+    )    
+
+    #hover_grid_dest.mode = 'mouse' 
+    #hover_grid_dest.point_policy = 'snap_to_data'
+    #plot_wellplate_dest.add_tools(hover_grid_dest)
+    #plot_wellplate_dest_2.add_tools(hover_grid_dest)
 
     plot_wellplate_source_supp.circle('x', 'y', 
                                  size='size',
@@ -279,7 +306,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                  nonselection_fill_color="black",
                                  nonselection_line_color="black",)
 
-    plot_wellplate_source_supp.add_layout(labels_supp)
+    #plot_wellplate_source_supp.add_layout(labels_supp)
 
     plot_wellplate_dest.circle('x', 'y', 
                                size='size', 
@@ -695,8 +722,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             dropdown_exp.value = 'Select experiment'
             _programmatic_change = False
             experiment_name.value = ''
-            cds_labels_dest.data = {'x':[], 'y':[], 'size':[]}
-            cds_labels_dest_2.data = {'x':[], 'y':[], 'size':[]}
+            cds_labels_dest.data = {'x':[], 'y':[], 'size':[], 'drugs':[]}
+            cds_labels_dest_2.data = {'x':[], 'y':[], 'size':[], 'drugs':[]}
             cds_labels_source.data = {'x':[], 'y':[], 'size':[]}
             cds_labels_source_supp.data = {'x':[], 'y':[], 'size':[]}
             cds_labels_source_drug.data = {'x':[], 'y':[], 'size':[], 'drug':[]}
@@ -762,25 +789,25 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             plot_wellplate_dest.x_range.factors = x_96
             plot_wellplate_dest.y_range.factors = y_96
             plot_wellplate_dest.title.text = "96 well plate"
-            cds_labels_dest.data = dict(source_labels_96.data, size=[50*NZOOM_WELLS_DEST]*len(source_labels_96.data['x']))
+            cds_labels_dest.data = dict(source_labels_96.data, size=[50*NZOOM_WELLS_DEST]*len(source_labels_96.data['x']), drugs=['']*len(source_labels_96.data['x']))
             plot_wellplate_dest.axis.visible = True
 
         elif '48' in new:
             plot_wellplate_dest.x_range.factors = x_48
             plot_wellplate_dest.y_range.factors = y_48
             plot_wellplate_dest.title.text = "48 well plate"
-            cds_labels_dest.data = dict(source_labels_48.data, size=[65*NZOOM_WELLS_DEST]*len(source_labels_48.data['x']))
+            cds_labels_dest.data = dict(source_labels_48.data, size=[65*NZOOM_WELLS_DEST]*len(source_labels_48.data['x']), drugs=['']*len(source_labels_48.data['x']))
             plot_wellplate_dest.axis.visible = True
 
         elif '24' in new:
             plot_wellplate_dest.x_range.factors = x_24
             plot_wellplate_dest.y_range.factors = y_24
             plot_wellplate_dest.title.text = "24 well plate"
-            cds_labels_dest.data = dict(source_labels_24.data, size=[80*NZOOM_WELLS_DEST]*len(source_labels_24.data['x']))
+            cds_labels_dest.data = dict(source_labels_24.data, size=[80*NZOOM_WELLS_DEST]*len(source_labels_24.data['x']), drugs=['']*len(source_labels_24.data['x']))
             plot_wellplate_dest.axis.visible = True
 
         else:
-            cds_labels_dest.data = {'x':[], 'y':[]}
+            cds_labels_dest.data = {'x':[], 'y':[], 'size':[], 'drugs':[]}
             plot_wellplate_dest.title.text = ""
             plot_wellplate_dest.axis.visible = False
 
@@ -795,29 +822,29 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 plot_wellplate_dest_2.x_range.factors = x_96
                 plot_wellplate_dest_2.y_range.factors = y_96
                 plot_wellplate_dest_2.title.text = "96 well plate"
-                cds_labels_dest_2.data = dict(source_labels_96.data, size=[50*NZOOM_WELLS_DEST]*len(source_labels_96.data['x']))
+                cds_labels_dest_2.data = dict(source_labels_96.data, size=[50*NZOOM_WELLS_DEST]*len(source_labels_96.data['x']), drugs=['']*len(source_labels_96.data['x']))
                 plot_wellplate_dest_2.axis.visible = True
 
             elif '48' in dropdown_well_plate_dest.value:
                 plot_wellplate_dest_2.x_range.factors = x_48
                 plot_wellplate_dest_2.y_range.factors = y_48
                 plot_wellplate_dest_2.title.text = "48 well plate"
-                cds_labels_dest_2.data = dict(source_labels_48.data, size=[65*NZOOM_WELLS_DEST]*len(source_labels_48.data['x']))
+                cds_labels_dest_2.data = dict(source_labels_48.data, size=[65*NZOOM_WELLS_DEST]*len(source_labels_48.data['x']), drugs=['']*len(source_labels_48.data['x']))
                 plot_wellplate_dest_2.axis.visible = True
 
             elif '24' in dropdown_well_plate_dest.value:
                 plot_wellplate_dest_2.x_range.factors = x_24
                 plot_wellplate_dest_2.y_range.factors = y_24
                 plot_wellplate_dest_2.title.text = "24 well plate"
-                cds_labels_dest_2.data = dict(source_labels_24.data, size=[80*NZOOM_WELLS_DEST]*len(source_labels_24.data['x']))
+                cds_labels_dest_2.data = dict(source_labels_24.data, size=[80*NZOOM_WELLS_DEST]*len(source_labels_24.data['x']), drugs=['']*len(source_labels_24.data['x']))
                 plot_wellplate_dest_2.axis.visible = True
 
             else:
-                cds_labels_dest_2.data = {'x':[], 'y':[]}
+                cds_labels_dest_2.data = {'x':[], 'y':[], 'size':[], 'drugs':[]}
                 plot_wellplate_dest_2.title.text = ""
                 plot_wellplate_dest_2.axis.visible = False
         else:
-            cds_labels_dest_2.data = {'x':[], 'y':[]}
+            cds_labels_dest_2.data = {'x':[], 'y':[], 'size':[], 'drugs':[]}
             plot_wellplate_dest_2.title.text = ""
             plot_wellplate_dest_2.axis.visible = False
     dropdown_n_dest_wellplates.on_change("value", load_well_plate_dest_2)
