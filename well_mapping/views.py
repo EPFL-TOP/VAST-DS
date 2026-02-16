@@ -88,14 +88,14 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     source_filled_well = bokeh.models.ColumnDataSource(data={'x':[], 'y':[]})
 
     plot_wellplate_source = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), 
-                                                  title='',width=900*NZOOM_WELLS_SOURCE, height=600*NZOOM_WELLS_SOURCE, tools="box_select,box_zoom,reset,undo")
+                                                  title='',width=int(900*NZOOM_WELLS_SOURCE), height=int(600*NZOOM_WELLS_SOURCE), tools="box_select,box_zoom,reset,undo")
     plot_wellplate_source.xaxis.major_label_text_font_size = "15pt"
     plot_wellplate_source.yaxis.major_label_text_font_size = "15pt"
     plot_wellplate_source.grid.visible = False
     plot_wellplate_source.axis.visible = False
 
     plot_wellplate_source_supp = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), 
-                                                       title='',width=900*NZOOM_WELLS_SOURCE, height=200*NZOOM_WELLS_SOURCE, tools="box_select,box_zoom,reset,undo")
+                                                       title='',width=int(900*NZOOM_WELLS_SOURCE), height=int(200*NZOOM_WELLS_SOURCE), tools="box_select,box_zoom,reset,undo")
     plot_wellplate_source_supp.xaxis.major_label_text_font_size = "15pt"
     plot_wellplate_source_supp.yaxis.major_label_text_font_size = "15pt"
     plot_wellplate_source_supp.grid.visible = False
@@ -104,14 +104,14 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
     plot_wellplate_dest   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title='',
-                                                  width=900*NZOOM_WELLS_DEST, height=600*NZOOM_WELLS_DEST, tools="box_select,box_zoom,reset,undo")
+                                                  width=int(900*NZOOM_WELLS_DEST), height=int(600*NZOOM_WELLS_DEST), tools="box_select,box_zoom,reset,undo")
     plot_wellplate_dest.xaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest.yaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest.grid.visible = False
     plot_wellplate_dest.axis.visible = False
 
     plot_wellplate_dest_2   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title='',
-                                                    width=900*NZOOM_WELLS_DEST, height=600*NZOOM_WELLS_DEST, tools="box_select,box_zoom,reset,undo")
+                                                    width=int(900*NZOOM_WELLS_DEST), height=int(600*NZOOM_WELLS_DEST), tools="box_select,box_zoom,reset,undo")
     plot_wellplate_dest_2.xaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest_2.yaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest_2.grid.visible = False
