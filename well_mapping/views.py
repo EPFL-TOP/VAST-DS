@@ -44,10 +44,13 @@ _programmatic_change = False
 global NZOOM_WELLS_SOURCE
 global NZOOM_WELLS_DEST
 
-NZOOM_WELLS_SOURCE = 1
-NZOOM_WELLS_DEST   = 1
+NZOOM_WELLS_SOURCE = 1./(1.2*1.2*1.2)
+NZOOM_WELLS_DEST   = 1./(1.2*1.2*1.2)
+
 #___________________________________________________________________________________________
 def vast_handler(doc: bokeh.document.Document) -> None:
+    global NZOOM_WELLS_DEST
+    global NZOOM_WELLS_SOURCE
     print('****************************  vast_handler ****************************')
     #TO BE CHANGED WITH ASYNC?????
     os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
@@ -85,14 +88,14 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     source_filled_well = bokeh.models.ColumnDataSource(data={'x':[], 'y':[]})
 
     plot_wellplate_source = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), 
-                                                  title='',width=900, height=600, tools="box_select,box_zoom,reset,undo")
+                                                  title='',width=900*NZOOM_WELLS_SOURCE, height=600*NZOOM_WELLS_SOURCE, tools="box_select,box_zoom,reset,undo")
     plot_wellplate_source.xaxis.major_label_text_font_size = "15pt"
     plot_wellplate_source.yaxis.major_label_text_font_size = "15pt"
     plot_wellplate_source.grid.visible = False
     plot_wellplate_source.axis.visible = False
 
     plot_wellplate_source_supp = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), 
-                                                       title='',width=900, height=200, tools="box_select,box_zoom,reset,undo")
+                                                       title='',width=900*NZOOM_WELLS_SOURCE, height=200*NZOOM_WELLS_SOURCE, tools="box_select,box_zoom,reset,undo")
     plot_wellplate_source_supp.xaxis.major_label_text_font_size = "15pt"
     plot_wellplate_source_supp.yaxis.major_label_text_font_size = "15pt"
     plot_wellplate_source_supp.grid.visible = False
@@ -100,13 +103,15 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
 
-    plot_wellplate_dest   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title='',width=900, height=600, tools="box_select,box_zoom,reset,undo")
+    plot_wellplate_dest   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title='',
+                                                  width=900*NZOOM_WELLS_DEST, height=600*NZOOM_WELLS_DEST, tools="box_select,box_zoom,reset,undo")
     plot_wellplate_dest.xaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest.yaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest.grid.visible = False
     plot_wellplate_dest.axis.visible = False
 
-    plot_wellplate_dest_2   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title='',width=900, height=600, tools="box_select,box_zoom,reset,undo")
+    plot_wellplate_dest_2   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title='',
+                                                    width=900*NZOOM_WELLS_DEST, height=600*NZOOM_WELLS_DEST, tools="box_select,box_zoom,reset,undo")
     plot_wellplate_dest_2.xaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest_2.yaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest_2.grid.visible = False
@@ -415,6 +420,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     def add_source_well(attr, old, new):
         print('------------------->>>>>>>>> add_source_well')
         n_well_supp = int(new)
+        global NZOOM_WELLS_SOURCE
 
         x_supp=[str(i+1) for i in range(n_well_supp)]
         y_supp=['Z' for i in range(n_well_supp)]
@@ -729,6 +735,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     #___________________________________________________________________________________________
     def load_well_plate_source(attr, old, new):
+        global NZOOM_WELLS_SOURCE
         print('------------------->>>>>>>>> load_well_plate_source')
         if '96' in new:
             plot_wellplate_source.x_range.factors = x_96
@@ -762,6 +769,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     #___________________________________________________________________________________________
     def load_well_plate_dest(attr, old, new):
         print('------------------->>>>>>>>> load_well_plate_dest')
+        global NZOOM_WELLS_DEST
         if '96' in new:
             plot_wellplate_dest.x_range.factors = x_96
             plot_wellplate_dest.y_range.factors = y_96
@@ -794,6 +802,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     #___________________________________________________________________________________________
     def load_well_plate_dest_2(attr, old, new):
         print('------------------->>>>>>>>> load_well_plate_dest_2')
+        global NZOOM_WELLS_DEST
         if dropdown_n_dest_wellplates.value == '2':
             if '96' in dropdown_well_plate_dest.value:
                 plot_wellplate_dest_2.x_range.factors = x_96
@@ -1358,7 +1367,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
             drug = Drug(slims_id=slimsid_name.value, 
                         concentration=drug_concentration.value, 
-                        valid=valid_wellcluster.value,
                         derivation_name=deriv_name)
             drug.save()
 
@@ -1461,7 +1469,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
             drug = Drug(slims_id=slimsid_name.value,
                         concentration=drug_concentration.value, 
-                        valid=valid_wellcluster.value,
                         derivation_name=deriv_name)
             drug.save()
 
