@@ -1178,6 +1178,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 files = glob.glob(os.path.join(path_leica, '*.tiff'))
 
                 print('path_leica ',path_leica)
+                pred_somite=None
+                prob_valid=None
+                prob_ori=None
                 for f in files:
                     if 'YFP' in f and 'norm' not in f:
                         file_YFP = f
@@ -1185,9 +1188,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                         img_tensor = img_tensor.to(device)
                         # Prediction
                         with torch.no_grad():
-                            pred = model(img_tensor).cpu().numpy().flatten()
+                            pred_somite = model(img_tensor).cpu().numpy().flatten()
                             logit = model_fish(img_tensor.to(device))    # shape [1,1]
-                            prob = torch.sigmoid(logit)[0,0].item()
+                            prob_valid = torch.sigmoid(logit)[0,0].item()
                     if 'BF' in f and 'norm' not in f:
                         file_BF = f
                         img_np = np.array(Image.open(file_BF)).astype(np.float32)
@@ -1197,11 +1200,11 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                             logit_ori = model_orientation(img.to(device))
                             prob_ori = torch.sigmoid(logit_ori)
 
-                pred_total, pred_def = pred
+                pred_total, pred_def = pred_somite
                 dest_well_preds, created = DestWellPropertiesPredicted.objects.get_or_create(dest_well=dest)
                 dest_well_preds.n_total_somites = pred_total
                 dest_well_preds.n_bad_somites  = pred_def
-                dest_well_preds.valid = True if prob>0.5 else False
+                dest_well_preds.valid = True if prob_valid>0.5 else False
                 dest_well_preds.correct_orientation = True if  prob_ori.mean()>0.5 else False
                 dest_well_preds.save()
 
