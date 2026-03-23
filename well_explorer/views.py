@@ -32,7 +32,8 @@ NZOOM_WELLS=1
 from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug, DestWellProperties
 
 from somiteCounting.training import SomiteCounter_freeze, FishQualityClassifier
-from somiteCounting.training_orientation_OLD import OrientationClassifier
+from somiteCounting.training_orientation import OrientationClassifier, preprocess_image
+
 import somiteCounting.orientfish as of
 
 def load_and_prepare_image(img_path, resize=(224,224)):
@@ -1104,8 +1105,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 file_YFP = f
                 img_raw, img_tensor = load_and_prepare_image(file_YFP)
                 img_tensor = img_tensor.to(device)
-
-
                 # Prediction
                 with torch.no_grad():
                     pred = model(img_tensor).cpu().numpy().flatten()
@@ -1113,12 +1112,20 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                     prob = torch.sigmoid(logit)[0,0].item()
             if 'BF' in f and 'norm' not in f:
                 file_BF = f
-                img_raw, img_tensor = load_and_prepare_image(file_BF)
-                img_tensor = img_tensor.to(device)
+                img_np = np.array(Image.open(file_BF)).astype(np.float32)
+                img = preprocess_image(img_np)
+                img = img.unsqueeze(0).cuda()   # 1,1,H,W
+                #img_raw, img_tensor = load_and_prepare_image(file_BF)
+                #img_tensor = img_tensor.to(device)
                 # Prediction
                 with torch.no_grad():
-                    logit_ori = model_orientation(img_tensor.to(device))
-                    prob_ori = torch.sigmoid(logit_ori).item()  # scalar
+                    #logit_ori = model_orientation(img_tensor.to(device))
+                    #prob_ori = torch.sigmoid(logit_ori).item()  # scalar
+
+                    logit_ori = model_orientation(img.to(device))
+                    prob_ori = torch.sigmoid(logit_ori)
+
+
         pred_total, pred_def = pred
         prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {:.1f}  --  defective {:.1f}  --  Valid Fish {}  --  Prob orientation {:.2} </b>".format(pred_total,pred_def, 'Yes' if prob>0.5 else 'No', prob_ori)
         prediction_message.visible = True

@@ -4,11 +4,14 @@ import numpy as np
 from PIL import Image
 from torchvision.transforms import functional as TF
 import os
+from .training_orientation import preprocess_image
+
 
 try:
     from training_orientation import OrientationClassifier
 except ModuleNotFoundError:
     from somiteCounting.training_orientation import OrientationClassifier
+
 
 
 class OrientationCorrector:
