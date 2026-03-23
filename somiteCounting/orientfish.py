@@ -4,13 +4,12 @@ import numpy as np
 from PIL import Image
 from torchvision.transforms import functional as TF
 import os
-from .training_orientation import preprocess_image
 
 
 try:
-    from training_orientation import OrientationClassifier
+    from training_orientation import OrientationClassifier, preprocess_image
 except ModuleNotFoundError:
-    from somiteCounting.training_orientation import OrientationClassifier
+    from somiteCounting.training_orientation import OrientationClassifier, preprocess_image
 
 
 
@@ -33,11 +32,11 @@ class OrientationCorrector:
             logit = self.model(tensor)
             return torch.sigmoid(logit).item()  # scalar
 
-    def correct(self, img_np):
+    def correct(self, t):
         """
         img_np: float32 numpy array normalized 0-1
         """
-        t = self.preprocess(img_np)
+        #t = self.preprocess(img_np)
         score0 = self.score(t)
 
         #if score0 >= 0.5:
@@ -77,7 +76,7 @@ def orient_fish(data_path=None, experiment_name=None):
     oc = OrientationCorrector(os.path.join(r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints","orientation_best.pth"))
 
     #image_path = r"D:\vast\VAST_2025-06-10\VAST images"
-    image_path = r"D:\vast"
+    image_path = r"D:\vast\VAST-DS"
     if data_path is not None:
         image_path = data_path
     for exp in os.listdir(image_path):
@@ -114,10 +113,14 @@ def orient_fish(data_path=None, experiment_name=None):
                         if "BF" not in f:
                             continue
                         print(f"     Processing {img_path}...")
-                        img = np.array(Image.open(img_path)).astype(np.float32)
-                        img_max = img/img.max()
+                        img_np = np.array(Image.open(img_path)).astype(np.float32)
 
-                        corrected = oc.correct(img_max)
+                        img = preprocess_image(img_np)
+                        img = img.unsqueeze(0).cuda()
+
+                        #img_max = img/img.max()
+
+                        corrected = oc.correct(img)
 
                 for f in os.listdir(well_path):
                     if f.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
@@ -156,4 +159,8 @@ def orient_fish(data_path=None, experiment_name=None):
 
 
 if __name__ == "__main__":
-    orient_fish()
+    import sys
+    if len(sys.argv)!=2:
+        print("usage python orientfish.py <experimentname>")
+        sys.exit(3)
+    orient_fish(sys.argv[1])
