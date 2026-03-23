@@ -1,3 +1,9 @@
+import os
+import django
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "VAST_DS.settings")  # <-- change this
+django.setup()
+
 from well_mapping.models import DestWellPropertiesPredicted
 
 derivation_name = "LY411575 Stock1"
