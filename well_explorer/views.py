@@ -1172,9 +1172,9 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         for dest_well_plate in dest_well_plates:
             dest_well_positions = DestWellPosition.objects.filter(well_plate=dest_well_plate)
             for dest in dest_well_positions:
-                path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}{}'.format(dest.positon_row, dest.positon_col))
-                if int(dest.positon_col) < 10:
-                    path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}0{}'.format(dest.positon_row, dest.positon_col))  
+                path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}{}'.format(dest.position_row, dest.position_col))
+                if int(dest.position_col) < 10:
+                    path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}0{}'.format(dest.position_row, dest.position_col))  
                 files = glob.glob(os.path.join(path_leica, '*.tiff'))
 
                 print('path_leica ',path_leica)
