@@ -1127,7 +1127,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
 
         pred_total, pred_def = pred
-        prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {:.1f}  --  defective {:.1f}  --  Valid Fish {}  --  Prob orientation {:.2} </b>".format(pred_total,pred_def, 'Yes' if prob>0.5 else 'No', prob_ori)
+        prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {:.1f}  --  defective {:.1f}  --  Valid Fish {}  --  Prob orientation {:.2} </b>".format(pred_total,pred_def, 'Yes' if prob>0.5 else 'No', prob_ori.mean(),' stdd ',prob_ori.std())
         prediction_message.visible = True
 
         predict_button.label = "Predict"
