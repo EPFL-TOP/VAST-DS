@@ -30,8 +30,9 @@ def preprocess_image(img_np, resize=(224, 224)):
     img_np = (img_np - p1) / (p99 - p1 + 1e-6)
 
     # Convert to tensor
-    img = torch.from_numpy(img_np)[None, None]  # 1x1xH xW
-
+    #img = torch.from_numpy(img_np)[None, None]  # 1x1xH xW
+    img = torch.from_numpy(img_np).float()[None, None]
+    
     # Resize
     img = F.interpolate(img, size=resize, mode="bilinear", align_corners=False)
 
@@ -55,15 +56,17 @@ class OrientationAugment:
         img = preprocess_image(img_np, self.resize)  # 1,H,W
 
         # Convert to PIL for geometric transforms
-        img_pil = Image.fromarray((img.squeeze().numpy() * 255).astype(np.uint8), mode="L")
-
+        #img_pil = Image.fromarray((img.squeeze().numpy() * 255).astype(np.uint8), mode="L")
+        img_pil = Image.fromarray((img.squeeze().numpy() * 255).astype(np.uint8))
         # --- SMALL ROTATION (safe) ---
         if self.rotation > 0:
             angle = random.uniform(-self.rotation, self.rotation)
             img_pil = img_pil.rotate(angle)
 
         # Back to tensor
-        img = torch.from_numpy(np.array(img_pil).astype(np.float32) / 255.0).unsqueeze(0)
+        #img = torch.from_numpy(np.array(img_pil).astype(np.float32) / 255.0).unsqueeze(0)
+        img = torch.from_numpy(np.array(img_pil)).float() / 255.0
+        img = img.unsqueeze(0)
 
         # --- INTENSITY AUGMENT ---
         if self.brightness > 0:
@@ -166,7 +169,13 @@ class OrientationClassifier(nn.Module):
 
         base.conv1.weight.data = old_conv1.weight.data.mean(dim=1, keepdim=True)
 
-        base.fc = nn.Linear(base.fc.in_features, 1)
+        #base.fc = nn.Linear(base.fc.in_features, 1)
+
+        # 👇 add dropout before FC
+        base.fc = nn.Sequential(
+            nn.Dropout(p=0.3),
+            nn.Linear(base.fc.in_features, 1)
+        )
 
         self.model = base
 
@@ -282,3 +291,4 @@ if __name__ == "__main__":
         batch_size=8,
         lr=1e-4
     )
+
