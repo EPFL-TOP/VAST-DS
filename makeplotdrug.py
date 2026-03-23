@@ -17,14 +17,14 @@ dest=DestWellPropertiesPredicted.objects.filter(
     )
 
 for d in dest:
-    print(dest)
+    print('-------------- ',dest)
 
-qs = (
-    DestWellPropertiesPredicted.objects
-    .filter(
-        valid=True,
-        dest_well__source_well__drugs__derivation_name=derivation_name,
-        dest_well__well_plate__experiment__name__in=experiment_names,
-    )
-    .values("n_total_somites", "n_bad_somites")
-)
+#qs = (
+#    DestWellPropertiesPredicted.objects
+#    .filter(
+#        valid=True,
+#        dest_well__source_well__drugs__derivation_name=derivation_name,
+#        dest_well__well_plate__experiment__name__in=experiment_names,
+#    )
+#    .values("n_total_somites", "n_bad_somites")
+#)
