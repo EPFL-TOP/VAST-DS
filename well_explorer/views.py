@@ -1158,8 +1158,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             print('Please select an experiment first')
             image_message.text = "<b style='color:red; font-size:18px;'>Please select an experiment first</b>"
             image_message.visible = True
-            predict_button.label = "Predict"
-            predict_button.button_type = "success"
+            predict_button_fullwell.label = "Predict"
+            predict_button_fullwell.button_type = "success"
             return
 
         LOCALPATH = LOCALPATH_HIVE
@@ -1167,17 +1167,23 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             LOCALPATH = LOCALPATH_RAID5
 
         experiment  = Experiment.objects.get(name=dropdown_exp.value)
-        dest_wellplates = experiment.dest_plate
-        for dest_plate in dest_wellplates:
-            dest_wells = dest_plate.destwellposition
-            for dest_well in dest_wells:
-
+        dest_well_plates   = DestWellPlate.objects.filter(experiment=experiment)
+        print('dest_well_plates=', dest_well_plates)
+        for dest_well_plate in dest_well_plates:
+            dest_well_positions = DestWellPosition.objects.filter(well_plate=dest_well_plate)
+            for dest in dest_well_positions:
                 path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(dest_plate.plate_number), 'Well_{}{}'.format(dest_well.positon_row, dest_well.positon_col))
                 if int(dest_well.positon_col) < 10:
                     path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(dest_plate.plate_number), 'Well_{}0{}'.format(dest_well.positon_row, dest_well.positon_col))  
                 files = glob.glob(os.path.join(path_leica, '*.tiff'))
 
                 print('path_leica ',path_leica)
+
+
+
+
+        predict_button_fullwell.label = "Predict"
+        predict_button_fullwell.button_type = "success"
 
 #___________________________________________________________________________________________
     def predict_callback_fullwell_short():
