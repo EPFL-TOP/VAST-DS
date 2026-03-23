@@ -14,7 +14,7 @@ dest=DestWellPropertiesPredicted.objects.filter(
         valid=True,
         dest_well__source_well__drugs__derivation_name=derivation_name,
         dest_well__well_plate__experiment__name__in=experiment_names,
-    )
+    ).distinct()
 
 for d in dest:
     print('-------------- ',dest)
