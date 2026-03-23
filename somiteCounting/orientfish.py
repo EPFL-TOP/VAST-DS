@@ -160,7 +160,19 @@ def orient_fish(data_path=None, experiment_name=None):
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv)!=2:
-        print("usage python orientfish.py <experimentname>")
-        sys.exit(3)
-    orient_fish(r'Y:\raw_data\microscopy\vast\VAST-DS',sys.argv[1])
+
+    for exp in os.listdir(r'Y:\raw_data\microscopy\vast\VAST-DS'):
+        if 'VAST_' not in exp:
+            continue
+        orient_fish(r'Y:\raw_data\microscopy\vast\VAST-DS',exp)
+    for exp in os.listdir(r'Y:\raw_data\microscopy\vast\VAST-HS'):
+        if 'VAST_' not in exp:
+            continue
+        orient_fish(r'Y:\raw_data\microscopy\vast\VAST-HS',exp)
+
+
+    #if len(sys.argv)!=2:
+    #    print("usage python orientfish.py <experimentname>")
+
+    #    sys.exit(3)
+    #orient_fish(r'Y:\raw_data\microscopy\vast\VAST-DS',sys.argv[1])
