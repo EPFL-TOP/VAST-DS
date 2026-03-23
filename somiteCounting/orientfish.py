@@ -163,4 +163,4 @@ if __name__ == "__main__":
     if len(sys.argv)!=2:
         print("usage python orientfish.py <experimentname>")
         sys.exit(3)
-    orient_fish('Y:\raw_data\microscopy\vast\VAST-DS',sys.argv[1])
+    orient_fish(r'Y:\raw_data\microscopy\vast\VAST-DS',sys.argv[1])
