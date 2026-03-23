@@ -32,7 +32,7 @@ NZOOM_WELLS=1
 from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug, DestWellProperties
 
 from somiteCounting.training import SomiteCounter_freeze, FishQualityClassifier
-from somiteCounting.training_orientation import OrientationClassifier
+from somiteCounting.training_orientation_OLD import OrientationClassifier
 import somiteCounting.orientfish as of
 
 def load_and_prepare_image(img_path, resize=(224,224)):

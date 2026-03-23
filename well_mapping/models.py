@@ -160,7 +160,7 @@ class Drug(models.Model):
     slims_id        = models.CharField(max_length=200, help_text="slims ID of the drug derivation.")
     derivation_name = models.CharField(max_length=200, help_text="name of the drug derivation.", default='', blank=True)
     concentration   = models.FloatField(help_text="Concentration of the drug derivation (mMol/L) or Percentage of the drug derivation (%).", default=-9999, blank=True, null=True)
-    valid           = models.BooleanField(default=True, help_text="can be imaged with VAST flag", blank=True)
+    #valid           = models.BooleanField(default=True, help_text="can be imaged with VAST flag", blank=True)
     #drug_derivation = models.ForeignKey(SlimsDrugDerivation,  default='', on_delete=models.CASCADE, blank=True, null=True)
     position        = models.ManyToManyField(SourceWellPosition, default='', related_name='drugs', blank=True, help_text="Source well positions of the drug in the source well plate")  
     
