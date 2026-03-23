@@ -17,7 +17,7 @@ dest=DestWellPropertiesPredicted.objects.filter(
     ).distinct()
 
 for d in dest:
-    print('-------------- ',dest)
+    print('-------------- ',len(dest))
 
 #qs = (
 #    DestWellPropertiesPredicted.objects
