@@ -1168,12 +1168,12 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
         experiment  = Experiment.objects.get(name=dropdown_exp.value)
         dest_well_plates   = DestWellPlate.objects.filter(experiment=experiment)
-        print('dest_well_plates=', dest_well_plates)
+        print('------dest_well_plates=', dest_well_plates)
         for dest_well_plate in dest_well_plates:
-            print('dest well plate ',dest_well_plate)
+            print('     ---------dest well plate ',dest_well_plate)
             dest_well_positions = DestWellPosition.objects.filter(well_plate=dest_well_plate)
             for dest in dest_well_positions:
-                print(' dest ',dest)
+                print('       =============dest ',dest)
                 path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}{}'.format(dest.position_row, dest.position_col), 'corrected_orientation' if use_corrected_checkbox.active else '')
                 if int(dest.position_col) < 10:
                     path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(dest_well_plate.plate_number), 'Well_{}0{}'.format(dest.position_row, dest.position_col), 'corrected_orientation' if use_corrected_checkbox.active else '')  
@@ -1183,9 +1183,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 pred_somite=None
                 prob_valid=None
                 prob_ori=None
-                print(files)
                 for f in files:
-                    print(f)
                     if 'YFP' in f and 'norm' not in f:
                         file_YFP = f
                         img_raw, img_tensor = load_and_prepare_image(file_YFP)
@@ -1204,13 +1202,14 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                             logit_ori = model_orientation(img.to(device))
                             prob_ori = torch.sigmoid(logit_ori)
 
-                pred_total, pred_def = pred_somite
-                dest_well_preds, created = DestWellPropertiesPredicted.objects.get_or_create(dest_well=dest)
-                dest_well_preds.n_total_somites = pred_total
-                dest_well_preds.n_bad_somites  = pred_def
-                dest_well_preds.valid = True if prob_valid>0.5 else False
-                dest_well_preds.correct_orientation = True if  prob_ori.mean()>0.5 else False
-                dest_well_preds.save()
+                if len(files)>0:
+                    pred_total, pred_def = pred_somite
+                    dest_well_preds, created = DestWellPropertiesPredicted.objects.get_or_create(dest_well=dest)
+                    dest_well_preds.n_total_somites = pred_total
+                    dest_well_preds.n_bad_somites  = pred_def
+                    dest_well_preds.valid = True if prob_valid>0.5 else False
+                    dest_well_preds.correct_orientation = True if  prob_ori.mean()>0.5 else False
+                    dest_well_preds.save()
 
         predict_button_fullwell.label = "Predict"
         predict_button_fullwell.button_type = "success"
