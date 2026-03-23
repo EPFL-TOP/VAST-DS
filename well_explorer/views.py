@@ -52,23 +52,33 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #model = SomiteCounter().to(device)
 model = SomiteCounter_freeze().to(device)
 checkpoint_path=r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints\somite_counting_best.pth"
-checkpoint = torch.load(checkpoint_path, map_location=device)
-model.load_state_dict(checkpoint["model_state_dict"])
-model.eval()
+
+try:
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+except Exception as e:
+    print('exception laoding model ',e)
+
 
 
 model_fish = FishQualityClassifier().to(device)
 checkpoint_path_fish=r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints\fish_quality_best.pth"
-checkpoint_fish = torch.load(checkpoint_path_fish, map_location=device)
-model_fish.load_state_dict(checkpoint_fish["model_state_dict"])
-model_fish.eval()
+try:
+    checkpoint_fish = torch.load(checkpoint_path_fish, map_location=device)
+    model_fish.load_state_dict(checkpoint_fish["model_state_dict"])
+    model_fish.eval()
+except Exception as e:
+    print('exception laoding model ',e)
 
 model_orientation = OrientationClassifier().to(device)
 checkpoint_path_ori=r"C:\Users\helsens\software\VAST-DS\somiteCounting\checkpoints\orientation_best.pth"
-checkpoint_orientation = torch.load(checkpoint_path_ori, map_location=device)
-model_orientation.load_state_dict(checkpoint_orientation["model_state_dict"])
-model_orientation.eval()
-
+try:
+    checkpoint_orientation = torch.load(checkpoint_path_ori, map_location=device)
+    model_orientation.load_state_dict(checkpoint_orientation["model_state_dict"])
+    model_orientation.eval()
+except Exception as e: 
+    print('exception laoding model ',e)
 
 
 
@@ -1051,6 +1061,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     saveimages_button.on_click(saveimages_callback_short)
 
     predict_button = bokeh.models.Button(label="Predict", button_type="success", width=150)
+    predict_button_fullwell = bokeh.models.Button(label="Predict Full well", button_type="success", width=150)
 
 #___________________________________________________________________________________________
     def predict_callback():
@@ -1140,6 +1151,40 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         bokeh.io.curdoc().add_next_tick_callback(predict_callback)
     predict_button.on_click(predict_callback_short)
 
+#___________________________________________________________________________________________
+    def predict_callback_fullwell():
+        print('------------------->>>>>>>>> predict_callback')
+        if dropdown_exp.value == 'Select experiment':
+            print('Please select an experiment first')
+            image_message.text = "<b style='color:red; font-size:18px;'>Please select an experiment first</b>"
+            image_message.visible = True
+            predict_button.label = "Predict"
+            predict_button.button_type = "success"
+            return
+
+        LOCALPATH = LOCALPATH_HIVE
+        if os.path.exists(os.path.join(LOCALPATH_RAID5, dropdown_exp.value)):
+            LOCALPATH = LOCALPATH_RAID5
+
+        experiment  = Experiment.objects.get(name=dropdown_exp.value)
+        dest_wellplates = experiment.dest_plate
+        for dest_plate in dest_wellplates:
+            dest_wells = dest_plate.destwellposition
+            for dest_well in dest_wells:
+
+                path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(dest_plate.plate_number), 'Well_{}{}'.format(dest_well.positon_row, dest_well.positon_col))
+                if int(dest_well.positon_col) < 10:
+                    path_leica = os.path.join(LOCALPATH, dropdown_exp.value,'Leica images', 'Plate {}'.format(dest_plate.plate_number), 'Well_{}0{}'.format(dest_well.positon_row, dest_well.positon_col))  
+                files = glob.glob(os.path.join(path_leica, '*.tiff'))
+
+                print('path_leica ',path_leica)
+
+#___________________________________________________________________________________________
+    def predict_callback_fullwell_short():
+        predict_button_fullwell.label = "Processing"
+        predict_button_fullwell.button_type = "danger"
+        bokeh.io.curdoc().add_next_tick_callback(predict_callback_fullwell)
+    predict_button_fullwell.on_click(predict_callback_fullwell_short)
 
     #___________________________________________________________________________________________
     def create_training_callback():
@@ -1295,7 +1340,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                                                          bokeh.layouts.column(image_message,drug_message)),
                                        bokeh.layouts.Spacer(width=50),
                                        bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
-                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), bokeh.layouts.column(contrast_slider,predict_button, use_corrected_checkbox), 
+                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), bokeh.layouts.column(contrast_slider,predict_button,predict_button_fullwell, use_corrected_checkbox), 
                                                                                                 bokeh.layouts.column(dropdown_total_somites, dropdown_total_somites_err), 
                                                                                                 bokeh.layouts.column(dropdown_bad_somites, dropdown_bad_somites_err), 
                                                                                                 bokeh.layouts.column(dropdown_good_image, dropdown_good_orientation), 

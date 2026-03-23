@@ -202,10 +202,22 @@ class DestWellProperties(models.Model):
     n_total_somites_err = models.IntegerField(default=0, help_text="Number of total somites error", blank=True, null=True)
     n_bad_somites_err   = models.IntegerField(default=0, help_text="Number of bad somites error", blank=True, null=True)    
     comments            = models.TextField(blank=True, max_length=2000, help_text="Comments if any", null=True)
-    valid               = models.BooleanField(default=True, help_text="should be used for training", blank=True, null=True)
+    valid               = models.BooleanField(default=True, help_text="is a valid fish image", blank=True, null=True)
     correct_orientation = models.BooleanField(default=True, help_text="is the fish correctly oriented (head to the left)?", blank=True, null=True)
     use_for_training    = models.BooleanField(default=False, help_text="should be used for training", blank=True, null=True)
     use_for_validation  = models.BooleanField(default=False, help_text="should be used for validation", blank=True, null=True)
+
+    def __str__(self):
+        """String for representing the Model object (in Admin site etc.)"""
+        return "exp={0}, pos={1}{2}, n_plate={3}, n_total_somites={4}, n_bad_somites={5}, valid={6}".format(self.dest_well.well_plate.experiment.name, self.dest_well.position_row, self.dest_well.position_col, self.dest_well.well_plate.plate_number, self.n_total_somites, self.n_bad_somites, self.valid)
+    
+#___________________________________________________________________________________________
+class DestWellPropertiesPredicted(models.Model):
+    dest_well           = models.OneToOneField(DestWellPosition, default='', on_delete=models.CASCADE, related_name='dest_well_properties_predicted')
+    n_total_somites     = models.IntegerField(default=-9999, help_text="Number of total somites in this well", blank=True, null=True)
+    n_bad_somites       = models.IntegerField(default=-9999, help_text="Number of bad somites in this well", blank=True, null=True)
+    valid               = models.BooleanField(default=True, help_text="is a valid fish image", blank=True, null=True)
+    correct_orientation = models.BooleanField(default=True, help_text="is the fish correctly oriented (head to the left)?", blank=True, null=True)
 
     def __str__(self):
         """String for representing the Model object (in Admin site etc.)"""
