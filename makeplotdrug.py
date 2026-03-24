@@ -16,11 +16,18 @@ dest=DestWellPropertiesPredicted.objects.filter(
         dest_well__source_well__drugs__derivation_name=derivation_name,
         dest_well__well_plate__experiment__name__in=experiment_names,
     ).distinct()
+dest_notvalid=DestWellPropertiesPredicted.objects.filter(
+        valid=False,
+        dest_well__source_well__drugs__derivation_name=derivation_name,
+        dest_well__well_plate__experiment__name__in=experiment_names,
+    ).distinct()
+print('n valid ',len(dest))
+print('n not valid ',len(dest_notvalid))
+
 n_total = []
 n_bad = []
 for d in dest:
-    #print('-------------- ',len(d))
-    print('-------------- ',d)
+
     n_total.append(d.n_total_somites)
     n_bad.append(d.n_bad_somites)
 
@@ -29,10 +36,10 @@ for d in dest:
 plt.figure(figsize=(10, 5))
 
 # Histogram for total somites
-plt.hist(n_total, bins=20, alpha=0.6, label="Total somites")
+plt.hist(n_total, bins=25, alpha=0.6, label="Total somites")
 
 # Histogram for bad somites
-plt.hist(n_bad, bins=20, alpha=0.6, label="Bad somites")
+plt.hist(n_bad, bins=25, alpha=0.6, label="Bad somites")
 
 plt.xlabel("Number of somites")
 plt.ylabel("Frequency")
