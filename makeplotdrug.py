@@ -87,8 +87,8 @@ plt.hist(n_bad_notv, bins=20, alpha=0.6, label="Defective somites", density=True
 plt.xlabel("Number of somites")
 plt.ylabel("Frequency")
 plt.text(5, 0.12, r'mean defective   = {:.1f}'.format(np.mean(np.array(n_bad_notv))), fontsize=15)
-plt.text(0, 0.10, r'median defective = {:.1f}'.format(np.median(np.array(n_bad_notv))), fontsize=15)
-plt.text(0, 0.08, r'std defective    = {:.1f}'.format(np.std(np.array(n_bad_notv))), fontsize=15)
+plt.text(5, 0.10, r'median defective = {:.1f}'.format(np.median(np.array(n_bad_notv))), fontsize=15)
+plt.text(5, 0.08, r'std defective    = {:.1f}'.format(np.std(np.array(n_bad_notv))), fontsize=15)
 plt.legend()
 plt.show()
 
