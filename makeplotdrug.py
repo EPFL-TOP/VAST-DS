@@ -1,7 +1,7 @@
 import os
 import django
 import matplotlib.pyplot as plt
-
+import numpy as np
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "VAST_DS.settings")  # <-- change this
 django.setup()
 
@@ -26,20 +26,43 @@ print('n not valid ',len(dest_notvalid))
 
 n_total = []
 n_bad = []
+
+n_total_notv = []
+n_bad_notv = []
 for d in dest:
 
     n_total.append(d.n_total_somites)
     n_bad.append(d.n_bad_somites)
 
+for d in dest_notvalid:
+    n_total_notv.append(d.n_total_somites)
+    n_bad_notv.append(d.n_bad_somites)
+
+
+print('mean tot   = ',np.array(n_total).mean())
+print('median tot = ',np.array(n_total).median())
+print('std tot    = ',np.array(n_total).std())
+
+print('mean bad   = ',np.array(n_bad).mean())
+print('median bad = ',np.array(n_bad).median())
+print('std bad    = ',np.array(n_bad).std())
 
 
 plt.figure(figsize=(10, 5))
 
-# Histogram for total somites
 plt.hist(n_total, bins=25, alpha=0.6, label="Total somites")
-
-# Histogram for bad somites
 plt.hist(n_bad, bins=25, alpha=0.6, label="Bad somites")
+
+plt.xlabel("Number of somites")
+plt.ylabel("Frequency")
+plt.title(f"Distribution of somites for {derivation_name}")
+plt.legend()
+plt.show()
+
+plt.figure(figsize=(10, 5))
+
+plt.hist(n_total_notv, bins=25, alpha=0.6, label="Total somites")
+plt.hist(n_bad_notv, bins=25, alpha=0.6, label="Bad somites")
 
 plt.xlabel("Number of somites")
 plt.ylabel("Frequency")
