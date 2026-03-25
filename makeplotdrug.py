@@ -47,17 +47,17 @@ print('mean bad   = ',np.mean(np.array(n_bad)))
 print('median bad = ',np.median(np.array(n_bad)))
 print('std bad    = ',np.std(np.array(n_bad)))
 
-
-plt.figure(figsize=(10, 5))
-
+plt.figure(figsize=(10, 10))
+plt.subplot(211)
 plt.hist(n_total, bins=25, alpha=0.6, label="Total somites", density=True)
+plt.subplot(212)
 plt.hist(n_bad, bins=25, alpha=0.6, label="Defective somites", density=True)
-
 plt.xlabel("Number of somites")
 plt.ylabel("Frequency")
 plt.title(f"Distribution of somites for {derivation_name}")
 plt.legend()
 plt.show()
+
 
 plt.figure(figsize=(10, 5))
 
