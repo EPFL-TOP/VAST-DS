@@ -50,8 +50,8 @@ print('std bad    = ',np.std(np.array(n_bad)))
 
 plt.figure(figsize=(10, 5))
 
-plt.hist(n_total, bins=25, alpha=0.6, label="Total somites")
-plt.hist(n_bad, bins=25, alpha=0.6, label="Bad somites")
+plt.hist(n_total, bins=25, alpha=0.6, label="Total somites", density=True)
+plt.hist(n_bad, bins=25, alpha=0.6, label="Defective somites", density=True)
 
 plt.xlabel("Number of somites")
 plt.ylabel("Frequency")
@@ -61,8 +61,8 @@ plt.show()
 
 plt.figure(figsize=(10, 5))
 
-plt.hist(n_total_notv, bins=25, alpha=0.6, label="Total somites")
-plt.hist(n_bad_notv, bins=25, alpha=0.6, label="Bad somites")
+plt.hist(n_total_notv, bins=25, alpha=0.6, label="Total somites", density=True)
+plt.hist(n_bad_notv, bins=25, alpha=0.6, label="Defective somites", density=True)
 
 plt.xlabel("Number of somites")
 plt.ylabel("Frequency")
