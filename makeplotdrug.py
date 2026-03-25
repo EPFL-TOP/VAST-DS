@@ -39,13 +39,13 @@ for d in dest_notvalid:
     n_bad_notv.append(d.n_bad_somites)
 
 
-print('mean tot   = ',np.array(n_total).mean())
-print('median tot = ',np.array(n_total).median())
-print('std tot    = ',np.array(n_total).std())
+print('mean tot   = ',np.mean(np.array(n_total)))
+print('median tot = ',np.median(np.array(n_total)))
+print('std tot    = ',np.std(np.array(n_total)))
 
-print('mean bad   = ',np.array(n_bad).mean())
-print('median bad = ',np.array(n_bad).median())
-print('std bad    = ',np.array(n_bad).std())
+print('mean bad   = ',np.mean(np.array(n_bad)))
+print('median bad = ',np.median(np.array(n_bad)))
+print('std bad    = ',np.std(np.array(n_bad)))
 
 
 plt.figure(figsize=(10, 5))
