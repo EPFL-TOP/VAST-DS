@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VAST Statistics</title>
+
+    <link rel="stylesheet"
+        href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        table.dataTable tbody td { vertical-align: middle; }
+        .na { color: #aaa; font-style: italic; }
+        .good { color: #2a9d2a; font-weight: bold; }
+        .warn { color: #e07000; font-weight: bold; }
+        .total-row td { background-color: #f0f4ff; font-weight: bold; border-top: 2px solid #334; }
+        .section-header { background: #334; color: #fff; padding: 4px 8px; }
+    </style>
+</head>
+<body>
+
+<h2>VAST Statistics</h2>
+
+<table id="stats-table" class="display">
+    <thead>
+        <tr>
+            <th rowspan="2">Experiment</th>
+            <th rowspan="2">Date</th>
+            <th colspan="3" class="section-header">VAST Efficiency</th>
+            <th colspan="3" class="section-header">Fish Quality</th>
+            <th colspan="5" class="section-header">Prediction vs Annotation</th>
+        </tr>
+        <tr>
+            <th>Dest Wells</th>
+            <th>Imaged</th>
+            <th>Efficiency</th>
+            <th>Valid</th>
+            <th>Invalid</th>
+            <th>% Valid</th>
+            <th>Annotated</th>
+            <th>Predicted</th>
+            <th>Both</th>
+            <th>Valid agree</th>
+            <th>Orientation agree</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in rows %}
+        <tr>
+            <td>{{ r.name }}</td>
+            <td>{{ r.date }}</td>
+            <td>{{ r.n_dest_wells }}</td>
+            <td>{{ r.n_imaged }}</td>
+            <td>{{ r.vast_efficiency|floatformat:1 }}%</td>
+            <td>{{ r.n_valid }}</td>
+            <td>{{ r.n_invalid }}</td>
+            <td>{{ r.frac_valid|floatformat:1 }}%</td>
+            <td>{{ r.n_annotated }}</td>
+            <td>{{ r.n_predicted }}</td>
+            <td>{{ r.n_both }}</td>
+            <td>
+                {% if r.agree_valid_pct is not None %}
+                    {{ r.agree_valid_pct|floatformat:1 }}%
+                {% else %}
+                    <span class="na">—</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if r.agree_orient_pct is not None %}
+                    {{ r.agree_orient_pct|floatformat:1 }}%
+                {% else %}
+                    <span class="na">—</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tbody>
+        <tr class="total-row">
+            <td>{{ data_total.name }}</td>
+            <td></td>
+            <td>{{ data_total.n_dest_wells }}</td>
+            <td>{{ data_total.n_imaged }}</td>
+            <td>{{ data_total.vast_efficiency|floatformat:1 }}%</td>
+            <td>{{ data_total.n_valid }}</td>
+            <td>{{ data_total.n_invalid }}</td>
+            <td>{{ data_total.frac_valid|floatformat:1 }}%</td>
+            <td>{{ data_total.n_annotated }}</td>
+            <td>{{ data_total.n_predicted }}</td>
+            <td>{{ data_total.n_both }}</td>
+            <td>
+                {% if data_total.agree_valid_pct is not None %}
+                    {{ data_total.agree_valid_pct|floatformat:1 }}%
+                {% else %}
+                    <span class="na">—</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if data_total.agree_orient_pct is not None %}
+                    {{ data_total.agree_orient_pct|floatformat:1 }}%
+                {% else %}
+                    <span class="na">—</span>
+                {% endif %}
+            </td>
+        </tr>
+    </tbody>
+    <tfoot>
+        <tr>
+            <th>Experiment</th>
+            <th>Date</th>
+            <th>Dest Wells</th>
+            <th>Imaged</th>
+            <th>Efficiency</th>
+            <th>Valid</th>
+            <th>Invalid</th>
+            <th>% Valid</th>
+            <th>Annotated</th>
+            <th>Predicted</th>
+            <th>Both</th>
+            <th>Valid agree</th>
+            <th>Orientation agree</th>
+        </tr>
+    </tfoot>
+</table>
+
+{% if rows %}
+<h3 style="margin-top:40px">Somite count prediction error (MAE) — experiments with both annotations and predictions</h3>
+<table id="mae-table" class="display" style="width:auto">
+    <thead>
+        <tr>
+            <th>Experiment</th>
+            <th>N (both)</th>
+            <th>MAE total somites</th>
+            <th>MAE bad somites</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in rows %}
+        {% if r.n_both > 0 %}
+        <tr>
+            <td>{{ r.name }}</td>
+            <td>{{ r.n_both }}</td>
+            <td>
+                {% if r.mae_somites is not None %}
+                    {{ r.mae_somites|floatformat:2 }}
+                {% else %}
+                    <span class="na">—</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if r.mae_bad_somites is not None %}
+                    {{ r.mae_bad_somites|floatformat:2 }}
+                {% else %}
+                    <span class="na">—</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+        <tr class="total-row">
+            <td>TOTAL</td>
+            <td>{{ data_total.n_both }}</td>
+            <td>
+                {% if data_total.mae_somites is not None %}
+                    {{ data_total.mae_somites|floatformat:2 }}
+                {% else %}
+                    <span class="na">—</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if data_total.mae_bad_somites is not None %}
+                    {{ data_total.mae_bad_somites|floatformat:2 }}
+                {% else %}
+                    <span class="na">—</span>
+                {% endif %}
+            </td>
+        </tr>
+    </tbody>
+</table>
+{% endif %}
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script>
+$(document).ready(function() {
+    $('#stats-table').DataTable({
+        pageLength: 25,
+        lengthMenu: [10, 25, 50, 100],
+        ordering: true,
+    });
+    $('#mae-table').DataTable({
+        paging: false,
+        searching: false,
+        info: false,
+        ordering: true,
+    });
+});
+</script>
+</body>
+</html>
