@@ -2,45 +2,44 @@
 <html>
 <head>
     <title>VAST Statistics</title>
-
-    <link rel="stylesheet"
-        href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
-
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
     <style>
         body { font-family: sans-serif; padding: 20px; }
-        table.dataTable tbody td { vertical-align: middle; }
-        .na { color: #aaa; font-style: italic; }
-        .good { color: #2a9d2a; font-weight: bold; }
-        .warn { color: #e07000; font-weight: bold; }
-        .total-row td { background-color: #f0f4ff; font-weight: bold; border-top: 2px solid #334; }
-        .section-header { background: #334; color: #fff; padding: 4px 8px; }
+        h2, h3 { margin-top: 28px; }
+        table.dataTable tbody td { vertical-align: middle; white-space: nowrap; }
+        .na  { color: #aaa; font-style: italic; }
+        .total-row td { background-color: #eef2ff; font-weight: bold; border-top: 2px solid #445; }
+        th.group { background: #334; color: #fff; text-align: center; padding: 4px 6px; }
+        a.btn-link {
+            display: inline-block; padding: 8px 18px; background: #334; color: #fff;
+            text-decoration: none; border-radius: 4px; font-size: 14px;
+        }
+        a.btn-link:hover { background: #556; }
     </style>
 </head>
 <body>
 
 <h2>VAST Statistics</h2>
+<p>
+    <a class="btn-link" href="{% url 'drug_plot' %}">&#9654; Open drug somite plot</a>
+</p>
 
-<table id="stats-table" class="display">
+<!-- ===== EFFICIENCY TABLE ===== -->
+<h3>Plate filling &amp; VAST efficiency</h3>
+<table id="eff-table" class="display compact">
     <thead>
         <tr>
             <th rowspan="2">Experiment</th>
             <th rowspan="2">Date</th>
-            <th colspan="3" class="section-header">VAST Efficiency</th>
-            <th colspan="3" class="section-header">Fish Quality</th>
-            <th colspan="5" class="section-header">Prediction vs Annotation</th>
+            <th colspan="3" class="group">Plate filling</th>
+            <th colspan="2" class="group">VAST efficiency</th>
         </tr>
         <tr>
-            <th>Dest Wells</th>
+            <th>Total dest wells</th>
+            <th>Mapped to source</th>
+            <th>Fill efficiency</th>
             <th>Imaged</th>
-            <th>Efficiency</th>
-            <th>Valid</th>
-            <th>Invalid</th>
-            <th>% Valid</th>
-            <th>Annotated</th>
-            <th>Predicted</th>
-            <th>Both</th>
-            <th>Valid agree</th>
-            <th>Orientation agree</th>
+            <th>VAST efficiency</th>
         </tr>
     </thead>
     <tbody>
@@ -49,150 +48,189 @@
             <td>{{ r.name }}</td>
             <td>{{ r.date }}</td>
             <td>{{ r.n_dest_wells }}</td>
+            <td>{{ r.n_mapped_wells }}</td>
+            <td>{{ r.plate_fill_eff|floatformat:1 }}%</td>
             <td>{{ r.n_imaged }}</td>
             <td>{{ r.vast_efficiency|floatformat:1 }}%</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tbody>
+        <tr class="total-row">
+            <td>{{ data_total.name }}</td><td></td>
+            <td>{{ data_total.n_dest_wells }}</td>
+            <td>{{ data_total.n_mapped_wells }}</td>
+            <td>{{ data_total.plate_fill_eff|floatformat:1 }}%</td>
+            <td>{{ data_total.n_imaged }}</td>
+            <td>{{ data_total.vast_efficiency|floatformat:1 }}%</td>
+        </tr>
+    </tbody>
+    <tfoot><tr>
+        <th>Experiment</th><th>Date</th>
+        <th>Total dest wells</th><th>Mapped to source</th><th>Fill efficiency</th>
+        <th>Imaged</th><th>VAST efficiency</th>
+    </tr></tfoot>
+</table>
+
+<!-- ===== FISH QUALITY TABLE ===== -->
+<h3>Fish quality &amp; annotation statistics</h3>
+<table id="qual-table" class="display compact">
+    <thead>
+        <tr>
+            <th rowspan="2">Experiment</th>
+            <th colspan="3" class="group">All annotated</th>
+            <th colspan="3" class="group">Training set</th>
+            <th colspan="3" class="group">Validation set</th>
+        </tr>
+        <tr>
+            <th>Valid</th><th>Invalid</th><th>% Valid</th>
+            <th>N</th><th>Mean total</th><th>Mean defective</th>
+            <th>N</th><th>Mean total</th><th>Mean defective</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in rows %}
+        <tr>
+            <td>{{ r.name }}</td>
             <td>{{ r.n_valid }}</td>
             <td>{{ r.n_invalid }}</td>
             <td>{{ r.frac_valid|floatformat:1 }}%</td>
-            <td>{{ r.n_annotated }}</td>
-            <td>{{ r.n_predicted }}</td>
-            <td>{{ r.n_both }}</td>
-            <td>
-                {% if r.agree_valid_pct is not None %}
-                    {{ r.agree_valid_pct|floatformat:1 }}%
-                {% else %}
-                    <span class="na">—</span>
-                {% endif %}
-            </td>
-            <td>
-                {% if r.agree_orient_pct is not None %}
-                    {{ r.agree_orient_pct|floatformat:1 }}%
-                {% else %}
-                    <span class="na">—</span>
-                {% endif %}
-            </td>
+            <td>{{ r.n_training }}</td>
+            <td>{% if r.mean_total_tr is not None %}{{ r.mean_total_tr|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.mean_bad_tr is not None %}{{ r.mean_bad_tr|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ r.n_validation }}</td>
+            <td>{% if r.mean_total_val is not None %}{{ r.mean_total_val|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.mean_bad_val is not None %}{{ r.mean_bad_val|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
         </tr>
         {% endfor %}
     </tbody>
     <tbody>
         <tr class="total-row">
             <td>{{ data_total.name }}</td>
-            <td></td>
-            <td>{{ data_total.n_dest_wells }}</td>
-            <td>{{ data_total.n_imaged }}</td>
-            <td>{{ data_total.vast_efficiency|floatformat:1 }}%</td>
             <td>{{ data_total.n_valid }}</td>
             <td>{{ data_total.n_invalid }}</td>
             <td>{{ data_total.frac_valid|floatformat:1 }}%</td>
-            <td>{{ data_total.n_annotated }}</td>
-            <td>{{ data_total.n_predicted }}</td>
-            <td>{{ data_total.n_both }}</td>
-            <td>
-                {% if data_total.agree_valid_pct is not None %}
-                    {{ data_total.agree_valid_pct|floatformat:1 }}%
-                {% else %}
-                    <span class="na">—</span>
-                {% endif %}
-            </td>
-            <td>
-                {% if data_total.agree_orient_pct is not None %}
-                    {{ data_total.agree_orient_pct|floatformat:1 }}%
-                {% else %}
-                    <span class="na">—</span>
-                {% endif %}
-            </td>
+            <td>{{ data_total.n_training }}</td>
+            <td>{% if data_total.mean_total_tr is not None %}{{ data_total.mean_total_tr|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.mean_bad_tr is not None %}{{ data_total.mean_bad_tr|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ data_total.n_validation }}</td>
+            <td>{% if data_total.mean_total_val is not None %}{{ data_total.mean_total_val|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.mean_bad_val is not None %}{{ data_total.mean_bad_val|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
         </tr>
     </tbody>
-    <tfoot>
-        <tr>
-            <th>Experiment</th>
-            <th>Date</th>
-            <th>Dest Wells</th>
-            <th>Imaged</th>
-            <th>Efficiency</th>
-            <th>Valid</th>
-            <th>Invalid</th>
-            <th>% Valid</th>
-            <th>Annotated</th>
-            <th>Predicted</th>
-            <th>Both</th>
-            <th>Valid agree</th>
-            <th>Orientation agree</th>
-        </tr>
-    </tfoot>
+    <tfoot><tr>
+        <th>Experiment</th>
+        <th>Valid</th><th>Invalid</th><th>% Valid</th>
+        <th>N (train)</th><th>Mean total (train)</th><th>Mean defective (train)</th>
+        <th>N (val)</th><th>Mean total (val)</th><th>Mean defective (val)</th>
+    </tr></tfoot>
 </table>
 
-{% if rows %}
-<h3 style="margin-top:40px">Somite count prediction error (MAE) — experiments with both annotations and predictions</h3>
-<table id="mae-table" class="display" style="width:auto">
+<!-- ===== SOMITE ANNOTATION STATS ===== -->
+<h3>Somite counts — annotated (all images)</h3>
+<table id="somite-table" class="display compact">
     <thead>
         <tr>
             <th>Experiment</th>
-            <th>N (both)</th>
-            <th>MAE total somites</th>
-            <th>MAE bad somites</th>
+            <th>N annotated</th>
+            <th>Mean total somites</th>
+            <th>Std total somites</th>
+            <th>Mean defective</th>
+            <th>Std defective</th>
         </tr>
     </thead>
     <tbody>
         {% for r in rows %}
-        {% if r.n_both > 0 %}
+        {% if r.n_annotated > 0 %}
         <tr>
             <td>{{ r.name }}</td>
-            <td>{{ r.n_both }}</td>
-            <td>
-                {% if r.mae_somites is not None %}
-                    {{ r.mae_somites|floatformat:2 }}
-                {% else %}
-                    <span class="na">—</span>
-                {% endif %}
-            </td>
-            <td>
-                {% if r.mae_bad_somites is not None %}
-                    {{ r.mae_bad_somites|floatformat:2 }}
-                {% else %}
-                    <span class="na">—</span>
-                {% endif %}
-            </td>
+            <td>{{ r.n_annotated }}</td>
+            <td>{% if r.mean_total_somites is not None %}{{ r.mean_total_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.std_total_somites is not None %}{{ r.std_total_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.mean_bad_somites is not None %}{{ r.mean_bad_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.std_bad_somites is not None %}{{ r.std_bad_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
         </tr>
         {% endif %}
         {% endfor %}
+    </tbody>
+    <tbody>
         <tr class="total-row">
-            <td>TOTAL</td>
-            <td>{{ data_total.n_both }}</td>
-            <td>
-                {% if data_total.mae_somites is not None %}
-                    {{ data_total.mae_somites|floatformat:2 }}
-                {% else %}
-                    <span class="na">—</span>
-                {% endif %}
-            </td>
-            <td>
-                {% if data_total.mae_bad_somites is not None %}
-                    {{ data_total.mae_bad_somites|floatformat:2 }}
-                {% else %}
-                    <span class="na">—</span>
-                {% endif %}
-            </td>
+            <td>{{ data_total.name }}</td>
+            <td>{{ data_total.n_annotated }}</td>
+            <td>{% if data_total.mean_total_somites is not None %}{{ data_total.mean_total_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.std_total_somites is not None %}{{ data_total.std_total_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.mean_bad_somites is not None %}{{ data_total.mean_bad_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.std_bad_somites is not None %}{{ data_total.std_bad_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
         </tr>
     </tbody>
+    <tfoot><tr>
+        <th>Experiment</th><th>N annotated</th>
+        <th>Mean total somites</th><th>Std total somites</th>
+        <th>Mean defective</th><th>Std defective</th>
+    </tr></tfoot>
 </table>
-{% endif %}
+
+<!-- ===== PREDICTION vs ANNOTATION TABLE ===== -->
+<h3>Prediction vs annotation comparison</h3>
+<table id="pred-table" class="display compact">
+    <thead>
+        <tr>
+            <th rowspan="2">Experiment</th>
+            <th rowspan="2">Annotated</th>
+            <th rowspan="2">Predicted</th>
+            <th rowspan="2">Both</th>
+            <th colspan="2" class="group">Agreement</th>
+            <th colspan="2" class="group">MAE (somites)</th>
+        </tr>
+        <tr>
+            <th>Valid flag</th>
+            <th>Orientation</th>
+            <th>Total somites</th>
+            <th>Defective somites</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in rows %}
+        <tr>
+            <td>{{ r.name }}</td>
+            <td>{{ r.n_annotated }}</td>
+            <td>{{ r.n_predicted }}</td>
+            <td>{{ r.n_both }}</td>
+            <td>{% if r.agree_valid_pct is not None %}{{ r.agree_valid_pct|floatformat:1 }}%{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.agree_orient_pct is not None %}{{ r.agree_orient_pct|floatformat:1 }}%{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.mae_somites is not None %}{{ r.mae_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.mae_bad_somites is not None %}{{ r.mae_bad_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tbody>
+        <tr class="total-row">
+            <td>{{ data_total.name }}</td>
+            <td>{{ data_total.n_annotated }}</td>
+            <td>{{ data_total.n_predicted }}</td>
+            <td>{{ data_total.n_both }}</td>
+            <td>{% if data_total.agree_valid_pct is not None %}{{ data_total.agree_valid_pct|floatformat:1 }}%{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.agree_orient_pct is not None %}{{ data_total.agree_orient_pct|floatformat:1 }}%{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.mae_somites is not None %}{{ data_total.mae_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.mae_bad_somites is not None %}{{ data_total.mae_bad_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+        </tr>
+    </tbody>
+    <tfoot><tr>
+        <th>Experiment</th><th>Annotated</th><th>Predicted</th><th>Both</th>
+        <th>Valid agree</th><th>Orient agree</th>
+        <th>MAE total somites</th><th>MAE defective</th>
+    </tr></tfoot>
+</table>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 <script>
 $(document).ready(function() {
-    $('#stats-table').DataTable({
-        pageLength: 25,
-        lengthMenu: [10, 25, 50, 100],
-        ordering: true,
-    });
-    $('#mae-table').DataTable({
-        paging: false,
-        searching: false,
-        info: false,
-        ordering: true,
-    });
+    var opts = { pageLength: 25, lengthMenu: [10, 25, 50, 100], ordering: true };
+    $('#eff-table').DataTable(opts);
+    $('#qual-table').DataTable(opts);
+    $('#somite-table').DataTable(opts);
+    $('#pred-table').DataTable(opts);
 });
 </script>
 </body>

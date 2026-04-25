@@ -52,4 +52,5 @@ if settings.DEBUG:
 bokeh_apps = [
     autoload("well_mapping/bokeh_dashboard", views_wm.vast_handler),
     autoload("well_explorer/bokeh_dashboard", views_we.vast_handler),
+    autoload("well_explorer/drug_plot", views_we.drug_plot_handler),
 ]

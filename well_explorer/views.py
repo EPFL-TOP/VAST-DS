@@ -1611,118 +1611,384 @@ def experiment_list(request: HttpRequest) -> HttpResponse:
 
 #___________________________________________________________________________________________
 def stats_list(request: HttpRequest) -> HttpResponse:
-    experiments = Experiment.objects.all()
+    experiments = Experiment.objects.all().order_by('name')
     rows = []
 
-    totals = {
-        'n_dest_wells': 0, 'n_imaged': 0,
+    def _mean(lst):
+        return sum(lst) / len(lst) if lst else None
+
+    def _std(lst):
+        if not lst or len(lst) < 2:
+            return None
+        m = sum(lst) / len(lst)
+        return (sum((x - m) ** 2 for x in lst) / len(lst)) ** 0.5
+
+    tk = {
+        'n_dest_wells': 0, 'n_mapped_wells': 0, 'n_imaged': 0,
         'n_valid': 0, 'n_invalid': 0,
         'n_annotated': 0, 'n_predicted': 0, 'n_both': 0,
-        'n_agree_valid': 0,
-        'n_agree_orientation': 0,
-        'sum_somite_err': 0, 'sum_bad_somite_err': 0,
+        'n_training': 0, 'n_validation': 0,
+        'n_agree_valid': 0, 'n_agree_orientation': 0,
     }
+    t_ann_total, t_ann_bad = [], []
+    t_ann_total_tr, t_ann_bad_tr = [], []
+    t_ann_total_val, t_ann_bad_val = [], []
+    t_somite_diffs, t_bad_diffs = [], []
 
     for exp in experiments:
-        row = {'name': exp.name, 'date': exp.date}
         n_dest_wells = 0
+        n_mapped_wells = 0
         n_imaged = 0
         n_valid = 0
         n_invalid = 0
         n_annotated = 0
         n_predicted = 0
         n_both = 0
+        n_training = 0
+        n_validation = 0
         n_agree_valid = 0
         n_agree_orientation = 0
-        sum_somite_err = 0
-        sum_bad_somite_err = 0
+        ann_total, ann_bad = [], []
+        ann_total_tr, ann_bad_tr = [], []
+        ann_total_val, ann_bad_val = [], []
+        somite_diffs, bad_diffs = [], []
 
         dest_well_plates = DestWellPlate.objects.filter(experiment=exp)
         for plate in dest_well_plates:
             dest_well_positions = DestWellPosition.objects.filter(well_plate=plate)
             n_dest_wells += dest_well_positions.count()
+            n_mapped_wells += dest_well_positions.filter(source_well__isnull=False).count()
 
             for dest in dest_well_positions:
-                has_annotated = False
-                has_predicted = False
                 props = None
                 pred = None
+                has_ann = False
+                has_pred = False
 
                 try:
                     props = dest.dest_well_properties
-                    has_annotated = True
+                    has_ann = True
                     n_imaged += 1
                     n_annotated += 1
                     if props.valid:
                         n_valid += 1
                     else:
                         n_invalid += 1
+                    if props.n_total_somites != -9999:
+                        ann_total.append(props.n_total_somites)
+                    if props.n_bad_somites != -9999:
+                        ann_bad.append(props.n_bad_somites)
+                    if props.use_for_training:
+                        n_training += 1
+                        if props.n_total_somites != -9999:
+                            ann_total_tr.append(props.n_total_somites)
+                        if props.n_bad_somites != -9999:
+                            ann_bad_tr.append(props.n_bad_somites)
+                    if props.use_for_validation:
+                        n_validation += 1
+                        if props.n_total_somites != -9999:
+                            ann_total_val.append(props.n_total_somites)
+                        if props.n_bad_somites != -9999:
+                            ann_bad_val.append(props.n_bad_somites)
                 except DestWellProperties.DoesNotExist:
                     pass
 
                 try:
                     pred = dest.dest_well_properties_predicted
-                    has_predicted = True
+                    has_pred = True
                     n_predicted += 1
                 except DestWellPropertiesPredicted.DoesNotExist:
                     pass
 
-                if has_annotated and has_predicted:
+                if has_ann and has_pred:
                     n_both += 1
                     if props.valid == pred.valid:
                         n_agree_valid += 1
                     if props.correct_orientation == pred.correct_orientation:
                         n_agree_orientation += 1
                     if props.n_total_somites != -9999 and pred.n_total_somites != -9999:
-                        sum_somite_err += abs(props.n_total_somites - pred.n_total_somites)
+                        somite_diffs.append(abs(props.n_total_somites - pred.n_total_somites))
                     if props.n_bad_somites != -9999 and pred.n_bad_somites != -9999:
-                        sum_bad_somite_err += abs(props.n_bad_somites - pred.n_bad_somites)
+                        bad_diffs.append(abs(props.n_bad_somites - pred.n_bad_somites))
 
-        vast_eff = (n_imaged / n_dest_wells * 100) if n_dest_wells > 0 else 0
-        frac_valid = (n_valid / (n_valid + n_invalid) * 100) if (n_valid + n_invalid) > 0 else 0
-        agree_valid_pct = (n_agree_valid / n_both * 100) if n_both > 0 else None
-        agree_orient_pct = (n_agree_orientation / n_both * 100) if n_both > 0 else None
-        mae_somites = (sum_somite_err / n_both) if n_both > 0 else None
-        mae_bad_somites = (sum_bad_somite_err / n_both) if n_both > 0 else None
-
-        row.update({
+        rows.append({
+            'name': exp.name, 'date': exp.date,
             'n_dest_wells': n_dest_wells,
+            'n_mapped_wells': n_mapped_wells,
+            'plate_fill_eff': (n_mapped_wells / n_dest_wells * 100) if n_dest_wells > 0 else 0,
             'n_imaged': n_imaged,
-            'vast_efficiency': vast_eff,
+            'vast_efficiency': (n_imaged / n_mapped_wells * 100) if n_mapped_wells > 0 else 0,
             'n_valid': n_valid,
             'n_invalid': n_invalid,
-            'frac_valid': frac_valid,
+            'frac_valid': (n_valid / (n_valid + n_invalid) * 100) if (n_valid + n_invalid) > 0 else 0,
             'n_annotated': n_annotated,
+            'mean_total_somites': _mean(ann_total),
+            'std_total_somites': _std(ann_total),
+            'mean_bad_somites': _mean(ann_bad),
+            'std_bad_somites': _std(ann_bad),
+            'n_training': n_training,
+            'mean_total_tr': _mean(ann_total_tr),
+            'mean_bad_tr': _mean(ann_bad_tr),
+            'n_validation': n_validation,
+            'mean_total_val': _mean(ann_total_val),
+            'mean_bad_val': _mean(ann_bad_val),
             'n_predicted': n_predicted,
             'n_both': n_both,
-            'agree_valid_pct': agree_valid_pct,
-            'agree_orient_pct': agree_orient_pct,
-            'mae_somites': mae_somites,
-            'mae_bad_somites': mae_bad_somites,
+            'agree_valid_pct': (n_agree_valid / n_both * 100) if n_both > 0 else None,
+            'agree_orient_pct': (n_agree_orientation / n_both * 100) if n_both > 0 else None,
+            'mae_somites': _mean(somite_diffs),
+            'mae_bad_somites': _mean(bad_diffs),
         })
-        rows.append(row)
 
-        for k in ('n_dest_wells', 'n_imaged', 'n_valid', 'n_invalid',
-                  'n_annotated', 'n_predicted', 'n_both',
-                  'n_agree_valid', 'n_agree_orientation',
-                  'sum_somite_err', 'sum_bad_somite_err'):
-            totals[k] += locals()[k]
+        for k, v in {'n_dest_wells': n_dest_wells, 'n_mapped_wells': n_mapped_wells,
+                     'n_imaged': n_imaged, 'n_valid': n_valid, 'n_invalid': n_invalid,
+                     'n_annotated': n_annotated, 'n_predicted': n_predicted,
+                     'n_both': n_both, 'n_training': n_training, 'n_validation': n_validation,
+                     'n_agree_valid': n_agree_valid,
+                     'n_agree_orientation': n_agree_orientation}.items():
+            tk[k] += v
+        t_ann_total += ann_total
+        t_ann_bad += ann_bad
+        t_ann_total_tr += ann_total_tr
+        t_ann_bad_tr += ann_bad_tr
+        t_ann_total_val += ann_total_val
+        t_ann_bad_val += ann_bad_val
+        t_somite_diffs += somite_diffs
+        t_bad_diffs += bad_diffs
 
-    nb = totals['n_both']
+    nd, nm, nb = tk['n_dest_wells'], tk['n_mapped_wells'], tk['n_both']
+    nv = tk['n_valid'] + tk['n_invalid']
     total_row = {
         'name': 'TOTAL',
-        'n_dest_wells': totals['n_dest_wells'],
-        'n_imaged': totals['n_imaged'],
-        'vast_efficiency': (totals['n_imaged'] / totals['n_dest_wells'] * 100) if totals['n_dest_wells'] > 0 else 0,
-        'n_valid': totals['n_valid'],
-        'n_invalid': totals['n_invalid'],
-        'frac_valid': (totals['n_valid'] / (totals['n_valid'] + totals['n_invalid']) * 100) if (totals['n_valid'] + totals['n_invalid']) > 0 else 0,
-        'n_annotated': totals['n_annotated'],
-        'n_predicted': totals['n_predicted'],
+        'n_dest_wells': nd,
+        'n_mapped_wells': nm,
+        'plate_fill_eff': (nm / nd * 100) if nd > 0 else 0,
+        'n_imaged': tk['n_imaged'],
+        'vast_efficiency': (tk['n_imaged'] / nm * 100) if nm > 0 else 0,
+        'n_valid': tk['n_valid'],
+        'n_invalid': tk['n_invalid'],
+        'frac_valid': (tk['n_valid'] / nv * 100) if nv > 0 else 0,
+        'n_annotated': tk['n_annotated'],
+        'mean_total_somites': _mean(t_ann_total),
+        'std_total_somites': _std(t_ann_total),
+        'mean_bad_somites': _mean(t_ann_bad),
+        'std_bad_somites': _std(t_ann_bad),
+        'n_training': tk['n_training'],
+        'mean_total_tr': _mean(t_ann_total_tr),
+        'mean_bad_tr': _mean(t_ann_bad_tr),
+        'n_validation': tk['n_validation'],
+        'mean_total_val': _mean(t_ann_total_val),
+        'mean_bad_val': _mean(t_ann_bad_val),
+        'n_predicted': tk['n_predicted'],
         'n_both': nb,
-        'agree_valid_pct': (totals['n_agree_valid'] / nb * 100) if nb > 0 else None,
-        'agree_orient_pct': (totals['n_agree_orientation'] / nb * 100) if nb > 0 else None,
-        'mae_somites': (totals['sum_somite_err'] / nb) if nb > 0 else None,
-        'mae_bad_somites': (totals['sum_bad_somite_err'] / nb) if nb > 0 else None,
+        'agree_valid_pct': (tk['n_agree_valid'] / nb * 100) if nb > 0 else None,
+        'agree_orient_pct': (tk['n_agree_orientation'] / nb * 100) if nb > 0 else None,
+        'mae_somites': _mean(t_somite_diffs),
+        'mae_bad_somites': _mean(t_bad_diffs),
     }
     return render(request, 'well_explorer/stats_listing.html', {'rows': rows, 'data_total': total_row})
+
+
+#___________________________________________________________________________________________
+def drug_plot_handler(doc: bokeh.document.Document) -> None:
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+
+    all_drug_names = sorted(list(Drug.objects.values_list('derivation_name', flat=True).distinct()))
+    all_exp_names  = sorted([e.name for e in Experiment.objects.all()])
+
+    if not all_drug_names:
+        doc.add_root(bokeh.models.Div(text='<b>No drugs found in the database.</b>'))
+        return
+
+    # --- Widgets ---
+    drug_select = bokeh.models.Select(
+        title='Drug derivation', options=all_drug_names,
+        value=all_drug_names[0], width=350,
+    )
+    exp_multi = bokeh.models.MultiSelect(
+        title='Experiments (Ctrl+click for multi-select)',
+        options=all_exp_names, value=all_exp_names,
+        height=180, width=350,
+    )
+    source_radio = bokeh.models.RadioGroup(
+        labels=['Predicted only', 'Annotated only', 'Both (overlay)'],
+        active=0,
+    )
+    valid_radio = bokeh.models.RadioGroup(
+        labels=['Valid fish only', 'Invalid fish only', 'All fish'],
+        active=0,
+    )
+    ann_subset_radio = bokeh.models.RadioGroup(
+        labels=['All annotations', 'Training set', 'Validation set'],
+        active=0,
+    )
+    update_button = bokeh.models.Button(label='Update plot', button_type='primary', width=350)
+    status_div = bokeh.models.Div(text='', width=350, styles={'color': '#666', 'font-style': 'italic'})
+
+    # --- Figures ---
+    p_total = bokeh.plotting.figure(
+        title='Total somites', width=580, height=360,
+        x_axis_label='Number of somites', y_axis_label='Density',
+        tools='pan,wheel_zoom,box_zoom,reset,save',
+    )
+    p_bad = bokeh.plotting.figure(
+        title='Defective somites', width=580, height=360,
+        x_axis_label='Number of somites', y_axis_label='Density',
+        tools='pan,wheel_zoom,box_zoom,reset,save',
+    )
+
+    # --- Data sources ---
+    src_total_pred = bokeh.models.ColumnDataSource(data=dict(top=[], left=[], right=[]))
+    src_total_ann  = bokeh.models.ColumnDataSource(data=dict(top=[], left=[], right=[]))
+    src_bad_pred   = bokeh.models.ColumnDataSource(data=dict(top=[], left=[], right=[]))
+    src_bad_ann    = bokeh.models.ColumnDataSource(data=dict(top=[], left=[], right=[]))
+
+    p_total.quad(top='top', bottom=0, left='left', right='right',
+                 source=src_total_pred, fill_color='#2196F3', fill_alpha=0.65,
+                 line_color='white', legend_label='Predicted')
+    p_total.quad(top='top', bottom=0, left='left', right='right',
+                 source=src_total_ann, fill_color='#FF9800', fill_alpha=0.65,
+                 line_color='white', legend_label='Annotated')
+    p_total.legend.click_policy = 'hide'
+    p_total.legend.location = 'top_right'
+
+    p_bad.quad(top='top', bottom=0, left='left', right='right',
+               source=src_bad_pred, fill_color='#2196F3', fill_alpha=0.65,
+               line_color='white', legend_label='Predicted')
+    p_bad.quad(top='top', bottom=0, left='left', right='right',
+               source=src_bad_ann, fill_color='#FF9800', fill_alpha=0.65,
+               line_color='white', legend_label='Annotated')
+    p_bad.legend.click_policy = 'hide'
+    p_bad.legend.location = 'top_right'
+
+    stats_div = bokeh.models.Div(text='', width=600, styles={'font-size': '13px', 'line-height': '1.6'})
+
+    # --- Helpers ---
+    def _shared_hist(vals_a, vals_b, n_bins=25):
+        combined = vals_a + vals_b
+        if not combined:
+            empty = dict(top=[], left=[], right=[])
+            return empty, empty
+        arr = np.array(combined, dtype=float)
+        bins = np.linspace(arr.min(), arr.max() + 1e-9, n_bins + 1)
+
+        def _to_dict(vals):
+            if not vals:
+                return dict(top=[0.0] * n_bins,
+                            left=bins[:-1].tolist(), right=bins[1:].tolist())
+            h, _ = np.histogram(np.array(vals, dtype=float), bins=bins, density=True)
+            return dict(top=h.tolist(), left=bins[:-1].tolist(), right=bins[1:].tolist())
+
+        return _to_dict(vals_a), _to_dict(vals_b)
+
+    def _fmt(label, vals):
+        if not vals:
+            return f'<b>{label}</b>: no data<br>'
+        a = np.array(vals, dtype=float)
+        return (f'<b>{label}</b> &mdash; N={len(a)}, '
+                f'mean={a.mean():.2f}, median={float(np.median(a)):.2f}, '
+                f'std={a.std():.2f}<br>')
+
+    # --- Update callback ---
+    def do_update():
+        drug         = drug_select.value
+        selected     = exp_multi.value
+        show_pred    = source_radio.active in (0, 2)
+        show_ann     = source_radio.active in (1, 2)
+        valid_map    = {0: True, 1: False, 2: None}
+        valid_filter = valid_map[valid_radio.active]
+        ann_filter   = {0: None, 1: 'training', 2: 'validation'}[ann_subset_radio.active]
+
+        if not selected:
+            for s in (src_total_pred, src_total_ann, src_bad_pred, src_bad_ann):
+                s.data = dict(top=[], left=[], right=[])
+            status_div.text = 'No experiments selected.'
+            stats_div.text = ''
+            return
+
+        status_div.text = 'Fetching data…'
+
+        pred_total, pred_bad = [], []
+        if show_pred:
+            qs = DestWellPropertiesPredicted.objects.filter(
+                dest_well__source_well__isnull=False,
+                dest_well__source_well__drugs__derivation_name=drug,
+                dest_well__well_plate__experiment__name__in=selected,
+            ).distinct()
+            if valid_filter is not None:
+                qs = qs.filter(valid=valid_filter)
+            for d in qs:
+                if d.n_total_somites != -9999:
+                    pred_total.append(d.n_total_somites)
+                if d.n_bad_somites != -9999:
+                    pred_bad.append(d.n_bad_somites)
+
+        ann_total, ann_bad = [], []
+        if show_ann:
+            qs = DestWellProperties.objects.filter(
+                dest_well__source_well__isnull=False,
+                dest_well__source_well__drugs__derivation_name=drug,
+                dest_well__well_plate__experiment__name__in=selected,
+            ).distinct()
+            if valid_filter is not None:
+                qs = qs.filter(valid=valid_filter)
+            if ann_filter == 'training':
+                qs = qs.filter(use_for_training=True)
+            elif ann_filter == 'validation':
+                qs = qs.filter(use_for_validation=True)
+            for d in qs:
+                if d.n_total_somites != -9999:
+                    ann_total.append(d.n_total_somites)
+                if d.n_bad_somites != -9999:
+                    ann_bad.append(d.n_bad_somites)
+
+        hist_total_pred, hist_total_ann = _shared_hist(pred_total, ann_total)
+        hist_bad_pred,   hist_bad_ann   = _shared_hist(pred_bad,   ann_bad)
+
+        src_total_pred.data = hist_total_pred
+        src_total_ann.data  = hist_total_ann
+        src_bad_pred.data   = hist_bad_pred
+        src_bad_ann.data    = hist_bad_ann
+
+        valid_label = {0: 'valid', 1: 'invalid', 2: 'all'}[valid_radio.active]
+        p_total.title.text = f'Total somites — {drug} ({valid_label} fish)'
+        p_bad.title.text   = f'Defective somites — {drug} ({valid_label} fish)'
+
+        html  = f'<h3>{drug}</h3>'
+        html += '<b>Total somites</b><br>'
+        html += _fmt('Predicted', pred_total)
+        html += _fmt('Annotated', ann_total)
+        html += '<br><b>Defective somites</b><br>'
+        html += _fmt('Predicted', pred_bad)
+        html += _fmt('Annotated', ann_bad)
+        stats_div.text = html
+        status_div.text = ''
+
+    update_button.on_click(do_update)
+
+    # --- Layout ---
+    controls = bokeh.layouts.column(
+        bokeh.models.Div(text='<h3 style="margin:0 0 8px">Controls</h3>'),
+        drug_select,
+        exp_multi,
+        bokeh.models.Div(text='<b>Data source:</b>'),
+        source_radio,
+        bokeh.models.Div(text='<b>Fish validity:</b>'),
+        valid_radio,
+        bokeh.models.Div(text='<b>Annotation subset:</b>'),
+        ann_subset_radio,
+        update_button,
+        status_div,
+        width=370,
+    )
+    plots = bokeh.layouts.column(
+        bokeh.layouts.row(p_total, p_bad),
+        stats_div,
+    )
+    doc.add_root(bokeh.layouts.row(controls, plots))
+
+
+#___________________________________________________________________________________________
+def drug_plot_page(request: HttpRequest) -> HttpResponse:
+    script = bokeh.embed.server_document(request.build_absolute_uri())
+    return render(request, 'well_explorer/drug_plot.html', {'script': script})
