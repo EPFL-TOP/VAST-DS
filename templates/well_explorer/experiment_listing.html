@@ -22,12 +22,13 @@
         <tr>
             <th>Experiment</th>
             <th>Date</th>
-            <th>Dest Wells</th>
-            <th>Imaged Wells</th>
-            <th>VAST Efficiency</th>
-            <th>Number of Fish</th>
-            <th>Number of Valid Fish</th>
-            <th>Number of Invalid Fish</th>
+            <th title="All destination well positions in the plate(s)">Dest Wells</th>
+            <th title="Destination wells mapped to a source well (drug)">Mapped Wells</th>
+            <th title="Wells for which VAST captured an image (have annotation or prediction)">Imaged Wells</th>
+            <th title="Imaged / Mapped — how reliably VAST captured each mapped well">VAST Efficiency</th>
+            <th title="Annotated wells with valid/invalid flag">Annotated Fish</th>
+            <th>Valid</th>
+            <th>Invalid</th>
             <th>% Valid</th>
             <th>Description</th>
         </tr>
@@ -38,7 +39,8 @@
             <td>{{ r.name }}</td>
             <td>{{ r.date_created }}</td>
             <td>{{ r.n_dest_wells }}</td>
-            <td>{{ r.n_wells }}</td>
+            <td>{{ r.n_mapped_wells }}</td>
+            <td>{{ r.n_imaged }}</td>
             <td>{{ r.vast_efficiency|floatformat:1 }}%</td>
             <td>{{ r.n_fish }}</td>
             <td>{{ r.n_fish_valid }}</td>
@@ -55,7 +57,8 @@
             <td>{{ data_total.name }}</td>
             <td>{{ data_total.date_created }}</td>
             <td>{{ data_total.n_dest_wells }}</td>
-            <td>{{ data_total.n_wells }}</td>
+            <td>{{ data_total.n_mapped_wells }}</td>
+            <td>{{ data_total.n_imaged }}</td>
             <td>{{ data_total.vast_efficiency|floatformat:1 }}%</td>
             <td>{{ data_total.n_fish }}</td>
             <td>{{ data_total.n_fish_valid }}</td>
@@ -70,11 +73,12 @@
             <th>Experiment</th>
             <th>Date</th>
             <th>Dest Wells</th>
+            <th>Mapped Wells</th>
             <th>Imaged Wells</th>
             <th>VAST Efficiency</th>
-            <th>Number of Fish</th>
-            <th>Number of Valid Fish</th>
-            <th>Number of Invalid Fish</th>
+            <th>Annotated Fish</th>
+            <th>Valid</th>
+            <th>Invalid</th>
             <th>% Valid</th>
             <th>Description</th>
         </tr>

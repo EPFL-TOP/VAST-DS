@@ -15,6 +15,23 @@
             text-decoration: none; border-radius: 4px; font-size: 14px;
         }
         a.btn-link:hover { background: #556; }
+        /* tooltip */
+        .tip { position: relative; display: inline-block; cursor: help; }
+        .tip .tip-text {
+            visibility: hidden; width: 260px; background: #333; color: #fff;
+            font-size: 12px; font-weight: normal; line-height: 1.4;
+            text-align: left; padding: 7px 10px; border-radius: 5px;
+            position: absolute; z-index: 9; bottom: 125%; left: 50%;
+            transform: translateX(-50%); opacity: 0; transition: opacity .2s;
+            pointer-events: none; white-space: normal;
+        }
+        .tip:hover .tip-text { visibility: visible; opacity: 1; }
+        .tip-icon {
+            display: inline-block; width: 14px; height: 14px; line-height: 14px;
+            background: #667; color: #fff; border-radius: 50%;
+            font-size: 10px; text-align: center; margin-left: 3px;
+            font-weight: bold; vertical-align: middle;
+        }
     </style>
 </head>
 <body>
@@ -180,7 +197,20 @@
             <th rowspan="2">Predicted</th>
             <th rowspan="2">Both</th>
             <th colspan="2" class="group">Agreement</th>
-            <th colspan="2" class="group">MAE (somites)</th>
+            <th colspan="2" class="group">
+                MAE (somites)
+                <span class="tip">
+                    <span class="tip-icon">?</span>
+                    <span class="tip-text">
+                        <b>Mean Absolute Error</b> between predicted and annotated somite counts,
+                        computed only on wells where both values exist.<br><br>
+                        <b>Typical range in this project: 3–7</b><br>
+                        &lt; 3 → excellent prediction<br>
+                        3–7 → good / acceptable<br>
+                        &gt; 7 → model may need retraining
+                    </span>
+                </span>
+            </th>
         </tr>
         <tr>
             <th>Valid flag</th>

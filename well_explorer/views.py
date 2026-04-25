@@ -1556,55 +1556,70 @@ def experiment_list(request: HttpRequest) -> HttpResponse:
 
     n_fish_valid_total = 0
     n_fish_notvalid_total = 0
-    n_wells_total  = 0
+    n_imaged_total = 0
     n_fish_total = 0
     n_dest_wells_total = 0
+    n_mapped_wells_total = 0
     for exp in experiments:
 
         data.append({'name': exp.name, 'date_created': exp.date, 'description': exp.description})
         n_fish_valid = 0
         n_fish_notvalid = 0
         n_fish = 0
-        n_wells = 0
+        n_imaged = 0
         n_dest_wells = 0
+        n_mapped_wells = 0
 
         dest_well_plates = DestWellPlate.objects.filter(experiment=exp)
         for plate in dest_well_plates:
             dest_well_positions = DestWellPosition.objects.filter(well_plate=plate)
             n_dest_wells += dest_well_positions.count()
+            n_mapped_wells += dest_well_positions.filter(source_well__isnull=False).count()
 
             for dest in dest_well_positions:
+                has_ann = False
+                has_pred = False
                 try:
-                    props = dest.dest_well_properties  # reverse OneToOne accessor
-                    n_wells += 1
+                    props = dest.dest_well_properties
+                    has_ann = True
                     if props.valid:
-                        n_fish_valid +=1
+                        n_fish_valid += 1
                     else:
-                        n_fish_notvalid +=1
+                        n_fish_notvalid += 1
                 except DestWellProperties.DoesNotExist:
                     pass
+                try:
+                    dest.dest_well_properties_predicted
+                    has_pred = True
+                except DestWellPropertiesPredicted.DoesNotExist:
+                    pass
+                if has_ann or has_pred:
+                    n_imaged += 1
 
         data[-1]['n_dest_wells'] = n_dest_wells
-        data[-1]['n_wells'] = n_wells
+        data[-1]['n_mapped_wells'] = n_mapped_wells
+        data[-1]['n_imaged'] = n_imaged
         data[-1]['n_fish_valid'] = n_fish_valid
         data[-1]['n_fish_notvalid'] = n_fish_notvalid
         data[-1]['fraction_valid'] = (n_fish_valid / (n_fish_valid + n_fish_notvalid)) * 100 if (n_fish_valid + n_fish_notvalid) > 0 else 0
-        data[-1]['vast_efficiency'] = (n_wells / n_dest_wells) * 100 if n_dest_wells > 0 else 0
+        data[-1]['vast_efficiency'] = (n_imaged / n_mapped_wells) * 100 if n_mapped_wells > 0 else 0
         n_fish = n_fish_valid + n_fish_notvalid
         data[-1]['n_fish'] = n_fish
         n_fish_valid_total += n_fish_valid
         n_fish_notvalid_total += n_fish_notvalid
         n_fish_total += n_fish
-        n_wells_total += n_wells
+        n_imaged_total += n_imaged
         n_dest_wells_total += n_dest_wells
+        n_mapped_wells_total += n_mapped_wells
     data_total = {
         'name': 'TOTAL', 'date_created': '', 'description': '',
         'n_dest_wells': n_dest_wells_total,
-        'n_wells': n_wells_total,
+        'n_mapped_wells': n_mapped_wells_total,
+        'n_imaged': n_imaged_total,
         'n_fish_valid': n_fish_valid_total,
         'n_fish_notvalid': n_fish_notvalid_total,
         'fraction_valid': (n_fish_valid_total / (n_fish_valid_total + n_fish_notvalid_total)) * 100 if (n_fish_valid_total + n_fish_notvalid_total) > 0 else 0,
-        'vast_efficiency': (n_wells_total / n_dest_wells_total) * 100 if n_dest_wells_total > 0 else 0,
+        'vast_efficiency': (n_imaged_total / n_mapped_wells_total) * 100 if n_mapped_wells_total > 0 else 0,
         'n_fish': n_fish_total,
     }
     return render(request, 'well_explorer/experiment_listing.html', {'rows': data, 'data_total': data_total})
@@ -1668,7 +1683,6 @@ def stats_list(request: HttpRequest) -> HttpResponse:
                 try:
                     props = dest.dest_well_properties
                     has_ann = True
-                    n_imaged += 1
                     n_annotated += 1
                     if props.valid:
                         n_valid += 1
@@ -1699,6 +1713,9 @@ def stats_list(request: HttpRequest) -> HttpResponse:
                     n_predicted += 1
                 except DestWellPropertiesPredicted.DoesNotExist:
                     pass
+
+                if has_ann or has_pred:
+                    n_imaged += 1
 
                 if has_ann and has_pred:
                     n_both += 1
