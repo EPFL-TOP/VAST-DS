@@ -24,10 +24,6 @@ import bokeh.plotting
 import bokeh.embed
 import bokeh.layouts
 
-global NCROP
-global NZOOM_WELLS
-NCROP=0
-NZOOM_WELLS=1
 
 from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug, DestWellProperties,DestWellPropertiesPredicted
 
@@ -108,6 +104,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     #TO BE CHANGED WITH ASYNC?????
     os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 
+    nzoom_wells = 1
+    ncrop = 0
 
     experiments = ['Select experiment']
     for exp in Experiment.objects.all():
@@ -299,8 +297,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     #___________________________________________________________________________________________
     def make_zoom_cb_wells(factor):
         def zoom_cb():
-            global NZOOM_WELLS
-            NZOOM_WELLS *= factor
+            nonlocal nzoom_wells
+            nzoom_wells *= factor
             plot_wellplate_dest.width  = int(plot_wellplate_dest.width * factor)
             plot_wellplate_dest.height = int(plot_wellplate_dest.height * factor)
             plot_wellplate_dest_2.width  = int(plot_wellplate_dest_2.width * factor)
@@ -513,8 +511,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         source_img_yfp.data = {'img':[np.flip(image_yfp,0)]}
         # Crop the YFP image around the fish
 
-        global NCROP
-        cropped_yfp = image_yfp[768+NCROP:1280+NCROP, :]
+        nonlocal ncrop
+        cropped_yfp = image_yfp[768+ncrop:1280+ncrop, :]
         source_img_yfp_cropped.data = {'img':[np.flip(cropped_yfp,0)]}
         path_vast = os.path.join(LOCALPATH, dropdown_exp.value,'VAST images', 'Plate 1', 'Well_{}{}'.format(position[0][1], position[0][0]))
         if int(position[0][0]) < 10:
@@ -671,8 +669,8 @@ def vast_handler(doc: bokeh.document.Document) -> None:
         image_yfp = imread(file_YFP)
         source_img_yfp.data = {'img':[np.flip(image_yfp,0)]}
 
-        global NCROP
-        cropped_yfp = image_yfp[768+NCROP:1280+NCROP, :]
+        nonlocal ncrop
+        cropped_yfp = image_yfp[768+ncrop:1280+ncrop, :]
         source_img_yfp_cropped.data = {'img':[np.flip(cropped_yfp,0)]}
 
         path_vast = os.path.join(LOCALPATH, dropdown_exp.value,'VAST images', 'Plate 2', 'Well_{}{}'.format(position[0][1], position[0][0]))
@@ -771,15 +769,15 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     #___________________________________________________________________________________________
     def move_crop_up():
-        global NCROP
+        nonlocal ncrop
         data = source_img_yfp.data['img']
         if len(data) == 0:
             return
         data = data[0]
 
-        NCROP += 10
-        y1=int(768-NCROP)
-        y2=int(1280-NCROP)
+        ncrop += 10
+        y1=int(768-ncrop)
+        y2=int(1280-ncrop)
         # Crop the YFP image around the fish
         cropped_yfp = data[y1:y2, :]
         source_img_yfp_cropped.data = {'img':[cropped_yfp]}
@@ -789,14 +787,14 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     #___________________________________________________________________________________________
     def move_crop_down():
-        global NCROP
+        nonlocal ncrop
         data = source_img_yfp.data['img']
         if len(data) == 0:
             return
         data = data[0]
-        NCROP -= 10
-        y1=int(768-NCROP)
-        y2=int(1280-NCROP)
+        ncrop -= 10
+        y1=int(768-ncrop)
+        y2=int(1280-ncrop)
         # Crop the YFP image around the fish
         cropped_yfp = data[y1:y2, :]
         source_img_yfp_cropped.data = {'img':[cropped_yfp]}
@@ -807,7 +805,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     #___________________________________________________________________________________________
     def load_experiment(attr, old, new):
-        global NZOOM_WELLS
+        nonlocal nzoom_wells
         experiment  = Experiment.objects.get(name=new)
         dest_well_plates   = DestWellPlate.objects.filter(experiment=experiment)
         print('dest_well_plates=', dest_well_plates)
@@ -825,21 +823,21 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 plot_wellplate_dest.x_range.factors = x_96
                 plot_wellplate_dest.y_range.factors = y_96
                 plot_wellplate_dest.title.text = "96 well plate"
-                cds_labels_dest.data = dict(source_labels_96.data, size=[50*NZOOM_WELLS]*len(source_labels_96.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
+                cds_labels_dest.data = dict(source_labels_96.data, size=[50*nzoom_wells]*len(source_labels_96.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
                 plot_wellplate_dest.axis.visible = True
 
             elif dest_well_plate.plate_type == '48':
                 plot_wellplate_dest.x_range.factors = x_48
                 plot_wellplate_dest.y_range.factors = y_48
                 plot_wellplate_dest.title.text = "48 well plate"
-                cds_labels_dest.data = dict(source_labels_48.data, size=[65*NZOOM_WELLS]*len(source_labels_48.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
+                cds_labels_dest.data = dict(source_labels_48.data, size=[65*nzoom_wells]*len(source_labels_48.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
                 plot_wellplate_dest.axis.visible = True
 
             elif dest_well_plate.plate_type == '24':
                 plot_wellplate_dest.x_range.factors = x_24
                 plot_wellplate_dest.y_range.factors = y_24
                 plot_wellplate_dest.title.text = "24 well plate"
-                cds_labels_dest.data = dict(source_labels_24.data, size=[80*NZOOM_WELLS]*len(source_labels_24.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
+                cds_labels_dest.data = dict(source_labels_24.data, size=[80*nzoom_wells]*len(source_labels_24.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
                 plot_wellplate_dest.axis.visible = True
 
         if n_plates==2:
@@ -848,21 +846,21 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 plot_wellplate_dest_2.x_range.factors = x_96
                 plot_wellplate_dest_2.y_range.factors = y_96
                 plot_wellplate_dest_2.title.text = "96 well plate"
-                cds_labels_dest_2.data = dict(source_labels_96.data, size=[50*NZOOM_WELLS]*len(source_labels_96.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
+                cds_labels_dest_2.data = dict(source_labels_96.data, size=[50*nzoom_wells]*len(source_labels_96.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
                 plot_wellplate_dest_2.axis.visible = True
 
             elif dest_well_plate_2.plate_type == '48':
                 plot_wellplate_dest_2.x_range.factors = x_48
                 plot_wellplate_dest_2.y_range.factors = y_48
                 plot_wellplate_dest_2.title.text = "48 well plate"
-                cds_labels_dest_2.data = dict(source_labels_48.data, size=[65*NZOOM_WELLS]*len(source_labels_48.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
+                cds_labels_dest_2.data = dict(source_labels_48.data, size=[65*nzoom_wells]*len(source_labels_48.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
                 plot_wellplate_dest_2.axis.visible = True
 
             elif dest_well_plate_2.plate_type == '24':
                 plot_wellplate_dest_2.x_range.factors = x_24
                 plot_wellplate_dest_2.y_range.factors = y_24
                 plot_wellplate_dest_2.title.text = "24 well plate"
-                cds_labels_dest_2.data = dict(source_labels_24.data, size=[80*NZOOM_WELLS]*len(source_labels_24.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
+                cds_labels_dest_2.data = dict(source_labels_24.data, size=[80*nzoom_wells]*len(source_labels_24.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
                 plot_wellplate_dest_2.axis.visible = True
 
         LOCALPATH = LOCALPATH_HIVE
@@ -1560,6 +1558,7 @@ def experiment_list(request: HttpRequest) -> HttpResponse:
     n_fish_notvalid_total = 0
     n_wells_total  = 0
     n_fish_total = 0
+    n_dest_wells_total = 0
     for exp in experiments:
 
         data.append({'name': exp.name, 'date_created': exp.date, 'description': exp.description})
@@ -1567,11 +1566,12 @@ def experiment_list(request: HttpRequest) -> HttpResponse:
         n_fish_notvalid = 0
         n_fish = 0
         n_wells = 0
-
+        n_dest_wells = 0
 
         dest_well_plates = DestWellPlate.objects.filter(experiment=exp)
         for plate in dest_well_plates:
             dest_well_positions = DestWellPosition.objects.filter(well_plate=plate)
+            n_dest_wells += dest_well_positions.count()
 
             for dest in dest_well_positions:
                 try:
@@ -1584,15 +1584,145 @@ def experiment_list(request: HttpRequest) -> HttpResponse:
                 except DestWellProperties.DoesNotExist:
                     pass
 
+        data[-1]['n_dest_wells'] = n_dest_wells
         data[-1]['n_wells'] = n_wells
         data[-1]['n_fish_valid'] = n_fish_valid
         data[-1]['n_fish_notvalid'] = n_fish_notvalid
         data[-1]['fraction_valid'] = (n_fish_valid / (n_fish_valid + n_fish_notvalid)) * 100 if (n_fish_valid + n_fish_notvalid) > 0 else 0
+        data[-1]['vast_efficiency'] = (n_wells / n_dest_wells) * 100 if n_dest_wells > 0 else 0
         n_fish = n_fish_valid + n_fish_notvalid
         data[-1]['n_fish'] = n_fish
         n_fish_valid_total += n_fish_valid
         n_fish_notvalid_total += n_fish_notvalid
         n_fish_total += n_fish
         n_wells_total += n_wells
-    data_total = {'name': 'TOTAL', 'date_created': '', 'description': '', 'n_wells': n_wells_total, 'n_fish_valid': n_fish_valid_total, 'n_fish_notvalid': n_fish_notvalid_total, 'fraction_valid': (n_fish_valid_total / (n_fish_valid_total + n_fish_notvalid_total)) * 100 if (n_fish_valid_total + n_fish_notvalid_total) > 0 else 0,  'n_fish': n_fish_total}
+        n_dest_wells_total += n_dest_wells
+    data_total = {
+        'name': 'TOTAL', 'date_created': '', 'description': '',
+        'n_dest_wells': n_dest_wells_total,
+        'n_wells': n_wells_total,
+        'n_fish_valid': n_fish_valid_total,
+        'n_fish_notvalid': n_fish_notvalid_total,
+        'fraction_valid': (n_fish_valid_total / (n_fish_valid_total + n_fish_notvalid_total)) * 100 if (n_fish_valid_total + n_fish_notvalid_total) > 0 else 0,
+        'vast_efficiency': (n_wells_total / n_dest_wells_total) * 100 if n_dest_wells_total > 0 else 0,
+        'n_fish': n_fish_total,
+    }
     return render(request, 'well_explorer/experiment_listing.html', {'rows': data, 'data_total': data_total})
+
+#___________________________________________________________________________________________
+def stats_list(request: HttpRequest) -> HttpResponse:
+    experiments = Experiment.objects.all()
+    rows = []
+
+    totals = {
+        'n_dest_wells': 0, 'n_imaged': 0,
+        'n_valid': 0, 'n_invalid': 0,
+        'n_annotated': 0, 'n_predicted': 0, 'n_both': 0,
+        'n_agree_valid': 0,
+        'n_agree_orientation': 0,
+        'sum_somite_err': 0, 'sum_bad_somite_err': 0,
+    }
+
+    for exp in experiments:
+        row = {'name': exp.name, 'date': exp.date}
+        n_dest_wells = 0
+        n_imaged = 0
+        n_valid = 0
+        n_invalid = 0
+        n_annotated = 0
+        n_predicted = 0
+        n_both = 0
+        n_agree_valid = 0
+        n_agree_orientation = 0
+        sum_somite_err = 0
+        sum_bad_somite_err = 0
+
+        dest_well_plates = DestWellPlate.objects.filter(experiment=exp)
+        for plate in dest_well_plates:
+            dest_well_positions = DestWellPosition.objects.filter(well_plate=plate)
+            n_dest_wells += dest_well_positions.count()
+
+            for dest in dest_well_positions:
+                has_annotated = False
+                has_predicted = False
+                props = None
+                pred = None
+
+                try:
+                    props = dest.dest_well_properties
+                    has_annotated = True
+                    n_imaged += 1
+                    n_annotated += 1
+                    if props.valid:
+                        n_valid += 1
+                    else:
+                        n_invalid += 1
+                except DestWellProperties.DoesNotExist:
+                    pass
+
+                try:
+                    pred = dest.dest_well_properties_predicted
+                    has_predicted = True
+                    n_predicted += 1
+                except DestWellPropertiesPredicted.DoesNotExist:
+                    pass
+
+                if has_annotated and has_predicted:
+                    n_both += 1
+                    if props.valid == pred.valid:
+                        n_agree_valid += 1
+                    if props.correct_orientation == pred.correct_orientation:
+                        n_agree_orientation += 1
+                    if props.n_total_somites != -9999 and pred.n_total_somites != -9999:
+                        sum_somite_err += abs(props.n_total_somites - pred.n_total_somites)
+                    if props.n_bad_somites != -9999 and pred.n_bad_somites != -9999:
+                        sum_bad_somite_err += abs(props.n_bad_somites - pred.n_bad_somites)
+
+        vast_eff = (n_imaged / n_dest_wells * 100) if n_dest_wells > 0 else 0
+        frac_valid = (n_valid / (n_valid + n_invalid) * 100) if (n_valid + n_invalid) > 0 else 0
+        agree_valid_pct = (n_agree_valid / n_both * 100) if n_both > 0 else None
+        agree_orient_pct = (n_agree_orientation / n_both * 100) if n_both > 0 else None
+        mae_somites = (sum_somite_err / n_both) if n_both > 0 else None
+        mae_bad_somites = (sum_bad_somite_err / n_both) if n_both > 0 else None
+
+        row.update({
+            'n_dest_wells': n_dest_wells,
+            'n_imaged': n_imaged,
+            'vast_efficiency': vast_eff,
+            'n_valid': n_valid,
+            'n_invalid': n_invalid,
+            'frac_valid': frac_valid,
+            'n_annotated': n_annotated,
+            'n_predicted': n_predicted,
+            'n_both': n_both,
+            'agree_valid_pct': agree_valid_pct,
+            'agree_orient_pct': agree_orient_pct,
+            'mae_somites': mae_somites,
+            'mae_bad_somites': mae_bad_somites,
+        })
+        rows.append(row)
+
+        for k in ('n_dest_wells', 'n_imaged', 'n_valid', 'n_invalid',
+                  'n_annotated', 'n_predicted', 'n_both',
+                  'n_agree_valid', 'n_agree_orientation',
+                  'sum_somite_err', 'sum_bad_somite_err'):
+            totals[k] += locals()[k]
+
+    nb = totals['n_both']
+    total_row = {
+        'name': 'TOTAL',
+        'n_dest_wells': totals['n_dest_wells'],
+        'n_imaged': totals['n_imaged'],
+        'vast_efficiency': (totals['n_imaged'] / totals['n_dest_wells'] * 100) if totals['n_dest_wells'] > 0 else 0,
+        'n_valid': totals['n_valid'],
+        'n_invalid': totals['n_invalid'],
+        'frac_valid': (totals['n_valid'] / (totals['n_valid'] + totals['n_invalid']) * 100) if (totals['n_valid'] + totals['n_invalid']) > 0 else 0,
+        'n_annotated': totals['n_annotated'],
+        'n_predicted': totals['n_predicted'],
+        'n_both': nb,
+        'agree_valid_pct': (totals['n_agree_valid'] / nb * 100) if nb > 0 else None,
+        'agree_orient_pct': (totals['n_agree_orientation'] / nb * 100) if nb > 0 else None,
+        'mae_somites': (totals['sum_somite_err'] / nb) if nb > 0 else None,
+        'mae_bad_somites': (totals['sum_bad_somite_err'] / nb) if nb > 0 else None,
+    }
+    return render(request, 'well_explorer/stats_listing.html', {'rows': rows, 'data_total': total_row})
