@@ -1061,7 +1061,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     saveimages_button.on_click(saveimages_callback_short)
 
     predict_button = bokeh.models.Button(label="Predict", button_type="success", width=150)
-    predict_button_fullwell = bokeh.models.Button(label="Predict Full well", button_type="success", width=150)
+    predict_button_fullwell = bokeh.models.Button(label="Predict Full Plate", button_type="success", width=150)
 
 #___________________________________________________________________________________________
     def predict_callback():
@@ -1158,7 +1158,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             print('Please select an experiment first')
             image_message.text = "<b style='color:red; font-size:18px;'>Please select an experiment first</b>"
             image_message.visible = True
-            predict_button_fullwell.label = "Predict"
+            predict_button_fullwell.label = "Predict Full Plate"
             predict_button_fullwell.button_type = "success"
             return
 
@@ -1211,7 +1211,7 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                     dest_well_preds.correct_orientation = True if  prob_ori.mean()>0.5 else False
                     dest_well_preds.save()
 
-        predict_button_fullwell.label = "Predict"
+        predict_button_fullwell.label = "Predict Full Plate"
         predict_button_fullwell.button_type = "success"
 
 #___________________________________________________________________________________________
