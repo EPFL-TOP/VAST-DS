@@ -35,13 +35,9 @@ urlpatterns = [
 
     path("", TemplateView.as_view(template_name="index.html"), name="index"),
 
-    path(r"well_mapping/", views_wm.index, name="index"),
-    path(r"well_mapping/bokeh_dashboard", views_wm.bokeh_dashboard, name="bokeh_dashboard_well_mapping"),
-    
-    path(r"well_explorer/", views_we.index, name="index"),
-    path(r"well_explorer/drugs_listing", views_we.drug_list, name="drugs_listing"),
-    path(r"well_explorer/experiment_listing", views_we.experiment_list, name="experiment_listing"),
-    path(r"well_explorer/bokeh_dashboard", views_we.bokeh_dashboard, name="bokeh_dashboard_well_explorer"),
+    path("well_mapping/", include("well_mapping.urls")),
+    path("well_explorer/", include("well_explorer.urls")),
+
     path('admin/', admin.site.urls),
 ]
 
