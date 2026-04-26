@@ -2161,3 +2161,10 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
 def drug_plot_page(request: HttpRequest) -> HttpResponse:
     script = bokeh.embed.server_document(request.build_absolute_uri())
     return render(request, 'well_explorer/drug_plot.html', {'script': script})
+
+
+#___________________________________________________________________________________________
+def docs_page(request: HttpRequest) -> HttpResponse:
+    """In-app documentation: project overview, page reference, retraining
+    instructions. Mirrors the most actionable parts of the README."""
+    return render(request, 'well_explorer/docs.html', {})

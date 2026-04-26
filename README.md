@@ -126,27 +126,38 @@ you put in `test/` have **both flags `false`** — they'll then show up in the
 
 ### Retraining
 
-All three scripts share the same CLI shape and write a best-checkpoint plus a
-JSON file with held-out test metrics next to it.
+> **Order matters**: retrain the **orientation classifier first**, then re-run
+> orientation correction on every well, then retrain the somite counter and
+> validity classifier. The somite/validity training data is typically sourced
+> from each well's `corrected_orientation/` subfolder, so refreshing those
+> folders with the new orientation model produces cleaner training data.
 
 ```bash
-# Somite counter (regression, 2 outputs)
+# 1. Orientation classifier (BF images)
+python -m somiteCounting.training_orientation \
+    --input_data_path D:\vast\VAST-DS\training_data \
+    --model_save_path checkpoints \
+    --epochs 40 --batch_size 8
+
+# 2. Refresh corrected_orientation/ folders for every well using the new model.
+#    Walks each experiment, picks the best of {no flip, hflip, vflip, hflip+vflip}
+#    on the BF image, and writes the flipped copies to <well>/corrected_orientation/.
+python somiteCounting/orientfish.py
+
+# 3. Re-extract train/, valid/, test/ folders for somites + validity from the
+#    freshly canonicalised images.
+
+# 4. Somite counter (regression, 2 outputs — YFP images)
 python -m somiteCounting.training \
     --input_data_path D:\vast\VAST-DS\training_data \
     --model_save_path checkpoints \
     --epochs 150 --batch_size 8 --patience 7
 
-# Fish-validity classifier
+# 5. Fish-validity classifier (YFP images)
 python -m somiteCounting.training_valid \
     --input_data_path D:\vast\VAST-DS\training_data \
     --model_save_path checkpoints \
     --epochs 50 --batch_size 8
-
-# Orientation classifier
-python -m somiteCounting.training_orientation \
-    --input_data_path D:\vast\VAST-DS\training_data \
-    --model_save_path checkpoints \
-    --epochs 40 --batch_size 8
 ```
 
 Each script also runs as `python somiteCounting/<file>.py …` if you prefer

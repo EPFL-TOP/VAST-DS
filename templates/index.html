@@ -86,6 +86,7 @@
   <nav class="sidebar">
     <div class="sidebar-section">Navigation</div>
     <a href="{% url 'index' %}">&#8962; Home</a>
+    <a href="{% url 'docs' %}">&#9432; Documentation</a>
 
     <hr>
     <div class="sidebar-section">Well Mapping</div>
@@ -114,6 +115,8 @@
       Use the sidebar or the cards below to navigate to any module.
       Start with <strong>Well Mapping</strong> to set up an experiment,
       then use the <strong>Well Explorer</strong> to review images, run predictions, and analyse results.
+      New here? See the <a href="{% url 'docs' %}">documentation</a> for an overview, retraining instructions,
+      and the project roadmap.
     </p>
 
     <!-- Well Mapping -->
@@ -190,6 +193,21 @@
         <a class="card-link" href="{% url 'drug_plot' %}">Open plot</a>
       </div>
 
+    </div>
+
+    <!-- Help -->
+    <div class="section-title">Help</div>
+    <div class="card-grid">
+      <div class="tool-card">
+        <div class="card-icon">&#9432;</div>
+        <p class="card-title">Documentation</p>
+        <p class="card-desc">
+          Project overview, page reference, training data layout, retraining
+          instructions for all three deep-learning models (in the right order),
+          and the upcoming roadmap.
+        </p>
+        <a class="card-link" href="{% url 'docs' %}">Read the docs</a>
+      </div>
     </div>
 
     {% endblock %}

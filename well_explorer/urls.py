@@ -11,4 +11,5 @@ urlpatterns = [
     path(r"bokeh_dashboard", views.bokeh_dashboard, name="bokeh_dashboard_well_explorer"),
     path(r"stats_listing", views.stats_list, name="stats_listing"),
     path(r"drug_plot", views.drug_plot_page, name="drug_plot"),
+    path(r"docs", views.docs_page, name="docs"),
 ]
