@@ -1,294 +1,183 @@
+"""Orientation-classifier training script.
+
+Predicts the `correct_orientation` flag in DestWellProperties (head should be
+on the left side of the BF image). Trained on **brightfield** images (filenames
+*without* 'YFP' — orientation is more visible there than in YFP).
+
+Re-exports `preprocess_image` and `OrientationClassifier` for back-compat with
+`well_explorer/views.py` and `orientfish.py`.
+"""
+
 import os
+import sys
 import json
-import numpy as np
-import random
+import argparse
+from pathlib import Path
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
-import torch.optim as optim
 
-from torchvision import models
-from torchvision.models import ResNet18_Weights
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PIL import Image
-
-
-# =========================================================
-# PREPROCESSING (SHARED LOGIC)
-# =========================================================
-def preprocess_image(img_np, resize=(224, 224)):
-    """
-    Robust normalization + resize
-    """
-    img_np = img_np.astype(np.float32)
-
-    # Robust normalization (avoid hot pixels dominating)
-    p1, p99 = np.percentile(img_np, [1, 99])
-    img_np = np.clip(img_np, p1, p99)
-    img_np = (img_np - p1) / (p99 - p1 + 1e-6)
-
-    # Convert to tensor
-    #img = torch.from_numpy(img_np)[None, None]  # 1x1xH xW
-    img = torch.from_numpy(img_np).float()[None, None]
-    
-    # Resize
-    img = F.interpolate(img, size=resize, mode="bilinear", align_corners=False)
-
-    return img.squeeze(0)  # 1xHxW
+from somiteCounting._common import (
+    BaseAugment,
+    ImageJsonDataset,
+    evaluate_classification,
+    make_grayscale_resnet18,
+    preprocess_image,   # re-exported for back-compat (well_explorer/views.py, orientfish.py)
+    train_loop,
+)
 
 
-# =========================================================
-# AUGMENTATION (SAFE FOR ORIENTATION TASK)
-# =========================================================
-class OrientationAugment:
-    def __init__(self, resize=(224, 224), rotation=10,
-                 brightness=0.2, contrast=0.2, noise=0.02):
-        self.resize = resize
-        self.rotation = rotation
-        self.brightness = brightness
-        self.contrast = contrast
-        self.noise = noise
+# =====================================================================
+# Dataset — BF images annotated with `correct_orientation`
+# =====================================================================
+class OrientationDataset(ImageJsonDataset):
+    REQUIRED_KEYS = ()                 # we accept missing keys, then filter below
+    FILENAME_FILTER = "NOT_YFP"        # orientation labels live on BF images
 
-    def __call__(self, img_np):
-        # --- preprocess first ---
-        img = preprocess_image(img_np, self.resize)  # 1,H,W
+    def accept_sample(self, info):
+        if info.get("correct_orientation") is None:
+            return False
+        if not info.get("valid", True):
+            return False
+        return True
 
-        # Convert to PIL for geometric transforms
-        #img_pil = Image.fromarray((img.squeeze().numpy() * 255).astype(np.uint8), mode="L")
-        img_pil = Image.fromarray((img.squeeze().numpy() * 255).astype(np.uint8))
-        # --- SMALL ROTATION (safe) ---
-        if self.rotation > 0:
-            angle = random.uniform(-self.rotation, self.rotation)
-            img_pil = img_pil.rotate(angle)
-
-        # Back to tensor
-        #img = torch.from_numpy(np.array(img_pil).astype(np.float32) / 255.0).unsqueeze(0)
-        img = torch.from_numpy(np.array(img_pil)).float() / 255.0
-        img = img.unsqueeze(0)
-
-        # --- INTENSITY AUGMENT ---
-        if self.brightness > 0:
-            factor = 1.0 + random.uniform(-self.brightness, self.brightness)
-            img = img * factor
-
-        if self.contrast > 0:
-            mean = img.mean()
-            factor = 1.0 + random.uniform(-self.contrast, self.contrast)
-            img = (img - mean) * factor + mean
-
-        # --- NOISE ---
-        if self.noise > 0:
-            img = img + torch.randn_like(img) * self.noise
-
-        img = torch.clamp(img, 0, 1)
-
-        return img
+    def extract_label(self, info):
+        return torch.tensor(1.0 if info.get("correct_orientation", False) else 0.0,
+                            dtype=torch.float32)
 
 
-# =========================================================
-# DATASET
-# =========================================================
-class OrientationDataset(Dataset):
-    """
-    Each image.json contains {"correct_orientation": true/false}
-    """
-
-    def __init__(self, folder, transform=None):
-        self.folder = folder
-        self.transform = transform
-
-        self.samples = []
-        for fname in os.listdir(folder):
-            if fname.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
-
-                if 'YFP' in fname:
-                    continue
-
-                img_path = os.path.join(folder, fname)
-                json_path = os.path.splitext(img_path)[0] + ".json"
-
-                if not os.path.exists(json_path):
-                    continue
-
-                with open(json_path, "r") as f:
-                    info = json.load(f)
-
-                if info.get("correct_orientation") is None:
-                    continue
-                if not info.get("valid", True):
-                    continue
-
-                self.samples.append((img_path, json_path))
-
-        self.samples.sort()
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        img_path, json_path = self.samples[idx]
-
-        # --- label ---
-        with open(json_path, "r") as f:
-            info = json.load(f)
-
-        label = 1 if info.get("correct_orientation", False) else 0
-        label = torch.tensor(label, dtype=torch.float32)
-
-        # --- image ---
-        img_np = np.array(Image.open(img_path)).astype(np.float32)
-
-        if self.transform:
-            img_tensor = self.transform(img_np)
-        else:
-            img_tensor = preprocess_image(img_np)
-
-        return img_tensor, label
+# =====================================================================
+# Augmentation policy: NEVER flip — flipping inverts the label.
+# Small rotation only, plus intensity jitter and a touch of noise.
+# =====================================================================
+class OrientationAugment(BaseAugment):
+    def __init__(self, resize=(224, 224)):
+        super().__init__(
+            resize=resize,
+            horizontal_flip=False,
+            vertical_flip=False,
+            rotation=10,
+            brightness=0.2,
+            contrast=0.2,
+            noise=0.02,
+        )
 
 
-# =========================================================
-# MODEL (PRETRAINED)
-# =========================================================
+# =====================================================================
+# Model — kept as a class for back-compat; well_explorer/views.py imports it.
+# =====================================================================
 class OrientationClassifier(nn.Module):
-    def __init__(self):
+    def __init__(self, dropout=0.3,
+                 unfreeze_layers=("layer3", "layer4"), unfreeze_all=False):
         super().__init__()
-
-        base = models.resnet18(weights=ResNet18_Weights.DEFAULT)
-
-        # Adapt first conv for grayscale
-        old_conv1 = base.conv1
-        base.conv1 = nn.Conv2d(
-            1, old_conv1.out_channels,
-            kernel_size=old_conv1.kernel_size,
-            stride=old_conv1.stride,
-            padding=old_conv1.padding,
-            bias=False
+        self.model = make_grayscale_resnet18(
+            num_outputs=1,
+            dropout=dropout,
+            unfreeze_layers=unfreeze_layers,
+            unfreeze_all=unfreeze_all,
         )
-
-        base.conv1.weight.data = old_conv1.weight.data.mean(dim=1, keepdim=True)
-
-        #base.fc = nn.Linear(base.fc.in_features, 1)
-
-        # 👇 add dropout before FC
-        base.fc = nn.Sequential(
-            nn.Dropout(p=0.3),
-            nn.Linear(base.fc.in_features, 1)
-        )
-
-        self.model = base
 
     def forward(self, x):
         return self.model(x)
 
 
-# =========================================================
-# TRAINING
-# =========================================================
-def train_orientation(data_folder,
-                      save_path="orientation_best.pth",
-                      epochs=30,
-                      batch_size=8,
-                      lr=1e-4):
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+# =====================================================================
+# Training entry point
+# =====================================================================
+def train_orientation(input_data_path: str,
+                      model_save_path: str,
+                      epochs: int = 40,
+                      batch_size: int = 8,
+                      patience: int = 7,
+                      lr_head: float = 1e-4,
+                      lr_backbone: float = 1e-5):
     transform = OrientationAugment()
+    train_dataset = OrientationDataset(os.path.join(input_data_path, "train"),
+                                       transform=transform)
+    valid_dataset = OrientationDataset(os.path.join(input_data_path, "valid"),
+                                       transform=lambda x: preprocess_image(x))
+    print(f"Orientation training: train={len(train_dataset)}, valid={len(valid_dataset)}")
 
-    train_dataset = OrientationDataset(
-        os.path.join(data_folder, "train"),
-        transform=transform
-    )
+    if len(train_dataset) == 0:
+        raise RuntimeError(f"No training samples in {input_data_path}/train")
 
-    valid_dataset = OrientationDataset(
-        os.path.join(data_folder, "valid"),
-        transform=lambda x: preprocess_image(x)  # NO augmentation
-    )
+    model = OrientationClassifier()
 
-    print(f"Train: {len(train_dataset)} | Valid: {len(valid_dataset)}")
+    bce = nn.BCEWithLogitsLoss()
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
+    def _criterion(pred, label):
+        return bce(pred.squeeze(-1), label)
 
-    model = OrientationClassifier().to(device)
-
-    criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-
-    best_val_loss = float("inf")
-
-    for epoch in range(epochs):
-
-        # ================= TRAIN =================
-        model.train()
-        train_loss = 0
-        correct = 0
-
-        for imgs, labels in train_loader:
-            imgs = imgs.to(device)
-            labels = labels.to(device).unsqueeze(1)
-
-            logits = model(imgs)
-            loss = criterion(logits, labels)
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            train_loss += loss.item() * imgs.size(0)
-
-            preds = (torch.sigmoid(logits) > 0.5).float()
-            correct += (preds == labels).sum().item()
-
-        train_loss /= len(train_dataset)
-        train_acc = correct / len(train_dataset)
-
-        # ================= VALID =================
-        model.eval()
-        val_loss = 0
-        correct = 0
-
+    def _accuracy(pred, label):
         with torch.no_grad():
-            for imgs, labels in valid_loader:
-                imgs = imgs.to(device)
-                labels = labels.to(device).unsqueeze(1)
+            p = (torch.sigmoid(pred.squeeze(-1)) > 0.5).float()
+            return (p == label).float().mean().item()
 
-                logits = model(imgs)
-                loss = criterion(logits, labels)
-
-                val_loss += loss.item() * imgs.size(0)
-
-                preds = (torch.sigmoid(logits) > 0.5).float()
-                correct += (preds == labels).sum().item()
-
-        val_loss /= len(valid_dataset)
-        val_acc = correct / len(valid_dataset)
-
-        print(f"Epoch {epoch+1}/{epochs} | "
-              f"Train Loss: {train_loss:.4f}, Acc: {train_acc:.3f} | "
-              f"Val Loss: {val_loss:.4f}, Acc: {val_acc:.3f}")
-
-        # Save best
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            torch.save({
-                "model_state_dict": model.state_dict()
-            }, save_path)
-            print("  Saved best model.")
-
-    print("Training finished.")
-
-
-# =========================================================
-# MAIN
-# =========================================================
-if __name__ == "__main__":
-    train_orientation(
-        data_folder=r"D:\vast\VAST-DS\training_data",
-        save_path=r"checkpoints\orientation_best.pth",
-        epochs=40,
-        batch_size=8,
-        lr=1e-4
+    save_file = os.path.join(model_save_path, "orientation_best.pth")
+    model = train_loop(
+        model=model,
+        train_dataset=train_dataset,
+        valid_dataset=valid_dataset,
+        criterion=_criterion,
+        save_path=save_file,
+        epochs=epochs,
+        batch_size=batch_size,
+        patience=patience,
+        lr_head=lr_head,
+        lr_backbone=lr_backbone,
+        extra_metric=_accuracy,
     )
+    return model
 
+
+def evaluate_test_set(model, input_data_path, model_save_path,
+                      test_path: str = None, batch_size: int = 8):
+    test_path = test_path or os.path.join(input_data_path, "test")
+    if not os.path.isdir(test_path):
+        print(f"[test eval] No test folder at {test_path} — skipping.")
+        return None
+    test_dataset = OrientationDataset(test_path, transform=lambda x: preprocess_image(x))
+    if len(test_dataset) == 0:
+        print(f"[test eval] Test folder {test_path} is empty — skipping.")
+        return None
+    print(f"[test eval] Held-out test set: {len(test_dataset)} images")
+    report = evaluate_classification(model, test_dataset, batch_size=batch_size)
+    for k, v in report.items():
+        print(f"  {k}: {v:.4f}" if isinstance(v, float) else f"  {k}: {v}")
+    out_path = os.path.join(model_save_path, "orientation_test_metrics.json")
+    with open(out_path, "w") as f:
+        json.dump(report, f, indent=2)
+    print(f"[test eval] Saved metrics to {out_path}")
+    return report
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train orientation classifier")
+    parser.add_argument("--epochs", type=int, default=40)
+    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--lr_head", type=float, default=1e-4)
+    parser.add_argument("--lr_backbone", type=float, default=1e-5)
+    parser.add_argument("--patience", type=int, default=7)
+    parser.add_argument("--input_data_path", type=str, default=r"D:\vast\training_data")
+    parser.add_argument("--model_save_path", type=str, default="checkpoints")
+    parser.add_argument("--test_data_path", type=str, default=None)
+    parser.add_argument("--skip_test_eval", action="store_true", default=False)
+    args = parser.parse_args()
+
+    os.makedirs(args.model_save_path, exist_ok=True)
+    model = train_orientation(
+        input_data_path=args.input_data_path,
+        model_save_path=args.model_save_path,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        patience=args.patience,
+        lr_head=args.lr_head,
+        lr_backbone=args.lr_backbone,
+    )
+    if not args.skip_test_eval:
+        evaluate_test_set(model, args.input_data_path, args.model_save_path,
+                          test_path=args.test_data_path,
+                          batch_size=args.batch_size)

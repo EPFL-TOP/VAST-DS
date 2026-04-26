@@ -188,35 +188,41 @@
 </table>
 
 <!-- ===== PREDICTION vs ANNOTATION TABLE ===== -->
-<h3>Prediction vs annotation comparison</h3>
+<h3>
+    Prediction vs annotation comparison
+    <span class="tip">
+        <span class="tip-icon">?</span>
+        <span class="tip-text" style="width:340px">
+            Each metric is split by which subset the annotated well belongs to,
+            using the <code>use_for_training</code> / <code>use_for_validation</code>
+            flags on <code>DestWellProperties</code>:<br><br>
+            <b>Train</b>: wells the model was trained on. MAE here is biased low —
+            don't trust it as generalisation error.<br>
+            <b>Val</b>: wells used for early stopping during training. Slightly biased low.<br>
+            <b>Held-out</b>: annotated wells flagged as neither — this is the only
+            <i>honest</i> generalisation metric.<br>
+            <b>All</b>: combined — useful for sanity checking only.<br><br>
+            <b>MAE</b> (Mean Absolute Error) on somite counts, typical range 3–7:<br>
+            &lt;3 → excellent · 3–7 → good · &gt;7 → consider retraining.
+        </span>
+    </span>
+</h3>
 <table id="pred-table" class="display compact">
     <thead>
         <tr>
             <th rowspan="2">Experiment</th>
             <th rowspan="2">Annotated</th>
             <th rowspan="2">Predicted</th>
-            <th rowspan="2">Both</th>
-            <th colspan="2" class="group">Agreement</th>
-            <th colspan="2" class="group">
-                MAE (somites)
-                <span class="tip">
-                    <span class="tip-icon">?</span>
-                    <span class="tip-text">
-                        <b>Mean Absolute Error</b> between predicted and annotated somite counts,
-                        computed only on wells where both values exist.<br><br>
-                        <b>Typical range in this project: 3–7</b><br>
-                        &lt; 3 → excellent prediction<br>
-                        3–7 → good / acceptable<br>
-                        &gt; 7 → model may need retraining
-                    </span>
-                </span>
-            </th>
+            <th colspan="5" class="group" style="background:#445">All (train + val + held-out)</th>
+            <th colspan="3" class="group" style="background:#7a5a2e">Train (biased low)</th>
+            <th colspan="3" class="group" style="background:#5a7a2e">Validation</th>
+            <th colspan="3" class="group" style="background:#2e5a7a">Held-out (honest)</th>
         </tr>
         <tr>
-            <th>Valid flag</th>
-            <th>Orientation</th>
-            <th>Total somites</th>
-            <th>Defective somites</th>
+            <th>n</th><th>Valid agree</th><th>Orient agree</th><th>MAE total</th><th>MAE def.</th>
+            <th>n</th><th>MAE total</th><th>MAE def.</th>
+            <th>n</th><th>MAE total</th><th>MAE def.</th>
+            <th>n</th><th>MAE total</th><th>MAE def.</th>
         </tr>
     </thead>
     <tbody>
@@ -225,11 +231,20 @@
             <td>{{ r.name }}</td>
             <td>{{ r.n_annotated }}</td>
             <td>{{ r.n_predicted }}</td>
-            <td>{{ r.n_both }}</td>
-            <td>{% if r.agree_valid_pct is not None %}{{ r.agree_valid_pct|floatformat:1 }}%{% else %}<span class="na">—</span>{% endif %}</td>
-            <td>{% if r.agree_orient_pct is not None %}{{ r.agree_orient_pct|floatformat:1 }}%{% else %}<span class="na">—</span>{% endif %}</td>
-            <td>{% if r.mae_somites is not None %}{{ r.mae_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
-            <td>{% if r.mae_bad_somites is not None %}{{ r.mae_bad_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ r.cmp_all.n }}</td>
+            <td>{% if r.cmp_all.agree_valid_pct is not None %}{{ r.cmp_all.agree_valid_pct|floatformat:1 }}%{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.cmp_all.agree_orient_pct is not None %}{{ r.cmp_all.agree_orient_pct|floatformat:1 }}%{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.cmp_all.mae_total is not None %}{{ r.cmp_all.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.cmp_all.mae_bad is not None %}{{ r.cmp_all.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ r.cmp_train.n }}</td>
+            <td>{% if r.cmp_train.mae_total is not None %}{{ r.cmp_train.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.cmp_train.mae_bad is not None %}{{ r.cmp_train.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ r.cmp_val.n }}</td>
+            <td>{% if r.cmp_val.mae_total is not None %}{{ r.cmp_val.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.cmp_val.mae_bad is not None %}{{ r.cmp_val.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ r.cmp_heldout.n }}</td>
+            <td>{% if r.cmp_heldout.mae_total is not None %}{{ r.cmp_heldout.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.cmp_heldout.mae_bad is not None %}{{ r.cmp_heldout.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
         </tr>
         {% endfor %}
     </tbody>
@@ -238,17 +253,28 @@
             <td>{{ data_total.name }}</td>
             <td>{{ data_total.n_annotated }}</td>
             <td>{{ data_total.n_predicted }}</td>
-            <td>{{ data_total.n_both }}</td>
-            <td>{% if data_total.agree_valid_pct is not None %}{{ data_total.agree_valid_pct|floatformat:1 }}%{% else %}<span class="na">—</span>{% endif %}</td>
-            <td>{% if data_total.agree_orient_pct is not None %}{{ data_total.agree_orient_pct|floatformat:1 }}%{% else %}<span class="na">—</span>{% endif %}</td>
-            <td>{% if data_total.mae_somites is not None %}{{ data_total.mae_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
-            <td>{% if data_total.mae_bad_somites is not None %}{{ data_total.mae_bad_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ data_total.cmp_all.n }}</td>
+            <td>{% if data_total.cmp_all.agree_valid_pct is not None %}{{ data_total.cmp_all.agree_valid_pct|floatformat:1 }}%{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.cmp_all.agree_orient_pct is not None %}{{ data_total.cmp_all.agree_orient_pct|floatformat:1 }}%{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.cmp_all.mae_total is not None %}{{ data_total.cmp_all.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.cmp_all.mae_bad is not None %}{{ data_total.cmp_all.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ data_total.cmp_train.n }}</td>
+            <td>{% if data_total.cmp_train.mae_total is not None %}{{ data_total.cmp_train.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.cmp_train.mae_bad is not None %}{{ data_total.cmp_train.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ data_total.cmp_val.n }}</td>
+            <td>{% if data_total.cmp_val.mae_total is not None %}{{ data_total.cmp_val.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.cmp_val.mae_bad is not None %}{{ data_total.cmp_val.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ data_total.cmp_heldout.n }}</td>
+            <td>{% if data_total.cmp_heldout.mae_total is not None %}{{ data_total.cmp_heldout.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.cmp_heldout.mae_bad is not None %}{{ data_total.cmp_heldout.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
         </tr>
     </tbody>
     <tfoot><tr>
-        <th>Experiment</th><th>Annotated</th><th>Predicted</th><th>Both</th>
-        <th>Valid agree</th><th>Orient agree</th>
-        <th>MAE total somites</th><th>MAE defective</th>
+        <th>Experiment</th><th>Annotated</th><th>Predicted</th>
+        <th>n</th><th>Valid agree</th><th>Orient agree</th><th>MAE total</th><th>MAE def.</th>
+        <th>n</th><th>MAE total</th><th>MAE def.</th>
+        <th>n</th><th>MAE total</th><th>MAE def.</th>
+        <th>n</th><th>MAE total</th><th>MAE def.</th>
     </tr></tfoot>
 </table>
 

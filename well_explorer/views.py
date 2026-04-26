@@ -98,6 +98,18 @@ def to_media_url(path):
     rel = p.relative_to(r"D:\vast")
     return f"/media/{rel.as_posix()}"
 
+
+def clamp_somite_count(x):
+    """Round a raw float somite prediction to a non-negative integer.
+
+    Used at inference time so what we store in DestWellPropertiesPredicted
+    matches the discrete, non-negative nature of somite counts (the network
+    outputs unbounded floats). Returns 0 on any error so saving never fails."""
+    try:
+        return max(0, int(round(float(x))))
+    except (TypeError, ValueError):
+        return 0
+
 #___________________________________________________________________________________________
 def vast_handler(doc: bokeh.document.Document) -> None:
     print('****************************  vast_handler ****************************')
@@ -1135,8 +1147,16 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                     prob_ori = torch.sigmoid(logit_ori)
 
 
-        pred_total, pred_def = pred
-        prediction_message.text = "<b style='color:blue; font-size:18px;'>Predicting Total {:.1f}  --  defective {:.1f}  --  Valid Fish {}  --  Prob orientation {:.2} +/- {:.2} </b>".format(pred_total,pred_def, 'Yes' if prob>0.5 else 'No', prob_ori.mean(),prob_ori.std())
+        pred_total_raw, pred_def_raw = pred
+        pred_total = clamp_somite_count(pred_total_raw)
+        pred_def   = clamp_somite_count(pred_def_raw)
+        prediction_message.text = (
+            "<b style='color:blue; font-size:18px;'>Predicting Total {} (raw {:.2f})"
+            "  --  defective {} (raw {:.2f})"
+            "  --  Valid Fish {}"
+            "  --  Prob orientation {:.2} +/- {:.2} </b>"
+        ).format(pred_total, pred_total_raw, pred_def, pred_def_raw,
+                 'Yes' if prob > 0.5 else 'No', prob_ori.mean(), prob_ori.std())
         prediction_message.visible = True
 
         predict_button.label = "Predict"
@@ -1201,10 +1221,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                             prob_ori = torch.sigmoid(logit_ori)
 
                 if len(files)>0:
-                    pred_total, pred_def = pred_somite
+                    pred_total_raw, pred_def_raw = pred_somite
                     dest_well_preds, created = DestWellPropertiesPredicted.objects.get_or_create(dest_well=dest)
-                    dest_well_preds.n_total_somites = pred_total
-                    dest_well_preds.n_bad_somites  = pred_def
+                    dest_well_preds.n_total_somites = clamp_somite_count(pred_total_raw)
+                    dest_well_preds.n_bad_somites  = clamp_somite_count(pred_def_raw)
                     dest_well_preds.valid = True if prob_valid>0.5 else False
                     dest_well_preds.correct_orientation = True if  prob_ori.mean()>0.5 else False
                     dest_well_preds.save()
@@ -1638,17 +1658,39 @@ def stats_list(request: HttpRequest) -> HttpResponse:
         m = sum(lst) / len(lst)
         return (sum((x - m) ** 2 for x in lst) / len(lst)) ** 0.5
 
+    def _subset_metrics(b):
+        n = b['n']
+        return {
+            'n': n,
+            'agree_valid_pct': (b['agree_valid'] / n * 100) if n > 0 else None,
+            'agree_orient_pct': (b['agree_orient'] / n * 100) if n > 0 else None,
+            'mae_total': _mean(b['somite_diffs']),
+            'mae_bad': _mean(b['bad_diffs']),
+        }
+
+    def _aggregate_buckets(buckets):
+        agg = {
+            'n': sum(b['n'] for b in buckets),
+            'agree_valid': sum(b['agree_valid'] for b in buckets),
+            'agree_orient': sum(b['agree_orient'] for b in buckets),
+            'somite_diffs': [v for b in buckets for v in b['somite_diffs']],
+            'bad_diffs': [v for b in buckets for v in b['bad_diffs']],
+        }
+        return _subset_metrics(agg)
+
     tk = {
         'n_dest_wells': 0, 'n_mapped_wells': 0, 'n_imaged': 0,
         'n_valid': 0, 'n_invalid': 0,
         'n_annotated': 0, 'n_predicted': 0, 'n_both': 0,
         'n_training': 0, 'n_validation': 0,
-        'n_agree_valid': 0, 'n_agree_orientation': 0,
     }
     t_ann_total, t_ann_bad = [], []
     t_ann_total_tr, t_ann_bad_tr = [], []
     t_ann_total_val, t_ann_bad_val = [], []
-    t_somite_diffs, t_bad_diffs = [], []
+    # per-subset comparison accumulators (training / validation / held-out)
+    SUBSETS = ('train', 'val', 'heldout')
+    t_subset = {s: {'n': 0, 'agree_valid': 0, 'agree_orient': 0,
+                    'somite_diffs': [], 'bad_diffs': []} for s in SUBSETS}
 
     for exp in experiments:
         n_dest_wells = 0
@@ -1661,12 +1703,12 @@ def stats_list(request: HttpRequest) -> HttpResponse:
         n_both = 0
         n_training = 0
         n_validation = 0
-        n_agree_valid = 0
-        n_agree_orientation = 0
         ann_total, ann_bad = [], []
         ann_total_tr, ann_bad_tr = [], []
         ann_total_val, ann_bad_val = [], []
-        somite_diffs, bad_diffs = [], []
+        # per-subset comparison accumulators for this experiment
+        sub = {s: {'n': 0, 'agree_valid': 0, 'agree_orient': 0,
+                   'somite_diffs': [], 'bad_diffs': []} for s in SUBSETS}
 
         dest_well_plates = DestWellPlate.objects.filter(experiment=exp)
         for plate in dest_well_plates:
@@ -1719,14 +1761,24 @@ def stats_list(request: HttpRequest) -> HttpResponse:
 
                 if has_ann and has_pred:
                     n_both += 1
+                    # bucket: training has priority over validation;
+                    # held-out = annotated but not flagged as either
+                    if props.use_for_training:
+                        s_key = 'train'
+                    elif props.use_for_validation:
+                        s_key = 'val'
+                    else:
+                        s_key = 'heldout'
+                    bucket = sub[s_key]
+                    bucket['n'] += 1
                     if props.valid == pred.valid:
-                        n_agree_valid += 1
+                        bucket['agree_valid'] += 1
                     if props.correct_orientation == pred.correct_orientation:
-                        n_agree_orientation += 1
+                        bucket['agree_orient'] += 1
                     if props.n_total_somites != -9999 and pred.n_total_somites != -9999:
-                        somite_diffs.append(abs(props.n_total_somites - pred.n_total_somites))
+                        bucket['somite_diffs'].append(abs(props.n_total_somites - pred.n_total_somites))
                     if props.n_bad_somites != -9999 and pred.n_bad_somites != -9999:
-                        bad_diffs.append(abs(props.n_bad_somites - pred.n_bad_somites))
+                        bucket['bad_diffs'].append(abs(props.n_bad_somites - pred.n_bad_somites))
 
         rows.append({
             'name': exp.name, 'date': exp.date,
@@ -1751,18 +1803,17 @@ def stats_list(request: HttpRequest) -> HttpResponse:
             'mean_bad_val': _mean(ann_bad_val),
             'n_predicted': n_predicted,
             'n_both': n_both,
-            'agree_valid_pct': (n_agree_valid / n_both * 100) if n_both > 0 else None,
-            'agree_orient_pct': (n_agree_orientation / n_both * 100) if n_both > 0 else None,
-            'mae_somites': _mean(somite_diffs),
-            'mae_bad_somites': _mean(bad_diffs),
+            'cmp_all':     _aggregate_buckets([sub[s] for s in SUBSETS]),
+            'cmp_train':   _subset_metrics(sub['train']),
+            'cmp_val':     _subset_metrics(sub['val']),
+            'cmp_heldout': _subset_metrics(sub['heldout']),
         })
 
         for k, v in {'n_dest_wells': n_dest_wells, 'n_mapped_wells': n_mapped_wells,
                      'n_imaged': n_imaged, 'n_valid': n_valid, 'n_invalid': n_invalid,
                      'n_annotated': n_annotated, 'n_predicted': n_predicted,
-                     'n_both': n_both, 'n_training': n_training, 'n_validation': n_validation,
-                     'n_agree_valid': n_agree_valid,
-                     'n_agree_orientation': n_agree_orientation}.items():
+                     'n_both': n_both, 'n_training': n_training,
+                     'n_validation': n_validation}.items():
             tk[k] += v
         t_ann_total += ann_total
         t_ann_bad += ann_bad
@@ -1770,8 +1821,12 @@ def stats_list(request: HttpRequest) -> HttpResponse:
         t_ann_bad_tr += ann_bad_tr
         t_ann_total_val += ann_total_val
         t_ann_bad_val += ann_bad_val
-        t_somite_diffs += somite_diffs
-        t_bad_diffs += bad_diffs
+        for s in SUBSETS:
+            t_subset[s]['n'] += sub[s]['n']
+            t_subset[s]['agree_valid'] += sub[s]['agree_valid']
+            t_subset[s]['agree_orient'] += sub[s]['agree_orient']
+            t_subset[s]['somite_diffs'] += sub[s]['somite_diffs']
+            t_subset[s]['bad_diffs'] += sub[s]['bad_diffs']
 
     nd, nm, nb = tk['n_dest_wells'], tk['n_mapped_wells'], tk['n_both']
     nv = tk['n_valid'] + tk['n_invalid']
@@ -1798,10 +1853,10 @@ def stats_list(request: HttpRequest) -> HttpResponse:
         'mean_bad_val': _mean(t_ann_bad_val),
         'n_predicted': tk['n_predicted'],
         'n_both': nb,
-        'agree_valid_pct': (tk['n_agree_valid'] / nb * 100) if nb > 0 else None,
-        'agree_orient_pct': (tk['n_agree_orientation'] / nb * 100) if nb > 0 else None,
-        'mae_somites': _mean(t_somite_diffs),
-        'mae_bad_somites': _mean(t_bad_diffs),
+        'cmp_all':     _aggregate_buckets([t_subset[s] for s in SUBSETS]),
+        'cmp_train':   _subset_metrics(t_subset['train']),
+        'cmp_val':     _subset_metrics(t_subset['val']),
+        'cmp_heldout': _subset_metrics(t_subset['heldout']),
     }
     return render(request, 'well_explorer/stats_listing.html', {'rows': rows, 'data_total': total_row})
 
@@ -1878,6 +1933,43 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
     p_bad.legend.click_policy = 'hide'
     p_bad.legend.location = 'top_right'
 
+    # --- Scatter plots: predicted vs annotated, paired per dest well ---
+    SUBSET_COLORS = {'train': '#FF9800', 'val': '#4CAF50', 'heldout': '#2196F3'}
+    SUBSET_LABELS = {'train': 'Train', 'val': 'Val', 'heldout': 'Held-out'}
+
+    p_scatter_total = bokeh.plotting.figure(
+        title='Total somites — predicted vs annotated', width=580, height=400,
+        x_axis_label='Annotated', y_axis_label='Predicted',
+        tools='pan,wheel_zoom,box_zoom,reset,save,hover',
+        match_aspect=True,
+    )
+    p_scatter_bad = bokeh.plotting.figure(
+        title='Defective somites — predicted vs annotated', width=580, height=400,
+        x_axis_label='Annotated', y_axis_label='Predicted',
+        tools='pan,wheel_zoom,box_zoom,reset,save,hover',
+        match_aspect=True,
+    )
+
+    # y=x reference line
+    for p in (p_scatter_total, p_scatter_bad):
+        p.add_layout(bokeh.models.Slope(gradient=1, y_intercept=0,
+                                        line_color='#888', line_dash='dashed', line_width=1))
+
+    src_scatter_total = {s: bokeh.models.ColumnDataSource(data=dict(x=[], y=[])) for s in SUBSET_COLORS}
+    src_scatter_bad   = {s: bokeh.models.ColumnDataSource(data=dict(x=[], y=[])) for s in SUBSET_COLORS}
+
+    for s, color in SUBSET_COLORS.items():
+        p_scatter_total.scatter('x', 'y', source=src_scatter_total[s], size=8,
+                                fill_color=color, line_color='white', fill_alpha=0.7,
+                                legend_label=SUBSET_LABELS[s])
+        p_scatter_bad.scatter('x', 'y', source=src_scatter_bad[s], size=8,
+                              fill_color=color, line_color='white', fill_alpha=0.7,
+                              legend_label=SUBSET_LABELS[s])
+
+    for p in (p_scatter_total, p_scatter_bad):
+        p.legend.click_policy = 'hide'
+        p.legend.location = 'top_left'
+
     stats_div = bokeh.models.Div(text='', width=600, styles={'font-size': '13px', 'line-height': '1.6'})
 
     # --- Helpers ---
@@ -1919,6 +2011,9 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
         if not selected:
             for s in (src_total_pred, src_total_ann, src_bad_pred, src_bad_ann):
                 s.data = dict(top=[], left=[], right=[])
+            for s in SUBSET_COLORS:
+                src_scatter_total[s].data = dict(x=[], y=[])
+                src_scatter_bad[s].data = dict(x=[], y=[])
             status_div.text = 'No experiments selected.'
             stats_div.text = ''
             return
@@ -1967,17 +2062,71 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
         src_bad_pred.data   = hist_bad_pred
         src_bad_ann.data    = hist_bad_ann
 
+        # --- Paired (annotated, predicted) data for scatter plots, split by subset ---
+        pair_total = {s: {'ann': [], 'pred': []} for s in SUBSET_COLORS}
+        pair_bad   = {s: {'ann': [], 'pred': []} for s in SUBSET_COLORS}
+
+        qs_pair = DestWellProperties.objects.filter(
+            dest_well__source_well__isnull=False,
+            dest_well__source_well__drugs__derivation_name=drug,
+            dest_well__well_plate__experiment__name__in=selected,
+        ).select_related('dest_well').distinct()
+        if valid_filter is not None:
+            qs_pair = qs_pair.filter(valid=valid_filter)
+
+        for ann in qs_pair:
+            try:
+                pred_obj = ann.dest_well.dest_well_properties_predicted
+            except DestWellPropertiesPredicted.DoesNotExist:
+                continue
+            if ann.use_for_training:
+                s_key = 'train'
+            elif ann.use_for_validation:
+                s_key = 'val'
+            else:
+                s_key = 'heldout'
+            if ann.n_total_somites != -9999 and pred_obj.n_total_somites != -9999:
+                pair_total[s_key]['ann'].append(ann.n_total_somites)
+                pair_total[s_key]['pred'].append(pred_obj.n_total_somites)
+            if ann.n_bad_somites != -9999 and pred_obj.n_bad_somites != -9999:
+                pair_bad[s_key]['ann'].append(ann.n_bad_somites)
+                pair_bad[s_key]['pred'].append(pred_obj.n_bad_somites)
+
+        for s in SUBSET_COLORS:
+            src_scatter_total[s].data = dict(x=pair_total[s]['ann'], y=pair_total[s]['pred'])
+            src_scatter_bad[s].data   = dict(x=pair_bad[s]['ann'],   y=pair_bad[s]['pred'])
+
+        def _pair_mae(d):
+            if not d['ann']:
+                return None
+            diffs = [abs(a - p) for a, p in zip(d['ann'], d['pred'])]
+            return sum(diffs) / len(diffs)
+
         valid_label = {0: 'valid', 1: 'invalid', 2: 'all'}[valid_radio.active]
         p_total.title.text = f'Total somites — {drug} ({valid_label} fish)'
         p_bad.title.text   = f'Defective somites — {drug} ({valid_label} fish)'
+        p_scatter_total.title.text = f'Predicted vs annotated — total somites — {drug}'
+        p_scatter_bad.title.text   = f'Predicted vs annotated — defective somites — {drug}'
 
         html  = f'<h3>{drug}</h3>'
-        html += '<b>Total somites</b><br>'
+        html += '<b>Total somites — distribution</b><br>'
         html += _fmt('Predicted', pred_total)
         html += _fmt('Annotated', ann_total)
-        html += '<br><b>Defective somites</b><br>'
+        html += '<br><b>Defective somites — distribution</b><br>'
         html += _fmt('Predicted', pred_bad)
         html += _fmt('Annotated', ann_bad)
+        html += '<br><b>Pred vs Ann — MAE per subset</b><br>'
+        for s in SUBSET_COLORS:
+            mt = _pair_mae(pair_total[s])
+            mb = _pair_mae(pair_bad[s])
+            n_t = len(pair_total[s]['ann'])
+            n_b = len(pair_bad[s]['ann'])
+            mt_str = f'{mt:.2f}' if mt is not None else '—'
+            mb_str = f'{mb:.2f}' if mb is not None else '—'
+            html += (f'<span style="color:{SUBSET_COLORS[s]}">&#9632;</span> '
+                     f'<b>{SUBSET_LABELS[s]}</b>: '
+                     f'total N={n_t}, MAE={mt_str} &nbsp;·&nbsp; '
+                     f'def. N={n_b}, MAE={mb_str}<br>')
         stats_div.text = html
         status_div.text = ''
 
@@ -1999,7 +2148,10 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
         width=370,
     )
     plots = bokeh.layouts.column(
+        bokeh.models.Div(text='<h4 style="margin:0">Distributions (histograms)</h4>'),
         bokeh.layouts.row(p_total, p_bad),
+        bokeh.models.Div(text='<h4 style="margin:14px 0 0">Predicted vs annotated (paired wells)</h4>'),
+        bokeh.layouts.row(p_scatter_total, p_scatter_bad),
         stats_div,
     )
     doc.add_root(bokeh.layouts.row(controls, plots))
