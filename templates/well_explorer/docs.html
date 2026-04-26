@@ -245,13 +245,44 @@
           contains <code>YFP</code>.</li>
       <li>Orientation classifier reads images whose filename does <em>not</em>
           contain <code>YFP</code> (i.e. brightfield).</li>
-      <li>To populate <code>test/</code>: pick ~10–20% of annotated wells at
-          random, move them in, and make sure both
-          <code>use_for_training</code> and <code>use_for_validation</code>
-          flags on <code>DestWellProperties</code> are <strong>false</strong> —
-          they will then show up in the "Held-out (honest)" column on the
+      <li>To populate <code>test/</code>: use the
+          <code>resplit_training_data</code> management command (below) — it
+          assigns each annotated well to one of train / valid / test, sets
+          the corresponding flag on <code>DestWellProperties</code>
+          (<code>use_for_training</code> / <code>use_for_validation</code> /
+          <code>use_for_test</code>), and rebuilds the on-disk folders to
+          match. The wells with <code>use_for_test=True</code> show up in the
+          <strong>Test (honest)</strong> column on the
           <a href="{% url 'stats_listing' %}">Statistics</a> page.</li>
     </ul>
+
+    <h3>One-shot re-split with <code>resplit_training_data</code></h3>
+    <p>
+      A Django management command resets every annotation's three subset
+      flags, randomly assigns each eligible annotation to train / valid /
+      test (default 70 / 15 / 15), updates the database, and rebuilds the
+      on-disk <code>train/</code> / <code>valid/</code> / <code>test/</code>
+      folders by copying source images and writing JSON sidecars.
+    </p>
+
+    <p>Dry-run first (no DB writes, no file moves) to see what it will do:</p>
+<pre><code>python manage.py resplit_training_data --dry_run</code></pre>
+
+    <p>Real run with a fixed seed for reproducibility:</p>
+<pre><code>python manage.py resplit_training_data \
+    --output_path D:\vast\VAST-DS\training_data \
+    --train 0.70 --valid 0.15 --test 0.15 \
+    --seed 42 \
+    --use_corrected</code></pre>
+
+    <p>
+      <code>--use_corrected</code> tells it to pull source images from each
+      well's <code>corrected_orientation/</code> subfolder (recommended after
+      retraining the orientation classifier — see step 2 below). By default,
+      annotations with <code>valid=False</code> are skipped, matching how the
+      training scripts filter their datasets; pass <code>--keep_invalid</code>
+      to include them.
+    </p>
 
     <h2 id="retrain">Retraining</h2>
 
@@ -283,9 +314,16 @@
         <code>&lt;well&gt;/corrected_orientation/</code>.
       </li>
       <li>
-        <strong>Re-extract</strong> your <code>train/</code>, <code>valid/</code>,
-        <code>test/</code> folders for somites + validity from the freshly
-        canonicalised images.
+        <strong>Re-split annotations</strong> into train / valid / test and
+        rebuild the on-disk training folders from the freshly canonicalised
+        images (this also sets the
+        <code>use_for_training</code> / <code>use_for_validation</code> /
+        <code>use_for_test</code> flags on <code>DestWellProperties</code>):
+<pre><code>python manage.py resplit_training_data \
+    --output_path D:\vast\VAST-DS\training_data \
+    --train 0.70 --valid 0.15 --test 0.15 \
+    --seed 42 \
+    --use_corrected</code></pre>
       </li>
       <li>
         <strong>Retrain the somite counter</strong>:

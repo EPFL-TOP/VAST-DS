@@ -117,12 +117,30 @@ on the task:
   { "valid": true, "correct_orientation": true }
   ```
 
-To build the held-out `test/` folder: pick ~10–20% of your annotated wells at
-random and move them into `test/`. The dashboard's "Statistics" page splits
-the prediction-vs-annotation comparison by `use_for_training` /
-`use_for_validation` flags on `DestWellProperties`, so make sure the wells
-you put in `test/` have **both flags `false`** — they'll then show up in the
-"Held-out (honest)" column.
+To build / rebuild the train / valid / test split there's a Django
+management command that does the work in one shot — DB flags and on-disk
+folders are kept in sync:
+
+```bash
+# Dry run first to see what it will do
+python manage.py resplit_training_data --dry_run
+
+# Real run
+python manage.py resplit_training_data \
+    --output_path D:\vast\VAST-DS\training_data \
+    --train 0.70 --valid 0.15 --test 0.15 \
+    --seed 42 \
+    --use_corrected
+```
+
+The command resets every annotation's `use_for_training` /
+`use_for_validation` / `use_for_test` flags, randomly partitions the
+eligible annotations into the three buckets (default 70 / 15 / 15), sets
+the corresponding flag on `DestWellProperties`, and copies source images
++ JSON sidecars into the chosen subfolder of `--output_path`. By default
+`valid=False` annotations are skipped (pass `--keep_invalid` to include
+them). The wells that land in the test bucket show up in the
+**Test (honest)** column on the Statistics page.
 
 ### Retraining
 
@@ -144,8 +162,15 @@ python -m somiteCounting.training_orientation \
 #    on the BF image, and writes the flipped copies to <well>/corrected_orientation/.
 python somiteCounting/orientfish.py
 
-# 3. Re-extract train/, valid/, test/ folders for somites + validity from the
-#    freshly canonicalised images.
+# 3. Re-split annotations into train / valid / test and rebuild the on-disk
+#    training folders from the freshly canonicalised images. Also sets the
+#    use_for_training / use_for_validation / use_for_test flags on
+#    DestWellProperties so the Statistics page matches the on-disk split.
+python manage.py resplit_training_data \
+    --output_path D:\vast\VAST-DS\training_data \
+    --train 0.70 --valid 0.15 --test 0.15 \
+    --seed 42 \
+    --use_corrected
 
 # 4. Somite counter (regression, 2 outputs — YFP images)
 python -m somiteCounting.training \

@@ -1248,10 +1248,10 @@ def vast_handler(doc: bokeh.document.Document) -> None:
             shutil.rmtree(LOCALPATH_TRAINING)
         if os.path.exists(LOCALPATH_TRAINING) is False:
             os.mkdir(LOCALPATH_TRAINING)
-        if os.path.exists(os.path.join(LOCALPATH_TRAINING,'train')) is False:
-            os.mkdir(os.path.join(LOCALPATH_TRAINING,'train'))
-        if os.path.exists(os.path.join(LOCALPATH_TRAINING,'valid')) is False:
-            os.mkdir(os.path.join(LOCALPATH_TRAINING,'valid'))
+        for sub in ('train', 'valid', 'test'):
+            sub_path = os.path.join(LOCALPATH_TRAINING, sub)
+            if os.path.exists(sub_path) is False:
+                os.mkdir(sub_path)
         
 
         for experiment in experiments:
@@ -1272,25 +1272,33 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                         #if props.valid and props.n_total_somites>=0 and props.n_bad_somites >=0:
                         #Add false to train other model
                         if props.n_total_somites>=0 and props.n_bad_somites >=0:
-                            if props.use_for_training is False and props.use_for_validation is False:
-                                rand=random.uniform(0,1)
-                                if rand>0.2: 
-                                    outdir=os.path.join(LOCALPATH_TRAINING,'train')
+                            # Pick the bucket. If the annotation already has a
+                            # flag set (e.g. assigned by a previous run or by
+                            # the resplit_training_data command), respect it.
+                            # Otherwise do a fresh 70/15/15 split.
+                            if (not props.use_for_training and
+                                not props.use_for_validation and
+                                not props.use_for_test):
+                                rand = random.uniform(0, 1)
+                                if rand < 0.70:
+                                    bucket = 'train'
                                     props.use_for_training = True
-                                    props.use_for_validation = False
-                                    props.save()
-                                else: 
-                                    outdir=os.path.join(LOCALPATH_TRAINING,'valid')
-                                    props.use_for_training = False
+                                elif rand < 0.85:
+                                    bucket = 'valid'
                                     props.use_for_validation = True
-                                    props.save()
-                            else:
-                                if props.use_for_training:
-                                    outdir=os.path.join(LOCALPATH_TRAINING,'train')
-                                elif props.use_for_validation:
-                                    outdir=os.path.join(LOCALPATH_TRAINING,'valid')
                                 else:
-                                    continue
+                                    bucket = 'test'
+                                    props.use_for_test = True
+                                props.save()
+                            elif props.use_for_training:
+                                bucket = 'train'
+                            elif props.use_for_validation:
+                                bucket = 'valid'
+                            elif props.use_for_test:
+                                bucket = 'test'
+                            else:
+                                continue
+                            outdir = os.path.join(LOCALPATH_TRAINING, bucket)
 
                             position_col = dest.position_col
                             position_row = dest.position_row
@@ -1682,13 +1690,14 @@ def stats_list(request: HttpRequest) -> HttpResponse:
         'n_dest_wells': 0, 'n_mapped_wells': 0, 'n_imaged': 0,
         'n_valid': 0, 'n_invalid': 0,
         'n_annotated': 0, 'n_predicted': 0, 'n_both': 0,
-        'n_training': 0, 'n_validation': 0,
+        'n_training': 0, 'n_validation': 0, 'n_test': 0,
     }
     t_ann_total, t_ann_bad = [], []
     t_ann_total_tr, t_ann_bad_tr = [], []
     t_ann_total_val, t_ann_bad_val = [], []
-    # per-subset comparison accumulators (training / validation / held-out)
-    SUBSETS = ('train', 'val', 'heldout')
+    t_ann_total_te, t_ann_bad_te = [], []
+    # per-subset comparison accumulators (training / validation / held-out test)
+    SUBSETS = ('train', 'val', 'test')
     t_subset = {s: {'n': 0, 'agree_valid': 0, 'agree_orient': 0,
                     'somite_diffs': [], 'bad_diffs': []} for s in SUBSETS}
 
@@ -1703,9 +1712,11 @@ def stats_list(request: HttpRequest) -> HttpResponse:
         n_both = 0
         n_training = 0
         n_validation = 0
+        n_test = 0
         ann_total, ann_bad = [], []
         ann_total_tr, ann_bad_tr = [], []
         ann_total_val, ann_bad_val = [], []
+        ann_total_te, ann_bad_te = [], []
         # per-subset comparison accumulators for this experiment
         sub = {s: {'n': 0, 'agree_valid': 0, 'agree_orient': 0,
                    'somite_diffs': [], 'bad_diffs': []} for s in SUBSETS}
@@ -1730,22 +1741,35 @@ def stats_list(request: HttpRequest) -> HttpResponse:
                         n_valid += 1
                     else:
                         n_invalid += 1
-                    if props.n_total_somites != -9999:
-                        ann_total.append(props.n_total_somites)
-                    if props.n_bad_somites != -9999:
-                        ann_bad.append(props.n_bad_somites)
+                    # Somite counts are only meaningful on valid fish — invalid
+                    # ones aren't counted properly and aren't used for analysis,
+                    # so we exclude them from the somite-count statistics.
+                    if props.valid:
+                        if props.n_total_somites != -9999:
+                            ann_total.append(props.n_total_somites)
+                        if props.n_bad_somites != -9999:
+                            ann_bad.append(props.n_bad_somites)
                     if props.use_for_training:
                         n_training += 1
-                        if props.n_total_somites != -9999:
-                            ann_total_tr.append(props.n_total_somites)
-                        if props.n_bad_somites != -9999:
-                            ann_bad_tr.append(props.n_bad_somites)
+                        if props.valid:
+                            if props.n_total_somites != -9999:
+                                ann_total_tr.append(props.n_total_somites)
+                            if props.n_bad_somites != -9999:
+                                ann_bad_tr.append(props.n_bad_somites)
                     if props.use_for_validation:
                         n_validation += 1
-                        if props.n_total_somites != -9999:
-                            ann_total_val.append(props.n_total_somites)
-                        if props.n_bad_somites != -9999:
-                            ann_bad_val.append(props.n_bad_somites)
+                        if props.valid:
+                            if props.n_total_somites != -9999:
+                                ann_total_val.append(props.n_total_somites)
+                            if props.n_bad_somites != -9999:
+                                ann_bad_val.append(props.n_bad_somites)
+                    if props.use_for_test:
+                        n_test += 1
+                        if props.valid:
+                            if props.n_total_somites != -9999:
+                                ann_total_te.append(props.n_total_somites)
+                            if props.n_bad_somites != -9999:
+                                ann_bad_te.append(props.n_bad_somites)
                 except DestWellProperties.DoesNotExist:
                     pass
 
@@ -1759,16 +1783,25 @@ def stats_list(request: HttpRequest) -> HttpResponse:
                 if has_ann or has_pred:
                     n_imaged += 1
 
-                if has_ann and has_pred:
-                    n_both += 1
-                    # bucket: training has priority over validation;
-                    # held-out = annotated but not flagged as either
+                # Prediction-vs-annotation comparison is restricted to wells
+                # whose manual annotation is `valid=True`: invalid fish have
+                # unreliable somite counts and are excluded from analysis, so
+                # comparing predictions against them would be noise.
+                if has_ann and has_pred and props.valid:
+                    # Bucket by the explicit subset flag. Annotations with
+                    # NO flag set (use_for_training / _validation / _test all
+                    # false) are skipped — we don't know which subset they
+                    # belong to, and the "honest" test column would be
+                    # misleading if we lumped them in.
                     if props.use_for_training:
                         s_key = 'train'
                     elif props.use_for_validation:
                         s_key = 'val'
+                    elif props.use_for_test:
+                        s_key = 'test'
                     else:
-                        s_key = 'heldout'
+                        continue
+                    n_both += 1
                     bucket = sub[s_key]
                     bucket['n'] += 1
                     if props.valid == pred.valid:
@@ -1801,19 +1834,22 @@ def stats_list(request: HttpRequest) -> HttpResponse:
             'n_validation': n_validation,
             'mean_total_val': _mean(ann_total_val),
             'mean_bad_val': _mean(ann_bad_val),
+            'n_test': n_test,
+            'mean_total_te': _mean(ann_total_te),
+            'mean_bad_te': _mean(ann_bad_te),
             'n_predicted': n_predicted,
             'n_both': n_both,
-            'cmp_all':     _aggregate_buckets([sub[s] for s in SUBSETS]),
-            'cmp_train':   _subset_metrics(sub['train']),
-            'cmp_val':     _subset_metrics(sub['val']),
-            'cmp_heldout': _subset_metrics(sub['heldout']),
+            'cmp_all':   _aggregate_buckets([sub[s] for s in SUBSETS]),
+            'cmp_train': _subset_metrics(sub['train']),
+            'cmp_val':   _subset_metrics(sub['val']),
+            'cmp_test':  _subset_metrics(sub['test']),
         })
 
         for k, v in {'n_dest_wells': n_dest_wells, 'n_mapped_wells': n_mapped_wells,
                      'n_imaged': n_imaged, 'n_valid': n_valid, 'n_invalid': n_invalid,
                      'n_annotated': n_annotated, 'n_predicted': n_predicted,
                      'n_both': n_both, 'n_training': n_training,
-                     'n_validation': n_validation}.items():
+                     'n_validation': n_validation, 'n_test': n_test}.items():
             tk[k] += v
         t_ann_total += ann_total
         t_ann_bad += ann_bad
@@ -1821,6 +1857,8 @@ def stats_list(request: HttpRequest) -> HttpResponse:
         t_ann_bad_tr += ann_bad_tr
         t_ann_total_val += ann_total_val
         t_ann_bad_val += ann_bad_val
+        t_ann_total_te += ann_total_te
+        t_ann_bad_te += ann_bad_te
         for s in SUBSETS:
             t_subset[s]['n'] += sub[s]['n']
             t_subset[s]['agree_valid'] += sub[s]['agree_valid']
@@ -1851,12 +1889,15 @@ def stats_list(request: HttpRequest) -> HttpResponse:
         'n_validation': tk['n_validation'],
         'mean_total_val': _mean(t_ann_total_val),
         'mean_bad_val': _mean(t_ann_bad_val),
+        'n_test': tk['n_test'],
+        'mean_total_te': _mean(t_ann_total_te),
+        'mean_bad_te': _mean(t_ann_bad_te),
         'n_predicted': tk['n_predicted'],
         'n_both': nb,
-        'cmp_all':     _aggregate_buckets([t_subset[s] for s in SUBSETS]),
-        'cmp_train':   _subset_metrics(t_subset['train']),
-        'cmp_val':     _subset_metrics(t_subset['val']),
-        'cmp_heldout': _subset_metrics(t_subset['heldout']),
+        'cmp_all':   _aggregate_buckets([t_subset[s] for s in SUBSETS]),
+        'cmp_train': _subset_metrics(t_subset['train']),
+        'cmp_val':   _subset_metrics(t_subset['val']),
+        'cmp_test':  _subset_metrics(t_subset['test']),
     }
     return render(request, 'well_explorer/stats_listing.html', {'rows': rows, 'data_total': total_row})
 

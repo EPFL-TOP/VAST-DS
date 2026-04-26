@@ -206,6 +206,7 @@ class DestWellProperties(models.Model):
     correct_orientation = models.BooleanField(default=True, help_text="is the fish correctly oriented (head to the left)?", blank=True, null=True)
     use_for_training    = models.BooleanField(default=False, help_text="should be used for training", blank=True, null=True)
     use_for_validation  = models.BooleanField(default=False, help_text="should be used for validation", blank=True, null=True)
+    use_for_test        = models.BooleanField(default=False, help_text="held out for the final test report (never seen during training)", blank=True, null=True)
 
     def __str__(self):
         """String for representing the Model object (in Admin site etc.)"""

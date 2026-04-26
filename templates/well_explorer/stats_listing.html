@@ -90,17 +90,34 @@
 </table>
 
 <!-- ===== FISH QUALITY TABLE ===== -->
-<h3>Fish quality &amp; annotation statistics</h3>
+<h3>
+    Fish quality &amp; annotation statistics
+    <span class="tip">
+        <span class="tip-icon">?</span>
+        <span class="tip-text" style="width:300px">
+            <b>Valid / Invalid / % Valid</b>: counts of every annotated well
+            (the validity flag itself).<br><br>
+            <b>Mean total / Mean defective</b> in the Training and Validation
+            columns are computed on <code>valid=True</code> annotations only —
+            invalid fish have unreliable somite counts.<br><br>
+            <b>N</b> in those same columns is the count of <i>all</i> wells
+            assigned to the subset (valid or not), so you can spot subsets
+            that are dominated by invalid fish.
+        </span>
+    </span>
+</h3>
 <table id="qual-table" class="display compact">
     <thead>
         <tr>
             <th rowspan="2">Experiment</th>
             <th colspan="3" class="group">All annotated</th>
-            <th colspan="3" class="group">Training set</th>
-            <th colspan="3" class="group">Validation set</th>
+            <th colspan="3" class="group" style="background:#7a5a2e">Training set</th>
+            <th colspan="3" class="group" style="background:#5a7a2e">Validation set</th>
+            <th colspan="3" class="group" style="background:#2e5a7a">Test set (held-out)</th>
         </tr>
         <tr>
             <th>Valid</th><th>Invalid</th><th>% Valid</th>
+            <th>N</th><th>Mean total</th><th>Mean defective</th>
             <th>N</th><th>Mean total</th><th>Mean defective</th>
             <th>N</th><th>Mean total</th><th>Mean defective</th>
         </tr>
@@ -118,6 +135,9 @@
             <td>{{ r.n_validation }}</td>
             <td>{% if r.mean_total_val is not None %}{{ r.mean_total_val|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
             <td>{% if r.mean_bad_val is not None %}{{ r.mean_bad_val|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ r.n_test }}</td>
+            <td>{% if r.mean_total_te is not None %}{{ r.mean_total_te|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.mean_bad_te is not None %}{{ r.mean_bad_te|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
         </tr>
         {% endfor %}
     </tbody>
@@ -133,6 +153,9 @@
             <td>{{ data_total.n_validation }}</td>
             <td>{% if data_total.mean_total_val is not None %}{{ data_total.mean_total_val|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
             <td>{% if data_total.mean_bad_val is not None %}{{ data_total.mean_bad_val|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ data_total.n_test }}</td>
+            <td>{% if data_total.mean_total_te is not None %}{{ data_total.mean_total_te|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.mean_bad_te is not None %}{{ data_total.mean_bad_te|floatformat:1 }}{% else %}<span class="na">—</span>{% endif %}</td>
         </tr>
     </tbody>
     <tfoot><tr>
@@ -140,11 +163,22 @@
         <th>Valid</th><th>Invalid</th><th>% Valid</th>
         <th>N (train)</th><th>Mean total (train)</th><th>Mean defective (train)</th>
         <th>N (val)</th><th>Mean total (val)</th><th>Mean defective (val)</th>
+        <th>N (test)</th><th>Mean total (test)</th><th>Mean defective (test)</th>
     </tr></tfoot>
 </table>
 
 <!-- ===== SOMITE ANNOTATION STATS ===== -->
-<h3>Somite counts — annotated (all images)</h3>
+<h3>
+    Somite counts — annotated (valid fish only)
+    <span class="tip">
+        <span class="tip-icon">?</span>
+        <span class="tip-text" style="width:280px">
+            Mean / std are computed only over annotations with
+            <code>valid=True</code>. Invalid fish are excluded because their
+            somite counts are not reliable and aren't used in downstream analysis.
+        </span>
+    </span>
+</h3>
 <table id="somite-table" class="display compact">
     <thead>
         <tr>
@@ -192,16 +226,21 @@
     Prediction vs annotation comparison
     <span class="tip">
         <span class="tip-icon">?</span>
-        <span class="tip-text" style="width:340px">
-            Each metric is split by which subset the annotated well belongs to,
-            using the <code>use_for_training</code> / <code>use_for_validation</code>
-            flags on <code>DestWellProperties</code>:<br><br>
+        <span class="tip-text" style="width:360px">
+            Restricted to <b>valid annotations only</b> (<code>valid=True</code>) —
+            invalid fish have unreliable somite counts and are excluded from
+            analysis.<br><br>
+            Each metric is split by the subset the annotated well was assigned
+            to, using the <code>use_for_training</code> / <code>use_for_validation</code>
+            / <code>use_for_test</code> flags on <code>DestWellProperties</code>:<br><br>
             <b>Train</b>: wells the model was trained on. MAE here is biased low —
             don't trust it as generalisation error.<br>
             <b>Val</b>: wells used for early stopping during training. Slightly biased low.<br>
-            <b>Held-out</b>: annotated wells flagged as neither — this is the only
+            <b>Test</b>: held-out, never seen during training — this is the only
             <i>honest</i> generalisation metric.<br>
             <b>All</b>: combined — useful for sanity checking only.<br><br>
+            Annotations with <i>none</i> of the three flags set are excluded
+            (we don't know which subset they belong to).<br><br>
             <b>MAE</b> (Mean Absolute Error) on somite counts, typical range 3–7:<br>
             &lt;3 → excellent · 3–7 → good · &gt;7 → consider retraining.
         </span>
@@ -213,10 +252,10 @@
             <th rowspan="2">Experiment</th>
             <th rowspan="2">Annotated</th>
             <th rowspan="2">Predicted</th>
-            <th colspan="5" class="group" style="background:#445">All (train + val + held-out)</th>
+            <th colspan="5" class="group" style="background:#445">All (valid annotations, train + val + test)</th>
             <th colspan="3" class="group" style="background:#7a5a2e">Train (biased low)</th>
             <th colspan="3" class="group" style="background:#5a7a2e">Validation</th>
-            <th colspan="3" class="group" style="background:#2e5a7a">Held-out (honest)</th>
+            <th colspan="3" class="group" style="background:#2e5a7a">Test (honest)</th>
         </tr>
         <tr>
             <th>n</th><th>Valid agree</th><th>Orient agree</th><th>MAE total</th><th>MAE def.</th>
@@ -242,9 +281,9 @@
             <td>{{ r.cmp_val.n }}</td>
             <td>{% if r.cmp_val.mae_total is not None %}{{ r.cmp_val.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
             <td>{% if r.cmp_val.mae_bad is not None %}{{ r.cmp_val.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
-            <td>{{ r.cmp_heldout.n }}</td>
-            <td>{% if r.cmp_heldout.mae_total is not None %}{{ r.cmp_heldout.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
-            <td>{% if r.cmp_heldout.mae_bad is not None %}{{ r.cmp_heldout.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ r.cmp_test.n }}</td>
+            <td>{% if r.cmp_test.mae_total is not None %}{{ r.cmp_test.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if r.cmp_test.mae_bad is not None %}{{ r.cmp_test.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
         </tr>
         {% endfor %}
     </tbody>
@@ -264,9 +303,9 @@
             <td>{{ data_total.cmp_val.n }}</td>
             <td>{% if data_total.cmp_val.mae_total is not None %}{{ data_total.cmp_val.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
             <td>{% if data_total.cmp_val.mae_bad is not None %}{{ data_total.cmp_val.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
-            <td>{{ data_total.cmp_heldout.n }}</td>
-            <td>{% if data_total.cmp_heldout.mae_total is not None %}{{ data_total.cmp_heldout.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
-            <td>{% if data_total.cmp_heldout.mae_bad is not None %}{{ data_total.cmp_heldout.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{{ data_total.cmp_test.n }}</td>
+            <td>{% if data_total.cmp_test.mae_total is not None %}{{ data_total.cmp_test.mae_total|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
+            <td>{% if data_total.cmp_test.mae_bad is not None %}{{ data_total.cmp_test.mae_bad|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
         </tr>
     </tbody>
     <tfoot><tr>
