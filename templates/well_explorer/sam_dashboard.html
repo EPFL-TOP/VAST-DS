@@ -1,0 +1,55 @@
+{% extends "well_explorer/_base.html" %}
+
+{% block title %}<title>VAST-DS · SAM segmentation</title>{% endblock %}
+{% block header_title %}SAM segmentation{% endblock %}
+{% block header_subtitle %}Click somites to seed point prompts &mdash; SAM produces per-somite masks; predictions saved with model_name='sam_v1'{% endblock %}
+
+{% block breadcrumb %}
+  <span class="sep">›</span> Well Explorer
+  <span class="sep">›</span> SAM segmentation
+{% endblock %}
+
+{% block extra_css %}
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-3.7.3.min.css" rel="stylesheet" type="text/css">
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-widgets-3.7.3.min.css" rel="stylesheet" type="text/css">
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-tables-3.7.3.min.js" rel="stylesheet" type="text/css">
+<style>
+    .sam-intro {
+        color: #55637a; font-size: 13px; max-width: 940px;
+        background: #fff; border-left: 3px solid #5b8dee;
+        padding: 10px 14px; border-radius: 4px; margin-bottom: 20px;
+    }
+    .sam-intro code { background: #eef2ff; padding: 1px 4px; border-radius: 3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<p class="sam-intro">
+    Pick an experiment, plate, and well. The canonicalised YFP image
+    (<code>&lt;well&gt;/corrected_orientation/</code>) loads in the figure;
+    each click adds a positive point prompt at that location. Press
+    <b>Segment</b> to run SAM &mdash; one mask per click &mdash; then
+    <b>Save</b> to write a <code>DestWellPropertiesPredicted</code> row
+    tagged <code>model_name='sam_v1'</code> with the per-somite data
+    (<code>centroid_x</code>, <code>centroid_y</code>, <code>area</code>,
+    <code>ap_position</code>, <code>severity</code>) in
+    <code>per_somite_data</code>.<br><br>
+    SAM and its checkpoint are loaded lazily on first <b>Segment</b> click;
+    if the package or weights are missing, the status panel will tell you
+    exactly what to install. See the <a href="{% url 'docs' %}#sam">SAM
+    section of the docs</a> for setup.
+</p>
+
+{% if script %}
+    {{ script | safe }}
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-widgets-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-tables-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-api-3.7.3.min.js"></script>
+{% endblock %}
