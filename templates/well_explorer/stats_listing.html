@@ -191,7 +191,7 @@
     <thead>
         <tr>
             <th>Experiment</th>
-            <th>N annotated</th>
+            <th>N valid</th>
             <th>Mean total somites</th>
             <th>Std total somites</th>
             <th>Mean defective</th>
@@ -200,10 +200,10 @@
     </thead>
     <tbody>
         {% for r in rows %}
-        {% if r.n_annotated > 0 %}
+        {% if r.n_valid > 0 %}
         <tr>
             <td>{{ r.name }}</td>
-            <td>{{ r.n_annotated }}</td>
+            <td>{{ r.n_valid }}</td>
             <td>{% if r.mean_total_somites is not None %}{{ r.mean_total_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
             <td>{% if r.std_total_somites is not None %}{{ r.std_total_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
             <td>{% if r.mean_bad_somites is not None %}{{ r.mean_bad_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
@@ -215,7 +215,7 @@
     <tbody>
         <tr class="total-row">
             <td>{{ data_total.name }}</td>
-            <td>{{ data_total.n_annotated }}</td>
+            <td>{{ data_total.n_valid }}</td>
             <td>{% if data_total.mean_total_somites is not None %}{{ data_total.mean_total_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
             <td>{% if data_total.std_total_somites is not None %}{{ data_total.std_total_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
             <td>{% if data_total.mean_bad_somites is not None %}{{ data_total.mean_bad_somites|floatformat:2 }}{% else %}<span class="na">—</span>{% endif %}</td>
@@ -223,7 +223,7 @@
         </tr>
     </tbody>
     <tfoot><tr>
-        <th>Experiment</th><th>N annotated</th>
+        <th>Experiment</th><th>N valid</th>
         <th>Mean total somites</th><th>Std total somites</th>
         <th>Mean defective</th><th>Std defective</th>
     </tr></tfoot>
