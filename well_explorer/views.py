@@ -1397,23 +1397,6 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     indent = bokeh.models.Spacer(width=30)
 
-    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,bokeh.layouts.column(dropdown_exp, well_mapping_button, create_training_button), 
-                                                         bokeh.models.Spacer(width=20),  
-                                                         bokeh.layouts.column(zoom_in_wells,zoom_out_wells, move_crop_up_button), 
-                                                         bokeh.layouts.column(zoom_in_fish,zoom_out_fish, move_crop_down_button), 
-                                                         bokeh.layouts.column(image_message,drug_message)),
-                                       bokeh.layouts.Spacer(width=50),
-                                       bokeh.layouts.row(indent,  bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2),
-                                                         bokeh.layouts.column(bokeh.layouts.row(bokeh.layouts.Spacer(width=10), bokeh.layouts.column(contrast_slider,predict_button,predict_button_fullwell, use_corrected_checkbox), 
-                                                                                                bokeh.layouts.column(dropdown_total_somites, dropdown_total_somites_err), 
-                                                                                                bokeh.layouts.column(dropdown_bad_somites, dropdown_bad_somites_err), 
-                                                                                                bokeh.layouts.column(dropdown_good_image, dropdown_good_orientation), 
-                                                                                                bokeh.layouts.column(saveimages_button,images_comments)),
-                                                                              bokeh.layouts.row(prediction_message),
-                                                                                bokeh.layouts.row(plot_img_yfp_cropped),
-                                                                              bokeh.layouts.row(plot_img_yfp, bokeh.layouts.Spacer(width=10),plot_img_bf),
-                                                                              bokeh.layouts.row(plot_img_vast))))
-
     plot_img_bf.axis.visible   = False
     plot_img_bf.grid.visible   = False
     plot_img_yfp.axis.visible  = False
@@ -1423,6 +1406,102 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     plot_img_vast.axis.visible = False
     plot_img_vast.grid.visible = False
 
+    # ---- Layout assembly (Tier-2 reorg) -----------------------------------
+    # All widgets and callbacks above are unchanged. We only group the
+    # existing widgets into clearly-labelled regions:
+    #   top bar (experiment + actions + status messages)
+    #   left  panel: destination plates + plate-zoom controls
+    #   center panel: image tabs (BF / YFP / YFP cropped / VAST) + image controls
+    #   right panel: annotation form + prediction controls
+    def _section_header(text, w=None):
+        d = bokeh.models.Div(
+            text=(f'<div style="font-size:13px; font-weight:700; color:#1a2340;'
+                  f' border-bottom:2px solid #5b8dee;'
+                  f' padding:6px 4px; margin:4px 0 8px;">{text}</div>'),
+        )
+        if w is not None:
+            d.width = w
+        return d
+
+    top_bar = bokeh.layouts.row(
+        indent,
+        bokeh.layouts.column(
+            _section_header("Experiment"),
+            dropdown_exp,
+        ),
+        bokeh.models.Spacer(width=20),
+        bokeh.layouts.column(
+            _section_header("Actions"),
+            bokeh.layouts.row(well_mapping_button, create_training_button),
+        ),
+        bokeh.models.Spacer(width=40),
+        bokeh.layouts.column(
+            _section_header("Status"),
+            image_message,
+            drug_message,
+        ),
+    )
+
+    plates_panel = bokeh.layouts.column(
+        _section_header("Destination plates"),
+        plot_wellplate_dest,
+        plot_wellplate_dest_2,
+        _section_header("Plate zoom"),
+        bokeh.layouts.row(zoom_in_wells, zoom_out_wells),
+    )
+
+    image_tabs = bokeh.models.Tabs(tabs=[
+        bokeh.models.TabPanel(child=plot_img_yfp_cropped, title="YFP cropped"),
+        bokeh.models.TabPanel(child=plot_img_yfp,         title="YFP"),
+        bokeh.models.TabPanel(child=plot_img_bf,          title="BF"),
+        bokeh.models.TabPanel(child=plot_img_vast,        title="VAST"),
+    ])
+
+    image_panel = bokeh.layouts.column(
+        _section_header("Image view"),
+        image_tabs,
+        contrast_slider,
+        _section_header("Fish zoom &amp; crop"),
+        bokeh.layouts.row(zoom_in_fish, zoom_out_fish),
+        bokeh.layouts.row(move_crop_up_button, move_crop_down_button),
+    )
+
+    annotation_panel = bokeh.layouts.column(
+        _section_header("Annotation"),
+        bokeh.layouts.row(dropdown_total_somites, dropdown_total_somites_err),
+        bokeh.layouts.row(dropdown_bad_somites,   dropdown_bad_somites_err),
+        bokeh.layouts.row(dropdown_good_image,    dropdown_good_orientation),
+        images_comments,
+        saveimages_button,
+    )
+
+    prediction_panel = bokeh.layouts.column(
+        _section_header("Prediction"),
+        bokeh.layouts.row(predict_button, predict_button_fullwell),
+        use_corrected_checkbox,
+        prediction_message,
+    )
+
+    right_col = bokeh.layouts.column(
+        annotation_panel,
+        bokeh.layouts.Spacer(height=20),
+        prediction_panel,
+    )
+
+    main_row = bokeh.layouts.row(
+        indent,
+        plates_panel,
+        bokeh.layouts.Spacer(width=20),
+        image_panel,
+        bokeh.layouts.Spacer(width=20),
+        right_col,
+    )
+
+    norm_layout = bokeh.layouts.column(
+        top_bar,
+        bokeh.layouts.Spacer(height=15),
+        main_row,
+    )
 
     doc.add_root(norm_layout)
 

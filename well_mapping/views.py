@@ -1989,33 +1989,64 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     indent = bokeh.models.Spacer(width=30)
 
-    text_layout = bokeh.layouts.column(bokeh.layouts.row(experiment_message),
-                                       bokeh.layouts.row(drug_message),
-                                       bokeh.layouts.row(mapping_message),
-                                       bokeh.layouts.row(pyrat_message),
-                                       bokeh.layouts.row(wellvalid_message))
+    # ---- Layout assembly (Tier-2 reorg) -----------------------------------
+    # All widgets and callbacks above are unchanged. We only add visual
+    # section headers around the existing groupings so the page is easier
+    # to read.
+    def _section_header(text):
+        return bokeh.models.Div(
+            text=(f'<div style="font-size:13px; font-weight:700; color:#1a2340;'
+                  f' border-bottom:2px solid #5b8dee;'
+                  f' padding:6px 4px; margin:4px 0 8px;">{text}</div>'),
+        )
 
-    well_layout = bokeh.layouts.row(indent, bokeh.layouts.column(plot_wellplate_source,plot_wellplate_source_supp), bokeh.layouts.column(plot_wellplate_dest, plot_wellplate_dest_2))
-    
-    exp_layout = bokeh.layouts.column(bokeh.layouts.row(zoom_in_wells_source, zoom_out_wells_source),
-                                      bokeh.layouts.row(dropdown_exp, dropdown_well_plate_source,dropdown_n_supp_sourcewell, dropdown_well_plate_dest, dropdown_n_dest_wellplates),
-                                      bokeh.layouts.row(experiment_name, experiment_date, pyrat_id),
-                                      bokeh.layouts.row(experiment_description), 
-                                      bokeh.layouts.row(create_experiment_button, delete_experiment_button, check_pyrat_id_button, modify_experiment_button))
-    
+    text_layout = bokeh.layouts.column(
+        _section_header("Status"),
+        bokeh.layouts.row(experiment_message),
+        bokeh.layouts.row(drug_message),
+        bokeh.layouts.row(mapping_message),
+        bokeh.layouts.row(pyrat_message),
+        bokeh.layouts.row(wellvalid_message),
+    )
 
-    drug_layout = bokeh.layouts.column(bokeh.layouts.row(zoom_in_wells_dest, zoom_out_wells_dest),
-                                       bokeh.layouts.row(slimsid_name, drug_concentration),
-                                       bokeh.layouts.row(add_drug_button, add_drug_other_wells_button, force_add_drug_button, remove_drug_button),
-                                       bokeh.layouts.row(wellcluster_comment,bokeh.layouts.column(valid_wellcluster,valid_wellcluster_button)),
-                                       bokeh.layouts.row(map_drug_button, unmap_drug_button),)
+    well_layout = bokeh.layouts.column(
+        _section_header("Source &amp; destination plates"),
+        bokeh.layouts.row(
+            indent,
+            bokeh.layouts.column(plot_wellplate_source, plot_wellplate_source_supp),
+            bokeh.layouts.column(plot_wellplate_dest,   plot_wellplate_dest_2),
+        ),
+    )
 
-   
+    exp_layout = bokeh.layouts.column(
+        _section_header("Experiment"),
+        bokeh.layouts.row(zoom_in_wells_source, zoom_out_wells_source),
+        bokeh.layouts.row(dropdown_exp, dropdown_well_plate_source, dropdown_n_supp_sourcewell,
+                          dropdown_well_plate_dest, dropdown_n_dest_wellplates),
+        bokeh.layouts.row(experiment_name, experiment_date, pyrat_id),
+        bokeh.layouts.row(experiment_description),
+        bokeh.layouts.row(create_experiment_button, delete_experiment_button,
+                          check_pyrat_id_button, modify_experiment_button),
+    )
 
-    norm_layout = bokeh.layouts.column(bokeh.layouts.row(indent,exp_layout, bokeh.layouts.Spacer(width=50), drug_layout, text_layout),
-                                       bokeh.layouts.row(bokeh.layouts.Spacer(height=50)),
-                                       well_layout,
-                                       bokeh.layouts.row(bokeh.layouts.Spacer(height=50)))
+    drug_layout = bokeh.layouts.column(
+        _section_header("Drug mapping"),
+        bokeh.layouts.row(zoom_in_wells_dest, zoom_out_wells_dest),
+        bokeh.layouts.row(slimsid_name, drug_concentration),
+        bokeh.layouts.row(add_drug_button, add_drug_other_wells_button,
+                          force_add_drug_button, remove_drug_button),
+        bokeh.layouts.row(wellcluster_comment,
+                          bokeh.layouts.column(valid_wellcluster, valid_wellcluster_button)),
+        bokeh.layouts.row(map_drug_button, unmap_drug_button),
+    )
+
+    norm_layout = bokeh.layouts.column(
+        bokeh.layouts.row(indent, exp_layout, bokeh.layouts.Spacer(width=50),
+                          drug_layout, text_layout),
+        bokeh.layouts.row(bokeh.layouts.Spacer(height=30)),
+        well_layout,
+        bokeh.layouts.row(bokeh.layouts.Spacer(height=30)),
+    )
 
     doc.add_root(norm_layout)
 
