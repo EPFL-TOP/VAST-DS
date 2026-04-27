@@ -1,0 +1,159 @@
+{% load static %}<!DOCTYPE html>
+{# ============================================================
+   Shared base for all well_explorer pages.
+   Provides the dark gradient header, sticky sidebar, breadcrumb
+   bar, and DataTables theming. Page-specific CSS/JS go in the
+   `extra_css` / `extra_js` blocks; the page body goes in `content`.
+   The active sidebar link is auto-detected from the URL name.
+   ============================================================ #}
+<html lang="en">
+<head>
+  {% block title %}<title>VAST-DS</title>{% endblock %}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3"
+        crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+  <style>
+    /* ---------- shell ---------- */
+    body { background: #f4f6fa; font-family: 'Segoe UI', sans-serif; margin: 0; }
+
+    .site-header {
+      background: linear-gradient(135deg, #1a2340 0%, #2e4070 100%);
+      color: #fff; padding: 22px 36px 16px; display: flex;
+      align-items: center; gap: 22px;
+    }
+    .site-header img { height: 60px; width: auto; flex-shrink: 0; }
+    .site-header h1 { font-size: 1.55rem; margin: 0; font-weight: 700; }
+    .site-header p  { margin: 3px 0 0; font-size: 0.9rem; color: #bbc8e8; }
+
+    .layout { display: flex; min-height: calc(100vh - 160px); }
+
+    /* ---------- sidebar ---------- */
+    .sidebar {
+      width: 220px; min-width: 220px; background: #1a2340;
+      padding: 20px 0; position: sticky; top: 0; max-height: 100vh; overflow-y: auto;
+    }
+    .sidebar-section {
+      padding: 10px 18px 4px; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1px; color: #7a92c0;
+    }
+    .sidebar a {
+      display: block; padding: 7px 22px; color: #c0ccdf; text-decoration: none;
+      font-size: 13px; border-left: 3px solid transparent; transition: all .15s;
+    }
+    .sidebar a:hover { background: #243060; color: #fff; border-left-color: #5b8dee; }
+    .sidebar a.active { background: #243060; color: #fff; border-left-color: #5b8dee; font-weight: 600; }
+    .sidebar hr { border-color: #2d3d60; margin: 10px 16px; }
+
+    /* ---------- main ---------- */
+    .main-content { flex: 1; min-width: 0; }   /* min-width:0 lets DataTables overflow scroll */
+
+    .breadcrumb-bar {
+      background: #fff; padding: 10px 36px; font-size: 13px;
+      color: #55637a; border-bottom: 1px solid #e2e8f2;
+    }
+    .breadcrumb-bar a { color: #2e4070; text-decoration: none; }
+    .breadcrumb-bar a:hover { text-decoration: underline; }
+    .breadcrumb-bar .sep { color: #aab; margin: 0 8px; }
+
+    .page-body { padding: 28px 36px; }
+    .page-body h2:first-child, .page-body h1:first-child { margin-top: 0; }
+
+    /* ---------- DataTables theming ---------- */
+    .dataTables_wrapper { color: #2c3550; font-size: 13px; }
+    .dataTables_wrapper .dataTables_filter input,
+    .dataTables_wrapper .dataTables_length select {
+      border: 1px solid #c5d0e0; padding: 4px 8px; border-radius: 4px;
+      background: #fff;
+    }
+    table.dataTable {
+      background: #fff; border-radius: 8px; overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08); border-collapse: separate; border-spacing: 0;
+    }
+    table.dataTable thead th {
+      background: #1a2340; color: #fff; border: none;
+      font-weight: 600; font-size: 12.5px; padding: 10px 12px;
+    }
+    table.dataTable tbody td { padding: 8px 12px; border-top: 1px solid #eef0f5; }
+    table.dataTable tbody tr:hover td { background: #f9fbff; }
+    table.dataTable tfoot th {
+      background: #f0f4ff; color: #1a2340; font-weight: 600;
+      font-size: 12px; padding: 8px 12px; border-top: 2px solid #c5d0e0;
+    }
+    /* total row used on stats / experiment listing */
+    .total-row td { background-color: #eef2ff !important; font-weight: 700; border-top: 2px solid #445 !important; }
+
+    /* ---------- footer ---------- */
+    .footer {
+      background: #1a2340; color: #7a92c0; text-align: center;
+      padding: 12px; font-size: 12px;
+    }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<div class="site-header">
+  <img src="{% static 'images/Oates_Logo-300x120.png' %}" alt="UPOATES logo">
+  <div>
+    <h1>{% block header_title %}VAST-DS{% endblock %}</h1>
+    <p>{% block header_subtitle %}High-throughput zebrafish drug-screening tool{% endblock %}</p>
+  </div>
+</div>
+
+<div class="layout">
+
+  {# ---- Sidebar (URL-aware active state) ---- #}
+  {% with current=request.resolver_match.url_name|default:"" %}
+  <nav class="sidebar">
+    <div class="sidebar-section">Navigation</div>
+    <a href="{% url 'index' %}" class="{% if current == 'index' %}active{% endif %}">&#8962; Home</a>
+    <a href="{% url 'docs' %}"  class="{% if current == 'docs'  %}active{% endif %}">&#9432; Documentation</a>
+
+    <hr>
+    <div class="sidebar-section">Well Mapping</div>
+    <a href="{% url 'bokeh_dashboard_well_mapping' %}"
+       class="{% if current == 'bokeh_dashboard_well_mapping' %}active{% endif %}">&#9881; Mapping Dashboard</a>
+
+    <hr>
+    <div class="sidebar-section">Well Explorer</div>
+    <a href="{% url 'bokeh_dashboard_well_explorer' %}"
+       class="{% if current == 'bokeh_dashboard_well_explorer' %}active{% endif %}">&#128269; Explorer Dashboard</a>
+    <a href="{% url 'experiment_listing' %}"
+       class="{% if current == 'experiment_listing' %}active{% endif %}">&#128202; Experiment Listing</a>
+    <a href="{% url 'drugs_listing' %}"
+       class="{% if current == 'drugs_listing' %}active{% endif %}">&#128138; Drug Listing</a>
+    <a href="{% url 'stats_listing' %}"
+       class="{% if current == 'stats_listing' %}active{% endif %}">&#128200; Statistics</a>
+    <a href="{% url 'drug_plot' %}"
+       class="{% if current == 'drug_plot' %}active{% endif %}">&#9654; Drug Somite Plot</a>
+
+    {% block sidebar_extra %}{% endblock %}
+  </nav>
+  {% endwith %}
+
+  <div class="main-content">
+
+    {# ---- Breadcrumb ---- #}
+    <div class="breadcrumb-bar">
+      <a href="{% url 'index' %}">Home</a>
+      {% block breadcrumb %}{% endblock %}
+    </div>
+
+    <div class="page-body">
+      {% block content %}{% endblock %}
+    </div>
+
+  </div>
+</div>
+
+<div class="footer">
+  Created by clement.helsens@epfl.ch &mdash; UPOATES Lab, EPFL
+</div>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>
