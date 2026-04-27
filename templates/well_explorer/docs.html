@@ -129,6 +129,7 @@
     <a href="#data-layout" style="font-size:12px">Training data layout</a>
     <a href="#retrain" style="font-size:12px">Retraining</a>
     <a href="#schema"  style="font-size:12px">Predictions schema</a>
+    <a href="#sam"     style="font-size:12px">SAM segmentation</a>
     <a href="#roadmap" style="font-size:12px">Roadmap</a>
   </nav>
 
@@ -417,10 +418,65 @@ python manage.py reinfer --experiment VAST_2026-04 --plate 2</code></pre>
         AP position is normalised so 0 = head, 1 = tail.</li>
     </ul>
     <p>
-      Existing rows from before this schema change have been tagged with
-      <code>model_name='resnet_v1'</code>, <code>model_version='legacy'</code>
-      so nothing was lost — the data migration is in
+      Existing rows from before this schema change kept their data and got
+      tagged <code>model_name='resnet_v1'</code> (Django populated this
+      from the new field's default when the column was added). They have
+      empty <code>model_version=''</code>, same as new rows the dashboard
+      writes. The schema migration is in
       <code>well_mapping/migrations/0036_predictions_multirow.py</code>.
+    </p>
+
+    <h2 id="sam">SAM segmentation</h2>
+    <p>
+      <a href="{% url 'sam_dashboard' %}">SAM segmentation dashboard</a> for
+      per-somite analysis. Click each somite to seed a point prompt, press
+      <b>Segment</b>, review the per-somite table, then <b>Save</b>. Stored
+      under <code>model_name='sam_v1'</code> with per-somite data in
+      <code>per_somite_data</code>.
+    </p>
+
+    <h3>Setup</h3>
+    <p>SAM is loaded lazily on the first <b>Segment</b> click. Two requirements:</p>
+    <ol>
+      <li>Install Meta's <code>segment_anything</code> package:
+<pre><code>pip install git+https://github.com/facebookresearch/segment-anything.git</code></pre>
+      </li>
+      <li>Drop a checkpoint file at <code>checkpoints/sam_vit_b_01ec64.pth</code>
+        (or set the <code>VAST_SAM_CHECKPOINT</code> environment variable to
+        a custom path). Smallest official weights are
+        <code>sam_vit_b</code> (~350 MB) — download from the
+        <a href="https://github.com/facebookresearch/segment-anything">Meta SAM
+        repo</a>. <code>vit_l</code> and <code>vit_h</code> are larger but more
+        accurate; set <code>VAST_SAM_MODEL_TYPE</code> accordingly.</li>
+    </ol>
+    <p>
+      MedSAM also works through this code path — drop the MedSAM checkpoint at
+      the same path and keep <code>vit_b</code> as the model type.
+    </p>
+
+    <h3>Workflow</h3>
+    <ol class="step-list">
+      <li>Pick experiment, plate, well from the selectors. The canonicalised
+        YFP image (<code>&lt;well&gt;/corrected_orientation/</code>) loads in
+        the figure. If no canonicalised image exists yet, run
+        <code>python manage.py refresh_orientation</code> first.</li>
+      <li>Click on each somite in the image. Each click adds a red dot
+        (positive point prompt).</li>
+      <li>Press <b>Segment</b>. SAM runs once per prompt, producing one mask
+        per somite. The masks overlay the image with one colour per somite,
+        and the per-somite table fills with centroid / area / AP-position.</li>
+      <li>Press <b>Save</b>. A row is upserted into
+        <code>DestWellPropertiesPredicted</code> with
+        <code>model_name='sam_v1'</code>; <code>n_total_somites</code> is the
+        click count and <code>per_somite_data</code> contains the full
+        per-somite list. Re-saving overwrites the row.</li>
+      <li><b>Clear prompts</b> resets clicks and overlays without touching
+        the database.</li>
+    </ol>
+
+    <p>
+      Severity is initially 0 (healthy) for every somite. The editable
+      severity UI and grid-prompt auto-segment are planned for a follow-up.
     </p>
 
     <h2 id="roadmap">Roadmap</h2>

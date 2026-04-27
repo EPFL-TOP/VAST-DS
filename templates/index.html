@@ -99,6 +99,7 @@
     <a href="{% url 'drugs_listing' %}">&#128138; Drug Listing</a>
     <a href="{% url 'stats_listing' %}">&#128200; Statistics</a>
     <a href="{% url 'drug_plot' %}">&#9654; Drug Somite Plot</a>
+    <a href="{% url 'sam_dashboard' %}">&#9678; SAM Segmentation</a>
 
     {% if user.is_staff %}
     <hr>
@@ -191,6 +192,19 @@
           filters.
         </p>
         <a class="card-link" href="{% url 'drug_plot' %}">Open plot</a>
+      </div>
+
+      <div class="tool-card">
+        <div class="card-icon">&#9678;</div>
+        <p class="card-title">SAM Segmentation</p>
+        <p class="card-desc">
+          Per-somite segmentation. Click each somite in the YFP image to seed
+          a point prompt; SAM produces a mask per click; saved predictions
+          land in <code>DestWellPropertiesPredicted</code> with
+          <code>model_name='sam_v1'</code> and per-somite metadata
+          (centroid, area, AP position, severity) ready for cross-fish queries.
+        </p>
+        <a class="card-link" href="{% url 'sam_dashboard' %}">Open dashboard</a>
       </div>
 
     </div>

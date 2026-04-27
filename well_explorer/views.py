@@ -2307,3 +2307,384 @@ def docs_page(request: HttpRequest) -> HttpResponse:
     """In-app documentation: project overview, page reference, retraining
     instructions. Mirrors the most actionable parts of the README."""
     return render(request, 'well_explorer/docs.html', {})
+
+
+#___________________________________________________________________________________________
+# SAM segmentation dashboard
+#
+# Workflow:
+#   1. user picks experiment → plate → well
+#   2. dashboard loads the canonicalised YFP image
+#   3. user clicks somites in the image → each click adds a positive
+#      point prompt to a CDS
+#   4. "Segment" button runs SAM with each point prompt → one mask per click
+#   5. masks are turned into per-somite records (centroid / area /
+#      AP position / severity=0 default) and shown as markers + table
+#   6. "Save" writes a DestWellPropertiesPredicted row with model_name='sam_v1'
+#      and per_somite_data populated
+#
+# Per-somite severity editing and grid-prompt auto-segment land in a follow-up.
+SAM_MODEL_NAME = 'sam_v1'
+
+
+def sam_handler(doc: bokeh.document.Document) -> None:
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+
+    # Lazy-import the SAM wrapper. Don't load weights yet — wait until the
+    # user clicks "Segment", since loading is slow and not every visitor
+    # to the page wants to run inference.
+    from somiteCounting.sam_segmenter import (
+        DEFAULT_SAM_CHECKPOINT, DEFAULT_SAM_MODEL_TYPE,
+        extract_per_somite_data, get_sam_instance,
+    )
+
+    # ----- experiment / plate / well selectors -----
+    exp_options = ['Select experiment'] + sorted([e.name for e in Experiment.objects.all()])
+    dropdown_exp   = bokeh.models.Select(title='Experiment', value=exp_options[0],
+                                         options=exp_options, width=320)
+    dropdown_plate = bokeh.models.Select(title='Plate', value='1',
+                                         options=['1', '2'], width=120)
+    dropdown_well  = bokeh.models.Select(title='Well', value='Select well',
+                                         options=['Select well'], width=160)
+
+    # ----- main image figure -----
+    img_size = 2048
+    img_fig = bokeh.plotting.figure(
+        title='YFP image (click somites to add prompts)',
+        width=720, height=720,
+        x_range=(0, img_size), y_range=(0, img_size),
+        tools='pan,wheel_zoom,box_zoom,reset,save,tap',
+        match_aspect=True,
+    )
+    img_fig.axis.visible = False
+    img_fig.grid.visible = False
+
+    img_source = bokeh.models.ColumnDataSource(data=dict(image=[], dw=[], dh=[]))
+    img_fig.image(image='image', x=0, y=0, dw='dw', dh='dh', source=img_source,
+                  palette='Greys256')
+
+    # Mask overlay (a single RGBA image stacking all per-somite masks).
+    mask_source = bokeh.models.ColumnDataSource(data=dict(image=[], dw=[], dh=[]))
+    img_fig.image_rgba(image='image', x=0, y=0, dw='dw', dh='dh',
+                       source=mask_source, alpha=0.45)
+
+    # Click prompts (the user's positive seeds).
+    prompts_source = bokeh.models.ColumnDataSource(data=dict(x=[], y=[]))
+    img_fig.scatter('x', 'y', source=prompts_source, size=14,
+                    fill_color='#ff3030', line_color='white', line_width=2,
+                    marker='circle')
+
+    # Per-somite centroids (after segmentation).
+    centroids_source = bokeh.models.ColumnDataSource(
+        data=dict(x=[], y=[], idx=[]))
+    img_fig.scatter('x', 'y', source=centroids_source, size=12,
+                    fill_color='#2196F3', line_color='white', line_width=1,
+                    marker='diamond')
+    img_fig.text(x='x', y='y', text='idx', source=centroids_source,
+                 text_color='white', text_font_size='10pt',
+                 x_offset=-3, y_offset=4)
+
+    # ----- right-column widgets -----
+    btn_segment   = bokeh.models.Button(label='Segment', button_type='primary',  width=160)
+    btn_clear     = bokeh.models.Button(label='Clear prompts',  button_type='warning', width=160)
+    btn_save      = bokeh.models.Button(label='Save', button_type='success',     width=160)
+    status_div    = bokeh.models.Div(width=400, height=80, styles={'font-size': '13px'})
+    table_source  = bokeh.models.ColumnDataSource(data=dict(
+        index=[], centroid_x=[], centroid_y=[], area=[], ap_position=[], severity=[]))
+    table = bokeh.models.DataTable(
+        source=table_source,
+        columns=[
+            bokeh.models.TableColumn(field='index',       title='#',     width=40),
+            bokeh.models.TableColumn(field='ap_position', title='AP',
+                formatter=bokeh.models.NumberFormatter(format='0.00'), width=60),
+            bokeh.models.TableColumn(field='area',        title='Area',  width=70),
+            bokeh.models.TableColumn(field='centroid_x',  title='cx',    width=60,
+                formatter=bokeh.models.NumberFormatter(format='0')),
+            bokeh.models.TableColumn(field='centroid_y',  title='cy',    width=60,
+                formatter=bokeh.models.NumberFormatter(format='0')),
+            bokeh.models.TableColumn(field='severity',    title='Sev.',  width=50),
+        ],
+        width=400, height=380, index_position=None,
+    )
+
+    # Mutable container for the loaded numpy image, so callbacks can read it.
+    state = {
+        'img_np':     None,   # 2-D float (H, W)
+        'masks':      [],     # list of 2-D bool masks
+        'somites':    [],     # list of dict (per-somite metadata)
+        'dest':       None,   # DestWellPosition currently displayed
+    }
+
+    def _set_status(html: str):
+        status_div.text = html
+
+    # ----- helpers -----
+    def _load_well_image():
+        """Look up the canonical YFP image for the current selection and load
+        it into `state['img_np']` + the figure's ColumnDataSource."""
+        exp_name = dropdown_exp.value
+        plate_n  = dropdown_plate.value
+        well_str = dropdown_well.value
+        if exp_name == 'Select experiment' or well_str == 'Select well':
+            return
+
+        # well_str is like 'A03' — split into row letter + col number
+        position_row = well_str[0]
+        position_col = well_str[1:].lstrip('0') or '0'
+
+        try:
+            plate = DestWellPlate.objects.get(experiment__name=exp_name,
+                                              plate_number=int(plate_n))
+            dest = DestWellPosition.objects.get(well_plate=plate,
+                                                position_row=position_row,
+                                                position_col=position_col)
+        except (DestWellPlate.DoesNotExist, DestWellPosition.DoesNotExist):
+            _set_status(f'<i>Well {well_str} not in database for {exp_name} P{plate_n}.</i>')
+            return
+
+        state['dest'] = dest
+        state['masks'] = []
+        state['somites'] = []
+        prompts_source.data = dict(x=[], y=[])
+        centroids_source.data = dict(x=[], y=[], idx=[])
+        mask_source.data = dict(image=[], dw=[], dh=[])
+        table_source.data = dict(
+            index=[], centroid_x=[], centroid_y=[], area=[], ap_position=[], severity=[])
+
+        # Find the canonicalised YFP image on disk.
+        localpath = None
+        for cand in (LOCALPATH_RAID5, LOCALPATH_HIVE, LOCALPATH_CH):
+            if os.path.isdir(os.path.join(cand, exp_name)):
+                localpath = cand
+                break
+        if localpath is None:
+            _set_status(f'<i>No local path found for experiment {exp_name}.</i>')
+            return
+
+        pad = position_col if int(position_col) >= 10 else f"0{position_col}"
+        well_dir = os.path.join(localpath, exp_name, 'Leica images',
+                                f'Plate {plate_n}', f'Well_{position_row}{pad}',
+                                'corrected_orientation')
+        files = glob.glob(os.path.join(well_dir, '*YFP*.tiff'))
+        files = [f for f in files if 'norm' not in f.lower()]
+        if not files:
+            _set_status(f'<i>No canonicalised YFP image found in {well_dir}. '
+                        f'Did you run <code>refresh_orientation</code>?</i>')
+            return
+        try:
+            img_np = imread(files[0]).astype(np.float32)
+        except Exception as e:
+            _set_status(f'<i>Could not read {files[0]}: {e}</i>')
+            return
+
+        h, w = img_np.shape[:2]
+        # Bokeh's image glyph wants the image flipped vertically so y increases upward
+        img_for_bokeh = np.flipud(img_np / max(img_np.max(), 1e-9))
+        img_source.data = dict(image=[img_for_bokeh], dw=[w], dh=[h])
+        img_fig.x_range.start = 0
+        img_fig.x_range.end   = w
+        img_fig.y_range.start = 0
+        img_fig.y_range.end   = h
+        state['img_np'] = img_np
+        _set_status(f'<b>Loaded</b> {os.path.basename(files[0])} ({w}×{h}). '
+                    f'Click somites to add prompts, then press <b>Segment</b>.')
+
+    def _populate_well_dropdown():
+        """When experiment/plate changes, populate `dropdown_well` with the
+        wells that exist in the database for that plate."""
+        exp_name = dropdown_exp.value
+        plate_n  = dropdown_plate.value
+        if exp_name == 'Select experiment':
+            dropdown_well.options = ['Select well']
+            dropdown_well.value = 'Select well'
+            return
+        try:
+            plate = DestWellPlate.objects.get(
+                experiment__name=exp_name, plate_number=int(plate_n))
+        except DestWellPlate.DoesNotExist:
+            dropdown_well.options = ['Select well']
+            dropdown_well.value = 'Select well'
+            return
+        wells = []
+        for d in DestWellPosition.objects.filter(well_plate=plate):
+            try:
+                col = int(d.position_col)
+            except (TypeError, ValueError):
+                continue
+            wells.append(f'{d.position_row}{col:02d}')
+        wells = sorted(set(wells))
+        dropdown_well.options = ['Select well'] + wells
+        dropdown_well.value = 'Select well'
+
+    # ----- click → add prompt -----
+    def _on_image_tap(event):
+        if state['img_np'] is None:
+            _set_status('<i>Select a well first.</i>')
+            return
+        h = state['img_np'].shape[0]
+        x = event.x
+        y_disp = event.y
+        # Bokeh y is flipped vs numpy (we flipud-ed the image), reverse.
+        y = h - y_disp
+        d = dict(prompts_source.data)
+        d['x'] = list(d['x']) + [x]
+        d['y'] = list(d['y']) + [y_disp]   # store display-space for the marker
+        prompts_source.data = d
+
+    img_fig.on_event(bokeh.events.Tap, _on_image_tap)
+
+    # ----- buttons -----
+    def _on_clear():
+        prompts_source.data = dict(x=[], y=[])
+        centroids_source.data = dict(x=[], y=[], idx=[])
+        mask_source.data = dict(image=[], dw=[], dh=[])
+        table_source.data = dict(
+            index=[], centroid_x=[], centroid_y=[], area=[], ap_position=[], severity=[])
+        state['masks'] = []
+        state['somites'] = []
+        _set_status('Prompts cleared.')
+
+    btn_clear.on_click(_on_clear)
+
+    def _on_segment():
+        if state['img_np'] is None:
+            _set_status('<i>Select a well first.</i>'); return
+        prompts = prompts_source.data
+        if not prompts['x']:
+            _set_status('<i>Add at least one point prompt by clicking on a somite.</i>'); return
+        sam, err = get_sam_instance()
+        if sam is None:
+            _set_status(
+                '<b style="color:#c00;">SAM not available.</b><br>'
+                f'<small>{err or "Unknown error"}</small>')
+            return
+        _set_status('Running SAM…')
+
+        # Convert display-space prompts (y was flipped for the image glyph)
+        # back into image-space.
+        h = state['img_np'].shape[0]
+        points_xy = list(zip(list(prompts['x']),
+                             [h - y for y in list(prompts['y'])]))
+
+        try:
+            sam.set_image(state['img_np'])
+            masks = sam.segment_at_points(points_xy)
+        except Exception as e:
+            _set_status(f'<b style="color:#c00;">SAM error:</b> {e}'); return
+
+        state['masks'] = masks
+        somites = extract_per_somite_data(masks, state['img_np'].shape[:2])
+        state['somites'] = somites
+
+        # Update centroids overlay (display-space y)
+        cx = [s['centroid_x'] for s in somites]
+        cy = [h - s['centroid_y'] for s in somites]
+        idx_strs = [str(s['index']) for s in somites]
+        centroids_source.data = dict(x=cx, y=cy, idx=idx_strs)
+
+        # Mask overlay: composite the masks into an RGBA image with one
+        # colour per somite (cycle through a small palette).
+        if masks:
+            H, W = state['img_np'].shape[:2]
+            rgba = np.zeros((H, W, 4), dtype=np.uint8)
+            palette = [
+                (255, 87, 51), (255, 195, 0), (76, 175, 80),
+                (33, 150, 243), (156, 39, 176), (244, 67, 54),
+                (0, 188, 212), (139, 195, 74),
+            ]
+            for i, m in enumerate(masks):
+                r, g, b = palette[i % len(palette)]
+                rgba[m, 0] = r
+                rgba[m, 1] = g
+                rgba[m, 2] = b
+                rgba[m, 3] = 180
+            mask_source.data = dict(
+                image=[np.flipud(rgba.view(np.uint32).reshape(H, W))],
+                dw=[W], dh=[H])
+
+        # Update table
+        table_source.data = dict(
+            index=[s['index'] for s in somites],
+            centroid_x=[round(s['centroid_x'], 1) for s in somites],
+            centroid_y=[round(s['centroid_y'], 1) for s in somites],
+            area=[s['area'] for s in somites],
+            ap_position=[s['ap_position'] for s in somites],
+            severity=[s['severity'] for s in somites],
+        )
+        _set_status(f'Segmented <b>{len(somites)}</b> somite(s). '
+                    f'Press <b>Save</b> to record.')
+
+    btn_segment.on_click(_on_segment)
+
+    def _on_save():
+        dest = state['dest']
+        somites = state['somites']
+        if dest is None or not somites:
+            _set_status('<i>Nothing to save — segment a well first.</i>'); return
+        n_total = len(somites)
+        n_bad = sum(1 for s in somites if int(s.get('severity', 0)) > 0)
+        DestWellPropertiesPredicted.objects.update_or_create(
+            dest_well=dest,
+            model_name=SAM_MODEL_NAME,
+            model_version='',
+            defaults={
+                'n_total_somites': n_total,
+                'n_bad_somites':   n_bad,
+                'per_somite_data': somites,
+            },
+        )
+        _set_status(f'<b>Saved.</b> {n_total} somite(s) recorded under '
+                    f'<code>model_name="{SAM_MODEL_NAME}"</code>.')
+
+    btn_save.on_click(_on_save)
+
+    # ----- callback wiring on selectors -----
+    dropdown_exp.on_change('value',
+                            lambda attr, old, new: _populate_well_dropdown())
+    dropdown_plate.on_change('value',
+                              lambda attr, old, new: _populate_well_dropdown())
+    dropdown_well.on_change('value',
+                             lambda attr, old, new: _load_well_image())
+
+    # ----- info banner about SAM availability -----
+    sam_now, sam_err = get_sam_instance()
+    if sam_now is None:
+        _set_status('<b style="color:#c00;">SAM not loaded.</b><br>'
+                    f'<small>{sam_err}</small><br>'
+                    '<small>Default expected checkpoint: '
+                    f'<code>{DEFAULT_SAM_CHECKPOINT}</code> '
+                    f'(model type <code>{DEFAULT_SAM_MODEL_TYPE}</code>). '
+                    'You can still browse images, but Segment will not run.</small>')
+    else:
+        _set_status('<i>Pick an experiment, plate, and well to begin. '
+                    'Click somites to add prompts, then press <b>Segment</b>.</i>')
+
+    # ----- layout -----
+    def _section(text):
+        return bokeh.models.Div(
+            text=(f'<div style="font-size:13px; font-weight:700; color:#1a2340;'
+                  f' border-bottom:2px solid #5b8dee;'
+                  f' padding:6px 4px; margin:4px 0 8px;">{text}</div>'))
+
+    selectors = bokeh.layouts.row(dropdown_exp, dropdown_plate, dropdown_well)
+    actions = bokeh.layouts.row(btn_segment, btn_clear, btn_save)
+    right_col = bokeh.layouts.column(
+        _section('Selection'), selectors,
+        _section('Actions'),   actions,
+        _section('Status'),    status_div,
+        _section('Per-somite data'), table,
+        width=420,
+    )
+    layout = bokeh.layouts.row(
+        bokeh.layouts.column(_section('Image'), img_fig),
+        bokeh.layouts.Spacer(width=20),
+        right_col,
+    )
+    doc.add_root(layout)
+
+
+#___________________________________________________________________________________________
+def sam_dashboard(request: HttpRequest) -> HttpResponse:
+    """Serve the SAM segmentation dashboard (Bokeh embed)."""
+    script = bokeh.embed.server_document(request.build_absolute_uri())
+    return render(request, 'well_explorer/sam_dashboard.html', {'script': script})

@@ -269,8 +269,33 @@ Severity scale: 0 = healthy, 1 = mild, 2 = moderate, 3 = severe.
 AP position is normalised so 0 = head, 1 = tail.
 
 The migration that introduced this schema is
-`well_mapping/migrations/0036_predictions_multirow.py`. Existing rows from
-before were tagged `model_name='resnet_v1'`, `model_version='legacy'`.
+`well_mapping/migrations/0036_predictions_multirow.py`. Existing rows kept
+their data and got `model_name='resnet_v1'` from the field default;
+`model_version` stayed empty (same as new rows from the dashboard's
+"Predict Full Plate" button).
+
+## SAM segmentation dashboard
+
+Per-somite segmentation page at `/well_explorer/sam_dashboard`. Click each
+somite to seed a point prompt, press **Segment**, then **Save** to write a
+prediction with `model_name='sam_v1'` and the per-somite list in
+`per_somite_data`.
+
+Setup (lazy-loaded on first click):
+
+```bash
+# 1. Install Meta's SAM library
+pip install git+https://github.com/facebookresearch/segment-anything.git
+
+# 2. Drop a checkpoint at the default path (or set VAST_SAM_CHECKPOINT)
+# Smallest official weights are sam_vit_b (~350 MB).
+# https://github.com/facebookresearch/segment-anything
+cp ~/Downloads/sam_vit_b_01ec64.pth checkpoints/
+```
+
+Set `VAST_SAM_CHECKPOINT` to override the path or `VAST_SAM_MODEL_TYPE` to
+use a different ViT size (`vit_b` / `vit_l` / `vit_h`). MedSAM weights work
+through the same code path; drop them at the same default location.
 
 ## Roadmap
 
