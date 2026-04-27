@@ -248,28 +248,47 @@ from the bottom of each `training_*.py` for the classifiers.
 
 ---
 
+## Predictions schema
+
+`DestWellPropertiesPredicted` is keyed by
+`(dest_well, model_name, model_version)` — multiple models can store
+predictions for the same well side-by-side. Read with
+`latest_prediction(dest_well, model_name='resnet_v1')` from
+`well_mapping.models`; write with
+`DestWellPropertiesPredicted.objects.update_or_create(...)` passing all
+three keys.
+
+| Field             | Purpose                                                      |
+|-------------------|--------------------------------------------------------------|
+| `model_name`      | e.g. `'resnet_v1'`, `'sam_v1'`, `'multitask_v1'`             |
+| `model_version`   | optional tag (git hash / date). Empty = overwrite-on-rerun   |
+| `predicted_at`    | auto-updated; used to pick the latest row per (well, model)  |
+| `per_somite_data` | JSONField — list of `{index, centroid_x, centroid_y, area, ap_position, severity, comments}` for SAM-style segmentation outputs |
+
+Severity scale: 0 = healthy, 1 = mild, 2 = moderate, 3 = severe.
+AP position is normalised so 0 = head, 1 = tail.
+
+The migration that introduced this schema is
+`well_mapping/migrations/0036_predictions_multirow.py`. Existing rows from
+before were tagged `model_name='resnet_v1'`, `model_version='legacy'`.
+
 ## Roadmap
 
 Planned, in order:
 
-1. **Multi-row predictions schema** — change `DestWellPropertiesPredicted`
-   from a OneToOne to a multi-row table keyed by
-   `(dest_well, model_name, model_version)` so multiple models (current
-   ResNet, future SAM-based segmenter, multi-task net, etc.) can store
-   predictions for the same well side by side. Stats and drug-plot pages
-   gain a "which model?" selector.
-2. **Per-somite data** — initially as a JSONField on the prediction row
-   (centroid, area, anterior-posterior position, defective flag per somite),
-   promoted to a dedicated `SomiteInstance` model when cross-well queries
-   require it.
-3. **SAM segmentation dashboard** — new Bokeh page where the user clicks
+1. ~~**Multi-row predictions schema**~~ — done (see above).
+2. **SAM segmentation dashboard** — new Bokeh page where the user clicks
    somites to seed point prompts; MedSAM produces per-somite masks; an
    "auto-segment" button runs grid-prompt + NMS for batch processing.
-   Predictions written to the multi-row schema with `model_name='sam_v1'`.
-4. **Cross-model comparison UI** — the prediction-vs-annotation table and
-   the drug plot both gain dropdowns to select which model_name to compare
+   Predictions written with `model_name='sam_v1'` and per-somite results
+   stored in `per_somite_data`.
+3. **Cross-model comparison UI** — the prediction-vs-annotation table and
+   the drug plot both gain dropdowns to select which `model_name` to compare
    against the manual annotations. Scatter plots can overlay multiple models
    for the same wells.
+4. **Per-somite as a dedicated model** — promote `per_somite_data` JSON to
+   a `SomiteInstance` table once cross-well queries on individual somites
+   become routine.
 
 ---
 

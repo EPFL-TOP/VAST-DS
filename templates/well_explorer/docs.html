@@ -128,6 +128,7 @@
     <a href="#models" style="font-size:12px">Deep-learning models</a>
     <a href="#data-layout" style="font-size:12px">Training data layout</a>
     <a href="#retrain" style="font-size:12px">Retraining</a>
+    <a href="#schema"  style="font-size:12px">Predictions schema</a>
     <a href="#roadmap" style="font-size:12px">Roadmap</a>
   </nav>
 
@@ -388,29 +389,59 @@ python manage.py reinfer --experiment VAST_2026-04 --plate 2</code></pre>
       pipeline establishes a clean baseline going forward.
     </div>
 
+    <h2 id="schema">Predictions schema</h2>
+    <p>
+      <code>DestWellPropertiesPredicted</code> is keyed by
+      <code>(dest_well, model_name, model_version)</code> — multiple models
+      can store predictions for the same well side-by-side. Read with
+      <code>latest_prediction(dest_well, model_name='resnet_v1')</code> from
+      <code>well_mapping.models</code>; write with
+      <code>DestWellPropertiesPredicted.objects.update_or_create(...)</code>
+      passing all three keys.
+    </p>
+    <ul>
+      <li><code>model_name</code>: e.g. <code>'resnet_v1'</code> (current
+        ResNet18 stack), <code>'sam_v1'</code> (incoming MedSAM segmenter),
+        future <code>'multitask_v1'</code>.</li>
+      <li><code>model_version</code>: optional checkpoint tag (git hash,
+        date). Empty string overwrites the previous row for that
+        well/model on each run; a non-empty tag keeps history.</li>
+      <li><code>predicted_at</code>: auto-updated; used by
+        <code>latest_prediction()</code> to pick the most recent row.</li>
+      <li><code>per_somite_data</code>: JSONField, used by SAM. List of
+        dicts:
+<pre><code>[{"index": 0, "centroid_x": 320, "centroid_y": 110,
+  "area": 850, "ap_position": 0.42,
+  "severity": 0, "comments": ""}, ...]</code></pre>
+        Severity scale: 0 = healthy, 1 = mild, 2 = moderate, 3 = severe.
+        AP position is normalised so 0 = head, 1 = tail.</li>
+    </ul>
+    <p>
+      Existing rows from before this schema change have been tagged with
+      <code>model_name='resnet_v1'</code>, <code>model_version='legacy'</code>
+      so nothing was lost — the data migration is in
+      <code>well_mapping/migrations/0036_predictions_multirow.py</code>.
+    </p>
+
     <h2 id="roadmap">Roadmap</h2>
     <p>Planned, in order:</p>
     <ol>
-      <li><strong>Multi-row predictions schema</strong> — change
-        <code>DestWellPropertiesPredicted</code> from a OneToOne to a multi-row
-        table keyed by <code>(dest_well, model_name, model_version)</code> so
-        multiple models (current ResNet, future SAM-based segmenter, etc.) can
-        store predictions for the same well side by side. Stats and drug-plot
-        pages gain a "which model?" selector.</li>
-      <li><strong>Per-somite data</strong> — initially as a JSONField on the
-        prediction row (centroid, area, anterior-posterior position, defective
-        flag per somite), promoted to a dedicated <code>SomiteInstance</code>
-        model when cross-well queries require it.</li>
+      <li><strong style="color:#888">[done]</strong> Multi-row predictions
+        schema — see above.</li>
       <li><strong>SAM segmentation dashboard</strong> — new Bokeh page where
         the user clicks somites to seed point prompts; MedSAM produces
         per-somite masks; an "auto-segment" button runs grid-prompt + NMS for
-        batch processing. Predictions written to the multi-row schema with
-        <code>model_name='sam_v1'</code>.</li>
+        batch processing. Predictions written with
+        <code>model_name='sam_v1'</code> and per-somite results stored in
+        <code>per_somite_data</code>.</li>
       <li><strong>Cross-model comparison UI</strong> — the
         prediction-vs-annotation table and the drug plot both gain dropdowns
         to select which <code>model_name</code> to compare against the manual
         annotations. Scatter plots can overlay multiple models for the same
         wells.</li>
+      <li><strong>Per-somite as a dedicated model</strong> — promote
+        <code>per_somite_data</code> JSON to a <code>SomiteInstance</code>
+        table once cross-well queries on individual somites become routine.</li>
     </ol>
 
     <p style="margin-top:32px; color:#888; font-size:12px">

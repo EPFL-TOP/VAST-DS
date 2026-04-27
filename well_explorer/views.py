@@ -25,7 +25,16 @@ import bokeh.embed
 import bokeh.layouts
 
 
-from well_mapping.models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug, DestWellProperties,DestWellPropertiesPredicted
+from well_mapping.models import (
+    Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition,
+    DestWellPosition, Drug, DestWellProperties, DestWellPropertiesPredicted,
+    latest_prediction,
+)
+
+# Default model_name used when reading/writing predictions from the original
+# ResNet18 stack. Will be joined by 'sam_v1', 'multitask_v1', etc., as new
+# models land — see DestWellPropertiesPredicted in well_mapping/models.py.
+RESNET_MODEL_NAME = 'resnet_v1'
 
 from somiteCounting.training import SomiteCounter_freeze, FishQualityClassifier
 from somiteCounting.training_orientation import OrientationClassifier, preprocess_image
@@ -1222,12 +1231,17 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
                 if len(files)>0:
                     pred_total_raw, pred_def_raw = pred_somite
-                    dest_well_preds, created = DestWellPropertiesPredicted.objects.get_or_create(dest_well=dest)
-                    dest_well_preds.n_total_somites = clamp_somite_count(pred_total_raw)
-                    dest_well_preds.n_bad_somites  = clamp_somite_count(pred_def_raw)
-                    dest_well_preds.valid = True if prob_valid>0.5 else False
-                    dest_well_preds.correct_orientation = True if  prob_ori.mean()>0.5 else False
-                    dest_well_preds.save()
+                    DestWellPropertiesPredicted.objects.update_or_create(
+                        dest_well=dest,
+                        model_name=RESNET_MODEL_NAME,
+                        model_version='',
+                        defaults={
+                            'n_total_somites':     clamp_somite_count(pred_total_raw),
+                            'n_bad_somites':       clamp_somite_count(pred_def_raw),
+                            'valid':               bool(prob_valid > 0.5),
+                            'correct_orientation': bool(prob_ori.mean() > 0.5),
+                        },
+                    )
 
         predict_button_fullwell.label = "Predict Full Plate"
         predict_button_fullwell.button_type = "success"
@@ -1698,11 +1712,8 @@ def experiment_list(request: HttpRequest) -> HttpResponse:
                         n_fish_notvalid += 1
                 except DestWellProperties.DoesNotExist:
                     pass
-                try:
-                    dest.dest_well_properties_predicted
+                if latest_prediction(dest, model_name=RESNET_MODEL_NAME) is not None:
                     has_pred = True
-                except DestWellPropertiesPredicted.DoesNotExist:
-                    pass
                 if has_ann or has_pred:
                     n_imaged += 1
 
@@ -1855,12 +1866,10 @@ def stats_list(request: HttpRequest) -> HttpResponse:
                 except DestWellProperties.DoesNotExist:
                     pass
 
-                try:
-                    pred = dest.dest_well_properties_predicted
+                pred = latest_prediction(dest, model_name=RESNET_MODEL_NAME)
+                if pred is not None:
                     has_pred = True
                     n_predicted += 1
-                except DestWellPropertiesPredicted.DoesNotExist:
-                    pass
 
                 if has_ann or has_pred:
                     n_imaged += 1
@@ -2057,8 +2066,8 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
     p_bad.legend.location = 'top_right'
 
     # --- Scatter plots: predicted vs annotated, paired per dest well ---
-    SUBSET_COLORS = {'train': '#FF9800', 'val': '#4CAF50', 'heldout': '#2196F3'}
-    SUBSET_LABELS = {'train': 'Train', 'val': 'Val', 'heldout': 'Held-out'}
+    SUBSET_COLORS = {'train': '#FF9800', 'val': '#4CAF50', 'test': '#2196F3'}
+    SUBSET_LABELS = {'train': 'Train', 'val': 'Val', 'test': 'Test'}
 
     p_scatter_total = bokeh.plotting.figure(
         title='Total somites — predicted vs annotated', width=580, height=400,
@@ -2145,7 +2154,11 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
 
         pred_total, pred_bad = [], []
         if show_pred:
+            # NOTE: when SAM lands and produces 'sam_v1' rows, this query
+            # will need a 'which model?' dropdown (Phase 3c). For now we
+            # always read from the original ResNet predictions.
             qs = DestWellPropertiesPredicted.objects.filter(
+                model_name=RESNET_MODEL_NAME,
                 dest_well__source_well__isnull=False,
                 dest_well__source_well__drugs__derivation_name=drug,
                 dest_well__well_plate__experiment__name__in=selected,
@@ -2198,16 +2211,19 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
             qs_pair = qs_pair.filter(valid=valid_filter)
 
         for ann in qs_pair:
-            try:
-                pred_obj = ann.dest_well.dest_well_properties_predicted
-            except DestWellPropertiesPredicted.DoesNotExist:
+            pred_obj = latest_prediction(ann.dest_well, model_name=RESNET_MODEL_NAME)
+            if pred_obj is None:
                 continue
+            # Bucket by explicit subset flag; skip annotations with no flag
+            # set so the "Test" colour stays an honest generalisation set.
             if ann.use_for_training:
                 s_key = 'train'
             elif ann.use_for_validation:
                 s_key = 'val'
+            elif ann.use_for_test:
+                s_key = 'test'
             else:
-                s_key = 'heldout'
+                continue
             if ann.n_total_somites != -9999 and pred_obj.n_total_somites != -9999:
                 pair_total[s_key]['ann'].append(ann.n_total_somites)
                 pair_total[s_key]['pred'].append(pred_obj.n_total_somites)

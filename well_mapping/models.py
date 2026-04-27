@@ -214,12 +214,58 @@ class DestWellProperties(models.Model):
     
 #___________________________________________________________________________________________
 class DestWellPropertiesPredicted(models.Model):
-    dest_well           = models.OneToOneField(DestWellPosition, default='', on_delete=models.CASCADE, related_name='dest_well_properties_predicted')
+    """Predictions produced by a DL model for a destination well.
+
+    One row per `(dest_well, model_name, model_version)` triple — so multiple
+    models can store predictions for the same well side-by-side and be
+    compared. Use `latest_prediction(dest, model_name=...)` to fetch the
+    most recent prediction for a given well/model.
+    """
+    dest_well           = models.ForeignKey(DestWellPosition, on_delete=models.CASCADE,
+                                            related_name='predictions')
+    model_name          = models.CharField(max_length=200, default='resnet_v1', db_index=True,
+                                           help_text="Identifier of the model that produced this prediction "
+                                                     "(e.g. 'resnet_v1', 'sam_v1', 'multitask_v1')")
+    model_version       = models.CharField(max_length=200, default='', blank=True,
+                                           help_text="Optional version/checkpoint tag (git hash, date, etc.)")
+    predicted_at        = models.DateTimeField(auto_now=True,
+                                               help_text="Last time this prediction was written")
+
     n_total_somites     = models.IntegerField(default=-9999, help_text="Number of total somites in this well", blank=True, null=True)
     n_bad_somites       = models.IntegerField(default=-9999, help_text="Number of bad somites in this well", blank=True, null=True)
     valid               = models.BooleanField(default=True, help_text="is a valid fish image", blank=True, null=True)
     correct_orientation = models.BooleanField(default=True, help_text="is the fish correctly oriented (head to the left)?", blank=True, null=True)
 
+    # Per-somite data, e.g. from SAM segmentation:
+    #   [{"index": 0, "centroid_x": 320, "centroid_y": 110, "area": 850,
+    #     "ap_position": 0.42, "severity": 1, "comments": "..."}, ...]
+    per_somite_data     = models.JSONField(blank=True, null=True, default=None,
+                                           help_text="Per-somite metrics from segmentation models (list of dicts)")
+
+    class Meta:
+        unique_together = (('dest_well', 'model_name', 'model_version'),)
+        indexes = [
+            models.Index(fields=['dest_well', 'model_name']),
+            models.Index(fields=['model_name', '-predicted_at']),
+        ]
+
     def __str__(self):
-        """String for representing the Model object (in Admin site etc.)"""
-        return "exp={0}, pos={1}{2}, n_plate={3}, n_total_somites={4}, n_bad_somites={5}, valid={6}".format(self.dest_well.well_plate.experiment.name, self.dest_well.position_row, self.dest_well.position_col, self.dest_well.well_plate.plate_number, self.n_total_somites, self.n_bad_somites, self.valid)
+        return ("exp={0}, pos={1}{2}, n_plate={3}, model={4}, n_total_somites={5}, "
+                "n_bad_somites={6}, valid={7}").format(
+            self.dest_well.well_plate.experiment.name,
+            self.dest_well.position_row, self.dest_well.position_col,
+            self.dest_well.well_plate.plate_number, self.model_name,
+            self.n_total_somites, self.n_bad_somites, self.valid)
+
+
+def latest_prediction(dest_well, model_name='resnet_v1', model_version=None):
+    """Return the most recent DestWellPropertiesPredicted row for a given
+    well/model, or None. Optional model_version constrains further.
+
+    Centralised here so callers don't all have to know the multi-row schema.
+    """
+    qs = DestWellPropertiesPredicted.objects.filter(
+        dest_well=dest_well, model_name=model_name)
+    if model_version is not None:
+        qs = qs.filter(model_version=model_version)
+    return qs.order_by('-predicted_at').first()

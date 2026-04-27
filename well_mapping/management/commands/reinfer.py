@@ -31,10 +31,10 @@ Dry run::
 
 Note
 ----
-The current schema has a single ``DestWellPropertiesPredicted`` row per dest
-well, so this command **overwrites** the existing prediction. When the
-multi-row schema lands (model_name + version + predicted_at) we'll switch
-this command to write a new row tagged with the model checkpoint hash.
+Predictions are written to ``DestWellPropertiesPredicted`` with
+``model_name='resnet_v1'``. Pass ``--model_version <tag>`` to keep multiple
+runs side-by-side; the default empty version overwrites the previous row
+for the same well.
 """
 
 import glob
@@ -111,6 +111,10 @@ class Command(BaseCommand):
                             default=DEFAULT_CHECKPOINTS["orientation"])
         parser.add_argument("--no_corrected", action="store_true", default=False,
                             help="Read raw images instead of corrected_orientation/.")
+        parser.add_argument("--model_version", default='',
+                            help="Optional model_version tag stored alongside the prediction "
+                                 "(e.g. checkpoint git hash or date). Default '' overwrites "
+                                 "the same row on each run.")
         parser.add_argument("--dry_run", action="store_true", default=False)
 
     # ------------------------------------------------------------------
@@ -219,16 +223,25 @@ class Command(BaseCommand):
                     continue
 
                 if not dry:
-                    row, _created = DestWellPropertiesPredicted.objects.get_or_create(dest_well=dest)
+                    # Multi-row schema: one row per (dest_well, model_name,
+                    # model_version). For now we always write under
+                    # model_name='resnet_v1'; SAM and future models will use
+                    # different names so they coexist on the same well.
+                    defaults = {}
                     if pred_total is not None:
-                        row.n_total_somites = pred_total
+                        defaults['n_total_somites'] = pred_total
                     if pred_def is not None:
-                        row.n_bad_somites = pred_def
+                        defaults['n_bad_somites'] = pred_def
                     if pred_valid is not None:
-                        row.valid = pred_valid
+                        defaults['valid'] = pred_valid
                     if pred_orient is not None:
-                        row.correct_orientation = pred_orient
-                    row.save()
+                        defaults['correct_orientation'] = pred_orient
+                    DestWellPropertiesPredicted.objects.update_or_create(
+                        dest_well=dest,
+                        model_name='resnet_v1',
+                        model_version=opts["model_version"],
+                        defaults=defaults,
+                    )
                 n_written += 1
 
                 if n_written % 50 == 0:
