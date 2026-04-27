@@ -1,42 +1,44 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Drug somite plot</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
-          rel="stylesheet"
-          integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3"
-          crossorigin="anonymous">
-    <link href="http://cdn.pydata.org/bokeh/release/bokeh-3.7.3.min.css" rel="stylesheet" type="text/css">
-    <link href="http://cdn.pydata.org/bokeh/release/bokeh-widgets-3.7.3.min.css" rel="stylesheet" type="text/css">
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    <style>
-        body { padding: 16px; }
-        .back-link { font-size: 14px; margin-bottom: 12px; display: inline-block; }
-    </style>
-</head>
-<body>
-    <a class="back-link" href="{% url 'stats_listing' %}">&larr; Back to statistics</a>
-    <h2>Drug somite plot</h2>
-    <p style="color:#555; font-size:13px">
-        Select a drug derivation and one or more experiments, then click <b>Update plot</b>.
-        Histograms show the distribution of total and defective somite counts.
-        Blue = predicted, orange = annotated. Click legend labels to show/hide series.
-    </p>
+{% extends "well_explorer/_base.html" %}
 
-    {% if script %}
-        {{ script | safe }}
-    {% endif %}
+{% block title %}<title>VAST-DS · Drug somite plot</title>{% endblock %}
+{% block header_title %}Drug somite plot{% endblock %}
+{% block header_subtitle %}Interactive histograms and predicted-vs-annotated scatter plots per drug{% endblock %}
 
-    <div class="footer" style="margin-top:40px">
-        <small>Created by clement.helsens@epfl.ch for the UPOATES lab</small>
-    </div>
+{% block breadcrumb %}
+  <span class="sep">›</span> Well Explorer
+  <span class="sep">›</span> Drug somite plot
+{% endblock %}
 
-    <script src="https://cdn.bokeh.org/bokeh/release/bokeh-3.7.3.min.js"></script>
-    <script src="https://cdn.bokeh.org/bokeh/release/bokeh-widgets-3.7.3.min.js"></script>
-    <script src="https://cdn.bokeh.org/bokeh/release/bokeh-tables-3.7.3.min.js"></script>
-    <script src="https://cdn.bokeh.org/bokeh/release/bokeh-api-3.7.3.min.js"></script>
-</body>
-</html>
+{% block extra_css %}
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-3.7.3.min.css" rel="stylesheet" type="text/css">
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-widgets-3.7.3.min.css" rel="stylesheet" type="text/css">
+<style>
+    .drug-plot-intro {
+        color: #55637a; font-size: 13px; max-width: 900px;
+        background: #fff; border-left: 3px solid #5b8dee;
+        padding: 10px 14px; border-radius: 4px; margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<p class="drug-plot-intro">
+    Select a drug derivation and one or more experiments, then click <b>Update plot</b>.
+    Histograms show the distribution of total and defective somite counts; the scatter
+    plots show predicted-vs-annotated paired wells, coloured by which subset
+    (train / val / test) they belong to. Click legend labels to hide / show a series.
+</p>
+
+{% if script %}
+    {{ script | safe }}
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-widgets-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-tables-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-api-3.7.3.min.js"></script>
+{% endblock %}

@@ -1,49 +1,57 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>VAST Statistics</title>
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
-    <style>
-        body { font-family: sans-serif; padding: 20px; }
-        h2, h3 { margin-top: 28px; }
-        table.dataTable tbody td { vertical-align: middle; white-space: nowrap; }
-        .na  { color: #aaa; font-style: italic; }
-        .total-row td { background-color: #eef2ff; font-weight: bold; border-top: 2px solid #445; }
-        th.group { background: #334; color: #fff; text-align: center; padding: 4px 6px; }
-        a.btn-link {
-            display: inline-block; padding: 8px 18px; background: #334; color: #fff;
-            text-decoration: none; border-radius: 4px; font-size: 14px;
-        }
-        a.btn-link:hover { background: #556; }
-        /* tooltip */
-        .tip { position: relative; display: inline-block; cursor: help; }
-        .tip .tip-text {
-            visibility: hidden; width: 260px; background: #333; color: #fff;
-            font-size: 12px; font-weight: normal; line-height: 1.4;
-            text-align: left; padding: 7px 10px; border-radius: 5px;
-            position: absolute; z-index: 9; bottom: 125%; left: 50%;
-            transform: translateX(-50%); opacity: 0; transition: opacity .2s;
-            pointer-events: none; white-space: normal;
-        }
-        .tip:hover .tip-text { visibility: visible; opacity: 1; }
-        .tip-icon {
-            display: inline-block; width: 14px; height: 14px; line-height: 14px;
-            background: #667; color: #fff; border-radius: 50%;
-            font-size: 10px; text-align: center; margin-left: 3px;
-            font-weight: bold; vertical-align: middle;
-        }
-    </style>
-</head>
-<body>
+{% extends "well_explorer/_base.html" %}
 
-<h2>VAST Statistics</h2>
+{% block title %}<title>VAST-DS · Statistics</title>{% endblock %}
+{% block header_title %}Statistics{% endblock %}
+{% block header_subtitle %}Plate filling, VAST efficiency, fish quality and prediction-vs-annotation comparison{% endblock %}
+
+{% block breadcrumb %}
+  <span class="sep">›</span> Well Explorer
+  <span class="sep">›</span> Statistics
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    table.dataTable tbody td { vertical-align: middle; white-space: nowrap; }
+    .na  { color: #aaa; font-style: italic; }
+    th.group { background: #334; color: #fff; text-align: center; padding: 4px 6px; }
+    a.btn-link {
+        display: inline-block; padding: 8px 18px; background: #2e4070; color: #fff;
+        text-decoration: none; border-radius: 4px; font-size: 14px; font-weight: 600;
+    }
+    a.btn-link:hover { background: #1a2340; color: #fff; }
+
+    /* tooltip */
+    .tip { position: relative; display: inline-block; cursor: help; }
+    .tip .tip-text {
+        visibility: hidden; width: 260px; background: #333; color: #fff;
+        font-size: 12px; font-weight: normal; line-height: 1.4;
+        text-align: left; padding: 7px 10px; border-radius: 5px;
+        position: absolute; z-index: 9; bottom: 125%; left: 50%;
+        transform: translateX(-50%); opacity: 0; transition: opacity .2s;
+        pointer-events: none; white-space: normal;
+    }
+    .tip:hover .tip-text { visibility: visible; opacity: 1; }
+    .tip-icon {
+        display: inline-block; width: 14px; height: 14px; line-height: 14px;
+        background: #667; color: #fff; border-radius: 50%;
+        font-size: 10px; text-align: center; margin-left: 3px;
+        font-weight: bold; vertical-align: middle;
+    }
+
+    .page-body h3 { margin-top: 32px; color: #1a2340; }
+    .page-body h3:first-of-type { margin-top: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+
 <p>
     <a class="btn-link" href="{% url 'drug_plot' %}">&#9654; Open drug somite plot</a>
 </p>
 
 <!-- ===== EFFICIENCY TABLE ===== -->
 <h3>Plate filling &amp; VAST efficiency</h3>
-<table id="eff-table" class="display compact">
+<table id="eff-table" class="display compact" style="width:100%">
     <thead>
         <tr>
             <th rowspan="2">Experiment</th>
@@ -97,8 +105,8 @@
         <span class="tip-text" style="width:300px">
             <b>Valid / Invalid / % Valid</b>: counts of every annotated well
             (the validity flag itself).<br><br>
-            <b>Mean total / Mean defective</b> in the Training and Validation
-            columns are computed on <code>valid=True</code> annotations only —
+            <b>Mean total / Mean defective</b> in the Training, Validation and
+            Test columns are computed on <code>valid=True</code> annotations only —
             invalid fish have unreliable somite counts.<br><br>
             <b>N</b> in those same columns is the count of <i>all</i> wells
             assigned to the subset (valid or not), so you can spot subsets
@@ -106,7 +114,7 @@
         </span>
     </span>
 </h3>
-<table id="qual-table" class="display compact">
+<table id="qual-table" class="display compact" style="width:100%">
     <thead>
         <tr>
             <th rowspan="2">Experiment</th>
@@ -179,7 +187,7 @@
         </span>
     </span>
 </h3>
-<table id="somite-table" class="display compact">
+<table id="somite-table" class="display compact" style="width:100%">
     <thead>
         <tr>
             <th>Experiment</th>
@@ -246,7 +254,7 @@
         </span>
     </span>
 </h3>
-<table id="pred-table" class="display compact">
+<table id="pred-table" class="display compact" style="width:100%">
     <thead>
         <tr>
             <th rowspan="2">Experiment</th>
@@ -317,16 +325,18 @@
     </tr></tfoot>
 </table>
 
+{% endblock %}
+
+{% block extra_js %}
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 <script>
 $(document).ready(function() {
-    var opts = { pageLength: 25, lengthMenu: [10, 25, 50, 100], ordering: true };
+    var opts = { pageLength: 25, lengthMenu: [10, 25, 50, 100], ordering: true, scrollX: true };
     $('#eff-table').DataTable(opts);
     $('#qual-table').DataTable(opts);
     $('#somite-table').DataTable(opts);
     $('#pred-table').DataTable(opts);
 });
 </script>
-</body>
-</html>
+{% endblock %}

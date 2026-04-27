@@ -1,230 +1,188 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Drug listing</title>
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+{% extends "well_explorer/_base.html" %}
 
-    <style>
-        table.dataTable tbody td {
-            vertical-align: top;
-        }
+{% block title %}<title>VAST-DS · Drug listing</title>{% endblock %}
+{% block header_title %}Drug listing{% endblock %}
+{% block header_subtitle %}Browse drugs by source well — valid and invalid fish thumbnails, somite statistics{% endblock %}
 
+{% block breadcrumb %}
+  <span class="sep">›</span> Well Explorer
+  <span class="sep">›</span> Drug listing
+{% endblock %}
 
-        .image-grid {
-            display: flex;
-            flex-wrap: wrap; /* Images will stay side-by-side until they hit the screen edge */
-            gap: 10px;
-            margin-top: 10px;
-        }
+{% block extra_css %}
+<style>
+    table.dataTable tbody td { vertical-align: top; }
 
-        .image-grid img {
-            transition: transform 0.2s;
-            border-radius: 4px;
-        }
+    .image-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+        margin-bottom: 10px;
+    }
 
-        .image-grid img:hover {
-            transform: scale(1.05);
-        }
+    .image-grid img {
+        transition: transform 0.2s;
+        border-radius: 4px;
+    }
 
-        /* Container for images to stay side-by-side */
-        .image-grid {
-            display: flex;
-            flex-wrap: wrap; /* Allows images to move to next line if there are many */
-            gap: 8px;
-            margin-bottom: 10px;
-        }
+    .image-grid img:hover {
+        transform: scale(1.05);
+    }
 
-/*        .img-container {
-//            position: relative;
-//            cursor: pointer;
-//            transition: transform 0.2s;
-*/
-        }
-.img-container {
-    position: relative; /* Essential for the absolute positioning of the badge */
-    display: inline-block;
-    margin: 5px;
-}
+    .img-container {
+        position: relative;
+        display: inline-block;
+        margin: 5px;
+    }
 
-.well-overlay {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    background: rgba(0, 0, 0, 0.7); /* Dark background for readability */
-    color: white;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-weight: bold;
-    font-size: 14px;
-    pointer-events: none; /* Let clicks pass through to the image */
-    z-index: 10;
-    text-shadow: 1px 1px 2px black;
-}
+    .well-overlay {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 10;
+        text-shadow: 1px 1px 2px black;
+    }
 
+    .img-container:hover {
+        transform: scale(1.1);
+        z-index: 10;
+    }
 
-        /* Hover effect for a quick preview */
-        .img-container:hover {
-            transform: scale(1.1);
-            z-index: 10;
-        }
+    .img-container img {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        object-fit: cover;
+    }
 
-        .img-container img {
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            object-fit: cover;
-        }
+    /* ---- Modal ---- */
+    #image-modal {
+        display: none;
+        position: fixed;
+        z-index: 10000;
+        left: 0; top: 0; width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        text-align: center;
+    }
 
+    #image-modal::before {
+        content: ''; display: inline-block; height: 100%; vertical-align: middle;
+    }
 
+    .modal-content-wrapper {
+        display: inline-block;
+        vertical-align: middle;
+        background: #1a1a1a;
+        padding: 15px;
+        border-radius: 12px;
+        border: 1px solid #444;
+    }
 
-        #modal-img {
-    /* Prevents the browser's default "ghosting" behavior */
-    user-select: none;
-    -webkit-user-drag: none;
-    display: block;
-    max-width: 80vw;
-    max-height: 70vh;
-    transition: transform 0.1s ease-out;
-    position: relative;
-    left: 0;
-    top: 0;
-}
+    #zoom-container {
+        position: relative;
+        overflow: hidden;
+        cursor: grab;
+        background: #000;
+    }
 
-#image-modal {
-    display: none;
-    position: fixed;
-    z-index: 10000;
-    left: 0; top: 0; width: 100%; height: 100%;
-    background-color: rgba(0, 0, 0, 0.9);
-    text-align: center;
-}
+    #zoom-container:active { cursor: grabbing; }
 
-#image-modal::before {
-    content: ''; display: inline-block; height: 100%; vertical-align: middle;
-}
+    #modal-img {
+        user-select: none;
+        -webkit-user-drag: none;
+        display: block;
+        max-width: 80vw;
+        max-height: 70vh;
+        transition: transform 0.1s ease-out;
+        transform-origin: center;
+        position: relative;
+        left: 0;
+        top: 0;
+    }
 
-.modal-content-wrapper {
-    display: inline-block;
-    vertical-align: middle;
-    background: #1a1a1a;
-    padding: 15px;
-    border-radius: 12px;
-    border: 1px solid #444;
-}
+    .modal-controls { color: white; font-family: sans-serif; }
 
+    .button-group {
+        display: inline-flex;
+        gap: 2px;
+        margin: 10px 0;
+    }
 
+    .nav-btn, #reset-zoom-btn {
+        background: #444;
+        border: none;
+        color: white;
+        padding: 10px 18px;
+        cursor: pointer;
+        font-size: 14px;
+    }
 
+    .nav-btn:hover, #reset-zoom-btn:hover { background: #666; }
 
-#zoom-container {
-    position: relative;
-    overflow: hidden; /* Important: crops the image as you move it */
-    cursor: grab;     /* Hand icon */
-    background: #000;
-}
+    #reset-zoom-btn { background: #007bff; font-weight: bold; }
 
-#zoom-container:active {
-    cursor: grabbing; /* Closed hand icon when clicking */
-}
+    .prev-btn { border-radius: 4px 0 0 4px; }
+    .next-btn { border-radius: 0 4px 4px 0; }
 
-#modal-img {
-    display: block;
-    max-width: 80vw;
-    max-height: 70vh;
-    transition: transform 0.1s ease-out; /* Smooth movement */
-    transform-origin: center;
-    position: relative; /* Allows left/top movement */
-    left: 0;
-    top: 0;
-}
+    #modal-status-badge {
+        padding: 3px 10px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-size: 12px;
+        margin-right: 10px;
+    }
+    .status-valid { background: #28a745; }
+    .status-invalid { background: #dc3545; }
 
+    .well-badge {
+        position: absolute;
+        top: 5px;
+        left: 5px;
+        background: rgba(0, 0, 0, 0.6);
+        color: white;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: bold;
+        pointer-events: none;
+    }
 
+    #modal-well-display {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        border-radius: 4px;
+        font-weight: bold;
+        pointer-events: none;
+        text-shadow: 1px 1px 2px black;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
 
+    .toggle-images-row {
+        background: #2e4070; color: #fff; border: none;
+        padding: 4px 10px; border-radius: 4px; cursor: pointer;
+        font-size: 12px; margin-top: 4px;
+    }
+    .toggle-images-row:hover { background: #1a2340; }
+</style>
+{% endblock %}
 
-.modal-controls {
-    color: white;
-    font-family: sans-serif;
-}
+{% block content %}
 
-.button-group {
-    display: inline-flex;
-    gap: 2px;
-    margin: 10px 0;
-}
-
-.nav-btn, #reset-zoom-btn {
-    background: #444;
-    border: none;
-    color: white;
-    padding: 10px 18px;
-    cursor: pointer;
-    font-size: 14px;
-}
-
-.nav-btn:hover, #reset-zoom-btn:hover { background: #666; }
-
-/* Styling specifically for the Reset button */
-#reset-zoom-btn {
-    background: #007bff;
-    font-weight: bold;
-}
-
-.prev-btn { border-radius: 4px 0 0 4px; }
-.next-btn { border-radius: 0 4px 4px 0; }
-
-#modal-status-badge {
-    padding: 3px 10px;
-    border-radius: 4px;
-    font-weight: bold;
-    font-size: 12px;
-    margin-right: 10px;
-}
-.status-valid { background: #28a745; }
-.status-invalid { background: #dc3545; }
-
-
-/* Thumbnail Overlay */
-.img-container {
-    position: relative;
-}
-
-.well-badge {
-    position: absolute;
-    top: 5px;
-    left: 5px;
-    background: rgba(0, 0, 0, 0.6);
-    color: white;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 11px;
-    font-weight: bold;
-    pointer-events: none; /* Allows clicks to pass through to the image */
-}
-
-/* Modal Label Styling */
-#modal-well-display {
-    position: absolute;
-    top: 15px;
-    left: 15px;
-    background: rgba(0, 0, 0, 0.7);
-    color: white;
-    border-radius: 4px;
-    font-weight: bold;
-    pointer-events: none; /* Let the scroll-wheel zoom pass through to the image */
-    text-shadow: 1px 1px 2px black;
-    border: 1px solid rgba(255,255,255,0.2);
-}
-
-    </style>
-</head>
-<body>
-
-
-
-
+<!-- Image modal (rendered once, populated on click) -->
 <div id="image-modal">
     <div class="modal-content-wrapper">
         <div id="zoom-container" style="position: relative; overflow: hidden;">
             <div id="modal-well-display" class="well-overlay" style="font-size: 20px; padding: 8px 15px; z-index: 100;"></div>
-            
             <img id="modal-img" src="">
         </div>
 
@@ -240,17 +198,13 @@
                 <button class="nav-btn next-btn">Next &#10095;</button>
             </div>
             <div style="font-size: 11px; opacity: 0.6; margin-top: 5px;">
-                Scroll to Zoom • Click Background to Close
+                Scroll to Zoom &middot; Click Background to Close &middot; ← / → / R / Esc
             </div>
-
         </div>
     </div>
 </div>
 
-
-<h2>Well Table</h2>
-
-<table id="well-table" class="display">
+<table id="well-table" class="display" style="width:100%">
     <thead>
         <tr>
             <th>Experiment</th>
@@ -258,57 +212,47 @@
             <th>Dest Wells</th>
             <th>Valid</th>
             <th>Drugs</th>
-  
-
- <th>N dest wells</th>
-<th>N fish</th>
-<th>N fish valid</th>
-<th>N fish invalid</th>
-<th>avg somites</th>
-<th>avg defective somites</th>
-<th>fraction defective somites</th> 
-
+            <th>N dest wells</th>
+            <th>N fish</th>
+            <th>N fish valid</th>
+            <th>N fish invalid</th>
+            <th>avg somites</th>
+            <th>avg defective somites</th>
+            <th>fraction defective somites</th>
         </tr>
     </thead>
     <tbody>
         {% for r in rows %}
         <tr>
+            <td>
+                {{ r.exp }}
+                <br>
+                <button class="toggle-images-row" style="cursor:pointer;">Show images</button>
 
-<td>
-    {{ r.exp }}
-    <br>
-    <button class="toggle-images-row" style="cursor:pointer;">Show images</button>
-    
-
-<div class="image-content-source" style="display:none;">
-    <div style="padding: 15px;">
-        <strong>Valid Images</strong>
-        <div class="image-grid">
-            {% for img_url, well_name in r.images_valid %}
-                <div class="img-container" style="position:relative; display:inline-block; margin:5px;">
-                    <img src="{{ img_url }}" class="zoomable" width="350" data-status="valid" data-well="{{ well_name }}">
-                    <div class="well-overlay">{{ well_name }}</div>
+                <div class="image-content-source" style="display:none;">
+                    <div style="padding: 15px;">
+                        <strong>Valid Images</strong>
+                        <div class="image-grid">
+                            {% for img_url, well_name in r.images_valid %}
+                                <div class="img-container" style="position:relative; display:inline-block; margin:5px;">
+                                    <img src="{{ img_url }}" class="zoomable" width="350" data-status="valid" data-well="{{ well_name }}">
+                                    <div class="well-overlay">{{ well_name }}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <br>
+                        <strong>Invalid Images</strong>
+                        <div class="image-grid">
+                            {% for img_url, well_name in r.images_invalid %}
+                                <div class="img-container" style="position:relative; display:inline-block; margin:5px;">
+                                    <img src="{{ img_url }}" class="zoomable" width="350" data-status="invalid" data-well="{{ well_name }}">
+                                    <div class="well-overlay">{{ well_name }}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
-            {% endfor %}
-        </div>
-        <br>
-        <strong>Invalid Images</strong>
-        <div class="image-grid">
-            {% for img_url, well_name in r.images_invalid %}
-                <div class="img-container" style="position:relative; display:inline-block; margin:5px;">
-                    <img src="{{ img_url }}" class="zoomable" width="350" data-status="invalid" data-well="{{ well_name }}">
-                    <div class="well-overlay">{{ well_name }}</div>
-                </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-
-
-
-
-</td>
-
+            </td>
 
             <td>{{ r.well }}</td>
             <td>{{ r.dest_wells }}</td>
@@ -318,71 +262,60 @@
                     <strong>{{ d.name }}</strong> ({{ d.conc }})<br>
                 {% endfor %}
             </td>
-
-
- <td>{{ r.number_of_dest_wells }}</td>
-<td>{{ r.number_of_fish }}</td>
-<td>{{ r.number_of_fish_valid }}</td>
-<td>{{ r.number_of_fish_notvalid }}</td>
-<td>{{ r.avg_total_somites|floatformat:2 }} ± {{ r.total_somites_err|floatformat:2 }}</td>
-<td>{{ r.avg_bad_somites|floatformat:2 }} ± {{ r.bad_somites_err|floatformat:2 }}</td>
-<td>{{ r.fraction_bad_somites|floatformat:2 }}</td>
-
-</tr> 
-
+            <td>{{ r.number_of_dest_wells }}</td>
+            <td>{{ r.number_of_fish }}</td>
+            <td>{{ r.number_of_fish_valid }}</td>
+            <td>{{ r.number_of_fish_notvalid }}</td>
+            <td>{{ r.avg_total_somites|floatformat:2 }} ± {{ r.total_somites_err|floatformat:2 }}</td>
+            <td>{{ r.avg_bad_somites|floatformat:2 }} ± {{ r.bad_somites_err|floatformat:2 }}</td>
+            <td>{{ r.fraction_bad_somites|floatformat:2 }}</td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 
+{% endblock %}
+
+{% block extra_js %}
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 
 <script>
-
-
 $(document).ready(function() {
 
+    let isDragging = false;
+    let startX, startY;
+    let currentX = 0, currentY = 0;
 
-let isDragging = false;
-let startX, startY;
-let currentX = 0, currentY = 0;
+    // 1. Mousedown (start)
+    $('#zoom-container').on('mousedown', function(e) {
+        if (scale > 1) {
+            isDragging = true;
+            $(this).css('cursor', 'grabbing');
+            startX = e.pageX - currentX;
+            startY = e.pageY - currentY;
+            e.preventDefault();
+        }
+    });
 
-// 1. Mousedown (Start)
-$('#zoom-container').on('mousedown', function(e) {
-    if (scale > 1) { 
-        isDragging = true;
-        $(this).css('cursor', 'grabbing');
-        
-        // Calculate the offset of the click relative to the image's current position
-        startX = e.pageX - currentX;
-        startY = e.pageY - currentY;
-        
-        e.preventDefault(); // STOPS THE "LOCKING" BUG
-    }
-});
+    // 2. Mousemove (moving — global)
+    $(document).on('mousemove', function(e) {
+        if (isDragging) {
+            currentX = e.pageX - startX;
+            currentY = e.pageY - startY;
+            updateImageTransform();
+        }
+    });
 
-// 2. Mousemove (Moving - Global)
-$(document).on('mousemove', function(e) {
-    if (isDragging) {
-        currentX = e.pageX - startX;
-        currentY = e.pageY - startY;
-        updateImageTransform();
-    }
-});
+    // 3. Mouseup (stop — global)
+    $(document).on('mouseup', function() {
+        if (isDragging) {
+            isDragging = false;
+            $('#zoom-container').css('cursor', 'grab');
+        }
+    });
 
-// 3. Mouseup (Stop - Global)
-$(document).on('mouseup', function() {
-    if (isDragging) {
-        isDragging = false;
-        $('#zoom-container').css('cursor', 'grab');
-    }
-});
-
-
-
-
-    // Update the reset button to also reset position
+    // Reset button also resets pan
     $('#reset-zoom-btn').on('click', function() {
         scale = 1;
         currentX = 0;
@@ -390,7 +323,7 @@ $(document).on('mouseup', function() {
         updateImageTransform();
     });
 
-    // Helper to apply both Zoom and Pan
+    // Helper: apply both zoom and pan
     function updateImageTransform() {
         $('#modal-img').css({
             'transform': `scale(${scale})`,
@@ -399,13 +332,11 @@ $(document).on('mouseup', function() {
         });
     }
 
-
-
     var table = $('#well-table').DataTable({ pageLength: 25 });
     let currentImgElement = null;
     let scale = 1;
 
-    // 1. Child Row Logic
+    // 1. Child row logic
     $('#well-table tbody').on('click', '.toggle-images-row', function () {
         var tr = $(this).closest('tr');
         var row = table.row(tr);
@@ -418,7 +349,7 @@ $(document).on('mouseup', function() {
         }
     });
 
-    // 2. Open Modal
+    // 2. Open modal
     $(document).on("click", ".zoomable", function(e) {
         currentImgElement = $(this);
         scale = 1;
@@ -426,103 +357,82 @@ $(document).on('mouseup', function() {
         $('#image-modal').fadeIn(200);
     });
 
+    function updateModal() {
+        if (!currentImgElement) return;
 
+        currentX = 0;
+        currentY = 0;
 
+        const src = currentImgElement.attr('src');
+        const wellName = currentImgElement.attr('data-well');
+        const status = currentImgElement.attr('data-status');
 
+        $('#modal-img').attr('src', src);
+        updateImageTransform();
 
-function updateModal() {
-    if (!currentImgElement) return;
+        $('#modal-well-display').text(wellName);
 
-    // Reset position for the new image
-    currentX = 0;
-    currentY = 0;
+        if (status === 'invalid') {
+            $('#modal-status-badge').text('Invalid').attr('class', 'status-invalid');
+        } else {
+            $('#modal-status-badge').text('Valid').attr('class', 'status-valid');
+        }
 
-    const src = currentImgElement.attr('src');
-    const wellName = currentImgElement.attr('data-well');
-    const status = currentImgElement.attr('data-status');
+        const allImgs = currentImgElement.closest('.image-grid').find('.zoomable');
+        const idx = allImgs.index(currentImgElement);
+        const total = allImgs.length;
 
-    $('#modal-img').attr('src', src);
-    updateImageTransform(); // Apply reset scale/pos
-
-    // This will now update the badge inside the zoom container
-    $('#modal-well-display').text(wellName);
-    
-    // 3. Status Detection
-    if (status === 'invalid') {
-        $('#modal-status-badge').text('Invalid').attr('class', 'status-invalid');
-    } else {
-        $('#modal-status-badge').text('Valid').attr('class', 'status-valid');
+        $('.prev-btn').prop('disabled', idx === 0).css('opacity', idx === 0 ? 0.3 : 1);
+        $('.next-btn').prop('disabled', idx === total - 1).css('opacity', idx === total - 1 ? 0.3 : 1);
+        $('#modal-caption').text(`(${idx + 1} / ${total})`);
     }
 
-    // 4. Navigation Logic
-    const allImgs = currentImgElement.closest('.image-grid').find('.zoomable');
-    const idx = allImgs.index(currentImgElement);
-    const total = allImgs.length;
-
-    $('.prev-btn').prop('disabled', idx === 0).css('opacity', idx === 0 ? 0.3 : 1);
-    $('.next-btn').prop('disabled', idx === total - 1).css('opacity', idx === total - 1 ? 0.3 : 1);
-    $('#modal-caption').text(`(${idx + 1} / ${total})`);
-}
-
-
-
-
-
     $('#zoom-container').on('wheel', function(e) {
-    e.preventDefault();
-    scale += (e.originalEvent.deltaY < 0 ? 0.2 : -0.2);
-    scale = Math.min(Math.max(1, scale), 5);
-    updateImageTransform();
-});
+        e.preventDefault();
+        scale += (e.originalEvent.deltaY < 0 ? 0.2 : -0.2);
+        scale = Math.min(Math.max(1, scale), 5);
+        updateImageTransform();
+    });
 
     $('#reset-zoom-btn').on('click', function() {
         scale = 1;
         $('#modal-img').css('transform', `scale(1)`);
     });
 
-    // 4. Grouped Navigation Click
+    // 4. Grouped navigation
     $('.nav-btn').on('click', function(e) {
         e.stopPropagation();
         const allImgs = currentImgElement.closest('.image-grid').find('.zoomable');
         let idx = allImgs.index(currentImgElement);
         const direction = $(this).hasClass('next-btn') ? 1 : -1;
         const newIdx = idx + direction;
-
-        // Check if the next/prev image actually exists
         if (newIdx >= 0 && newIdx < allImgs.length) {
             currentImgElement = allImgs.eq(newIdx);
-            scale = 1; // Reset zoom when switching images
+            scale = 1;
             updateModal();
         }
     });
 
     // 5. Close on background click
+    $('#image-modal').on('click', function(e) {
+        if (e.target === this) {
+            $(this).fadeOut(200);
+        }
+    });
 
-// Close modal only if clicking the DARK BACKGROUND (not the image or controls)
-$('#image-modal').on('click', function(e) {
-    if (e.target === this) {
-        $(this).fadeOut(200);
-    }
+    $(document).keydown(function(e) {
+        if (e.keyCode == 27) $('#image-modal').fadeOut(200); // Esc
+    });
 });
 
-// If you want a specific way to close it without clicking the background, 
-// use the Escape key or add a "Close" button.
-$(document).keydown(function(e) {
-    if (e.keyCode == 27) $('#image-modal').fadeOut(200); // ESC to close
-});
-
-
-});
-
+// Keyboard navigation when modal is open
 $(document).keydown(function(e) {
     if ($('#image-modal').is(':visible')) {
-        if (e.keyCode == 37) $('.prev-btn').click();  // Left arrow
-        if (e.keyCode == 39) $('.next-btn').click();  // Right arrow
-        if (e.keyCode == 27) $('#image-modal').click(); // Esc to close
-        if (e.keyCode == 82) $('#reset-zoom-btn').click(); // 'R' to reset zoom
+        if (e.keyCode == 37) $('.prev-btn').click();  // ←
+        if (e.keyCode == 39) $('.next-btn').click();  // →
+        if (e.keyCode == 27) $('#image-modal').click(); // Esc
+        if (e.keyCode == 82) $('#reset-zoom-btn').click(); // R
     }
 });
-
 </script>
-</body>
-</html>
+{% endblock %}
