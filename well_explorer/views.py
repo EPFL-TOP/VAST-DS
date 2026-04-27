@@ -1269,8 +1269,11 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 for dest in dest_well_positions:
                     try:
                         props = dest.dest_well_properties  # reverse OneToOne accessor
-                        #if props.valid and props.n_total_somites>=0 and props.n_bad_somites >=0:
-                        #Add false to train other model
+                        # Project rule: never include valid=False annotations
+                        # in any training data. (Same rule applied by the
+                        # resplit_training_data management command.)
+                        if not props.valid:
+                            continue
                         if props.n_total_somites>=0 and props.n_bad_somites >=0:
                             # Pick the bucket. If the annotation already has a
                             # flag set (e.g. assigned by a previous run or by

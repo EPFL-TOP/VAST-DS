@@ -79,9 +79,6 @@ class Command(BaseCommand):
                             help="Pull from <well>/corrected_orientation/ instead of the raw well folder")
         parser.add_argument("--dry_run", action="store_true", default=False,
                             help="Print the plan, don't touch the DB or filesystem")
-        parser.add_argument("--keep_invalid", action="store_true", default=False,
-                            help="Include `valid=False` annotations (by default they are skipped, "
-                                 "matching how training scripts filter their datasets)")
 
     # ------------------------------------------------------------------
     def handle(self, *args, **opts):
@@ -92,26 +89,53 @@ class Command(BaseCommand):
         out = opts["output_path"]
         seed = opts["seed"]
         dry = opts["dry_run"]
-        keep_invalid = opts["keep_invalid"]
 
         random.seed(seed)
         self.stdout.write(self.style.NOTICE(
             f"Re-split: train={ratios[0]} valid={ratios[1]} test={ratios[2]} "
-            f"seed={seed} dry_run={dry} keep_invalid={keep_invalid}"))
+            f"seed={seed} dry_run={dry}"))
 
-        # ---- 1. Collect annotated wells with usable somite labels ----
+        # ---- 1. Collect eligible annotations.
+        # Rule:
+        #   * `valid=True` is REQUIRED — invalid fish are never used in training
+        #     of any task (project policy: invalid fish aren't used for analysis).
+        #   * Must have at least one usable label for at least one task —
+        #       somite (n_total_somites >= 0 AND n_bad_somites >= 0)
+        #       OR orientation (correct_orientation is not None)
+        #     The training Datasets do their own per-task filtering at JSON
+        #     read time, so a sample with only an orientation label still
+        #     gets pulled into orientation training and ignored by the
+        #     somite/validity scripts.
+        #
+        # NOTE on the validity classifier: with `valid=False` excluded
+        # everywhere, the validity classifier sees only positive examples
+        # and will degenerate. If you want to train it properly, you'll
+        # need negative examples — flag this when planning that work.
         candidates = []
+        n_skip_invalid = 0
+        n_skip_no_label = 0
         for props in DestWellProperties.objects.select_related(
             "dest_well__well_plate__experiment").iterator():
-            if props.n_total_somites is None or props.n_total_somites < 0:
-                continue
-            if props.n_bad_somites is None or props.n_bad_somites < 0:
-                continue
-            if not keep_invalid and not props.valid:
+            if not props.valid:
+                n_skip_invalid += 1
                 continue
             if props.dest_well is None:
                 continue
+            has_somites = (
+                props.n_total_somites is not None and props.n_total_somites >= 0
+                and props.n_bad_somites is not None and props.n_bad_somites >= 0
+            )
+            has_orientation = (props.correct_orientation is not None)
+            if not (has_somites or has_orientation):
+                n_skip_no_label += 1
+                continue
             candidates.append(props)
+        if n_skip_invalid:
+            self.stdout.write(self.style.NOTICE(
+                f"  Skipped {n_skip_invalid} annotation(s) with valid=False"))
+        if n_skip_no_label:
+            self.stdout.write(self.style.NOTICE(
+                f"  Skipped {n_skip_no_label} annotation(s) with no usable label"))
 
         n = len(candidates)
         if n == 0:

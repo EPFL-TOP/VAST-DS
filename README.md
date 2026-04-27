@@ -144,28 +144,35 @@ them). The wells that land in the test bucket show up in the
 
 ### Retraining
 
-> **Order matters**: retrain the **orientation classifier first**, then re-run
-> orientation correction on every well, then retrain the somite counter and
-> validity classifier. The somite/validity training data is typically sourced
-> from each well's `corrected_orientation/` subfolder, so refreshing those
-> folders with the new orientation model produces cleaner training data.
+> **Order matters**: orientation first, then refresh the canonicalised
+> images, then re-split, then the count + validity models, then refresh
+> production predictions. Each step depends on the canonical output of the
+> previous one.
+
+> **Strict rule on invalid fish**: annotations with `valid=False` are
+> **never** used in training of any task. `resplit_training_data` and the
+> dashboard's "Create Training Set" button both enforce this.
 
 ```bash
-# 1. Orientation classifier (BF images)
+# 1. Orientation classifier (BF images, no flips during augmentation)
 python -m somiteCounting.training_orientation \
     --input_data_path D:\vast\VAST-DS\training_data \
     --model_save_path checkpoints \
     --epochs 40 --batch_size 8
 
-# 2. Refresh corrected_orientation/ folders for every well using the new model.
+# 2. Refresh corrected_orientation/ for every well, using the new model.
 #    Walks each experiment, picks the best of {no flip, hflip, vflip, hflip+vflip}
-#    on the BF image, and writes the flipped copies to <well>/corrected_orientation/.
-python somiteCounting/orientfish.py
+#    on the BF image, and writes flipped copies to <well>/corrected_orientation/.
+python manage.py refresh_orientation \
+    --checkpoint checkpoints/orientation_best.pth
+# add --experiment VAST_2026-04 to limit to one experiment
 
 # 3. Re-split annotations into train / valid / test and rebuild the on-disk
 #    training folders from the freshly canonicalised images. Also sets the
 #    use_for_training / use_for_validation / use_for_test flags on
 #    DestWellProperties so the Statistics page matches the on-disk split.
+#    Includes annotations that have any usable label (somite OR orientation),
+#    so orientation-only labels still get fair coverage.
 python manage.py resplit_training_data \
     --output_path D:\vast\VAST-DS\training_data \
     --train 0.70 --valid 0.15 --test 0.15 \
@@ -183,10 +190,18 @@ python -m somiteCounting.training_valid \
     --input_data_path D:\vast\VAST-DS\training_data \
     --model_save_path checkpoints \
     --epochs 50 --batch_size 8
+
+# 6. Refresh production predictions for every dest well in the DB with the
+#    new checkpoints (batch counterpart to "Predict Full Plate").
+python manage.py reinfer
+# limits: --experiment VAST_2026-04 --plate 2
+
+# 7. Restart the Django dev server so the dashboard's in-memory models
+#    pick up the new checkpoints.
 ```
 
-Each script also runs as `python somiteCounting/<file>.py …` if you prefer
-the old style — both work.
+Each training script also runs as `python somiteCounting/<file>.py …` if
+you prefer the old style — both work.
 
 After training, three files appear in `checkpoints/`:
 

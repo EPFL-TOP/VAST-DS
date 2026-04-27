@@ -161,7 +161,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr_head", type=float, default=1e-4)
     parser.add_argument("--lr_backbone", type=float, default=1e-5)
     parser.add_argument("--patience", type=int, default=7)
-    parser.add_argument("--input_data_path", type=str, default=r"D:\vast\training_data")
+    parser.add_argument("--input_data_path", type=str, default=r"D:\vast\VAST-DS\training_data")
     parser.add_argument("--model_save_path", type=str, default="checkpoints")
     parser.add_argument("--test_data_path", type=str, default=None)
     parser.add_argument("--skip_test_eval", action="store_true", default=False)

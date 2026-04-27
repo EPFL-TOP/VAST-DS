@@ -296,6 +296,15 @@
       cleaner training data.
     </div>
 
+    <div class="callout">
+      <strong>Strict rule on invalid fish.</strong> Annotations with
+      <code>valid=False</code> are <strong>never</strong> used in training of
+      any task. <code>resplit_training_data</code> and the dashboard's
+      "Create Training Set" button both enforce this. Consequence: the
+      validity classifier sees only positive examples and will degenerate —
+      flag this when planning to retrain it on its own.
+    </div>
+
     <ol class="step-list">
       <li>
         <strong>Retrain orientation</strong>:
@@ -305,20 +314,22 @@
     --epochs 40 --batch_size 8</code></pre>
       </li>
       <li>
-        <strong>Re-run orientation correction</strong> on all experiments so
-        every well's <code>corrected_orientation/</code> folder uses the new
-        model:
-<pre><code>python somiteCounting/orientfish.py</code></pre>
-        This walks every well, picks the best of {no flip, hflip, vflip,
-        hflip+vflip}, and writes the flipped images to
-        <code>&lt;well&gt;/corrected_orientation/</code>.
+        <strong>Refresh <code>corrected_orientation/</code> for every well</strong>
+        using the new model. Wraps <code>orientfish.py</code> as a
+        management command with proper CLI flags and an experiment filter:
+<pre><code>python manage.py refresh_orientation \
+    --checkpoint checkpoints/orientation_best.pth
+# or limit to a single experiment:
+python manage.py refresh_orientation --experiment VAST_2026-04</code></pre>
       </li>
       <li>
         <strong>Re-split annotations</strong> into train / valid / test and
         rebuild the on-disk training folders from the freshly canonicalised
         images (this also sets the
         <code>use_for_training</code> / <code>use_for_validation</code> /
-        <code>use_for_test</code> flags on <code>DestWellProperties</code>):
+        <code>use_for_test</code> flags on <code>DestWellProperties</code>).
+        Includes any annotation with at least one usable label (somite or
+        orientation), so orientation-only annotations get fair coverage:
 <pre><code>python manage.py resplit_training_data \
     --output_path D:\vast\VAST-DS\training_data \
     --train 0.70 --valid 0.15 --test 0.15 \
@@ -340,10 +351,19 @@
     --epochs 50 --batch_size 8</code></pre>
       </li>
       <li>
-        <strong>Restart the Django server</strong> so the dashboard picks up
-        the new checkpoints. Checkpoint paths are hard-coded in
-        <code>well_explorer/views.py</code> (lines ~50–75) — if you change
-        <code>--model_save_path</code>, update them too.
+        <strong>Refresh production predictions</strong> for every dest well
+        in the database with the new checkpoints (batch counterpart to the
+        dashboard's "Predict Full Plate" button):
+<pre><code>python manage.py reinfer
+# or limit:
+python manage.py reinfer --experiment VAST_2026-04 --plate 2</code></pre>
+      </li>
+      <li>
+        <strong>Restart the Django server</strong> so the dashboard's
+        in-memory model instances pick up the new checkpoints. Checkpoint
+        paths are hard-coded in <code>well_explorer/views.py</code>
+        (lines ~50–75) — if you changed <code>--model_save_path</code>,
+        update them too.
       </li>
     </ol>
 
