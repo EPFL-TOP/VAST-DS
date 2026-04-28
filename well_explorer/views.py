@@ -182,14 +182,14 @@ def vast_handler(doc: bokeh.document.Document) -> None:
     prediction_message    = bokeh.models.Div(visible=False)
 
     plot_wellplate_dest   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title='',
-                                                  width=900, height=600, tools="box_select,box_zoom,reset,undo")
+                                                  width=560, height=380, tools="box_select,box_zoom,reset,undo")
     plot_wellplate_dest.xaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest.yaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest.grid.visible = False
     plot_wellplate_dest.axis.visible = False
 
     plot_wellplate_dest_2   = bokeh.plotting.figure(x_range=bokeh.models.FactorRange(*x_96), y_range=bokeh.models.FactorRange(*y_96), title='',
-                                                    width=900, height=600, tools="box_select,box_zoom,reset,undo")
+                                                    width=560, height=380, tools="box_select,box_zoom,reset,undo")
     plot_wellplate_dest_2.xaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest_2.yaxis.major_label_text_font_size = "15pt"
     plot_wellplate_dest_2.grid.visible = False
@@ -1386,24 +1386,29 @@ def vast_handler(doc: bokeh.document.Document) -> None:
 
     data_img_bf   = {'img':[]}
     source_img_bf = bokeh.models.ColumnDataSource(data=data_img_bf)
-    plot_img_bf   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="pan,box_select,wheel_zoom,box_zoom,reset,undo",width=550, height=550)
+    # All four image plots share roughly the same target width inside the
+    # tabs container so the strip is visually consistent. The cropped YFP
+    # keeps its wide aspect (it's a strip across the fish); VAST is naturally
+    # tall (multi-frame stack) but is now constrained so the dashboard fits.
+    IMG_TAB_W = 600
+    plot_img_bf   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="pan,box_select,wheel_zoom,box_zoom,reset,undo",width=IMG_TAB_W, height=IMG_TAB_W)
     plot_img_bf.image(image='img', x=0, y=0, dw=im_size, dh=im_size, source=source_img_bf, color_mapper=color_mapper)
 
     data_img_yfp   = {'img':[]}
     source_img_yfp = bokeh.models.ColumnDataSource(data=data_img_yfp)
-    plot_img_yfp   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="pan,box_select,wheel_zoom,box_zoom,reset,undo",width=550, height=550)
+    plot_img_yfp   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="pan,box_select,wheel_zoom,box_zoom,reset,undo",width=IMG_TAB_W, height=IMG_TAB_W)
     plot_img_yfp.image(image='img', x=0, y=0, dw=im_size, dh=im_size, source=source_img_yfp, color_mapper=color_mapper)
 
     data_img_yfp_cropped   = {'img':[]}
     source_img_yfp_cropped = bokeh.models.ColumnDataSource(data=data_img_yfp_cropped)
-    plot_img_yfp_cropped   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="pan,box_select,wheel_zoom,box_zoom,reset,undo",width=1100, height=275)
+    plot_img_yfp_cropped   = bokeh.plotting.figure(x_range=x_range, y_range=y_range, tools="pan,box_select,wheel_zoom,box_zoom,reset,undo",width=IMG_TAB_W, height=200)
     plot_img_yfp_cropped.image(image='img', x=0, y=0, dw=im_size, dh=im_size, source=source_img_yfp_cropped, color_mapper=color_mapper)
 
     data_img_vast   = {'img':[]}
     source_img_vast = bokeh.models.ColumnDataSource(data=data_img_vast)
     x_range_2 = bokeh.models.Range1d(start=0, end=1024)
     y_range_2 = bokeh.models.Range1d(start=0, end=200*4)
-    plot_img_vast   = bokeh.plotting.figure(x_range=x_range_2, y_range=y_range_2, tools="box_select,wheel_zoom,box_zoom,reset,undo",width=1110, height=217*4)
+    plot_img_vast   = bokeh.plotting.figure(x_range=x_range_2, y_range=y_range_2, tools="box_select,wheel_zoom,box_zoom,reset,undo",width=IMG_TAB_W, height=520)
     plot_img_vast.image_rgba(image='img', x=0, y=0, dw=1024, dh=200*4, source=source_img_vast)
 
 
