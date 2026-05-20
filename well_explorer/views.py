@@ -844,21 +844,21 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 plot_wellplate_dest.x_range.factors = x_96
                 plot_wellplate_dest.y_range.factors = y_96
                 plot_wellplate_dest.title.text = "96 well plate"
-                cds_labels_dest.data = dict(source_labels_96.data, size=[50*nzoom_wells]*len(source_labels_96.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
+                cds_labels_dest.data = dict(source_labels_96.data, size=[30*nzoom_wells]*len(source_labels_96.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
                 plot_wellplate_dest.axis.visible = True
 
             elif dest_well_plate.plate_type == '48':
                 plot_wellplate_dest.x_range.factors = x_48
                 plot_wellplate_dest.y_range.factors = y_48
                 plot_wellplate_dest.title.text = "48 well plate"
-                cds_labels_dest.data = dict(source_labels_48.data, size=[65*nzoom_wells]*len(source_labels_48.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
+                cds_labels_dest.data = dict(source_labels_48.data, size=[42*nzoom_wells]*len(source_labels_48.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
                 plot_wellplate_dest.axis.visible = True
 
             elif dest_well_plate.plate_type == '24':
                 plot_wellplate_dest.x_range.factors = x_24
                 plot_wellplate_dest.y_range.factors = y_24
                 plot_wellplate_dest.title.text = "24 well plate"
-                cds_labels_dest.data = dict(source_labels_24.data, size=[80*nzoom_wells]*len(source_labels_24.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
+                cds_labels_dest.data = dict(source_labels_24.data, size=[55*nzoom_wells]*len(source_labels_24.data['x']) if cds_labels_dest.data['size']==[] else cds_labels_dest.data['size'])
                 plot_wellplate_dest.axis.visible = True
 
         if n_plates==2:
@@ -867,21 +867,21 @@ def vast_handler(doc: bokeh.document.Document) -> None:
                 plot_wellplate_dest_2.x_range.factors = x_96
                 plot_wellplate_dest_2.y_range.factors = y_96
                 plot_wellplate_dest_2.title.text = "96 well plate"
-                cds_labels_dest_2.data = dict(source_labels_96.data, size=[50*nzoom_wells]*len(source_labels_96.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
+                cds_labels_dest_2.data = dict(source_labels_96.data, size=[30*nzoom_wells]*len(source_labels_96.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
                 plot_wellplate_dest_2.axis.visible = True
 
             elif dest_well_plate_2.plate_type == '48':
                 plot_wellplate_dest_2.x_range.factors = x_48
                 plot_wellplate_dest_2.y_range.factors = y_48
                 plot_wellplate_dest_2.title.text = "48 well plate"
-                cds_labels_dest_2.data = dict(source_labels_48.data, size=[65*nzoom_wells]*len(source_labels_48.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
+                cds_labels_dest_2.data = dict(source_labels_48.data, size=[42*nzoom_wells]*len(source_labels_48.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
                 plot_wellplate_dest_2.axis.visible = True
 
             elif dest_well_plate_2.plate_type == '24':
                 plot_wellplate_dest_2.x_range.factors = x_24
                 plot_wellplate_dest_2.y_range.factors = y_24
                 plot_wellplate_dest_2.title.text = "24 well plate"
-                cds_labels_dest_2.data = dict(source_labels_24.data, size=[80*nzoom_wells]*len(source_labels_24.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
+                cds_labels_dest_2.data = dict(source_labels_24.data, size=[55*nzoom_wells]*len(source_labels_24.data['x']) if cds_labels_dest_2.data['size']==[] else cds_labels_dest_2.data['size'])
                 plot_wellplate_dest_2.axis.visible = True
 
         LOCALPATH = LOCALPATH_HIVE
@@ -2107,6 +2107,74 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
         p.legend.click_policy = 'hide'
         p.legend.location = 'top_left'
 
+    # --- Dose-response plots: somite count vs drug concentration ---
+    # Same drug derivation can have several `Drug` rows with different
+    # `concentration` values (one row per concentration); we aggregate
+    # somite measurements per concentration here. Log x-axis by default —
+    # drug screens typically span several orders of magnitude.
+    p_dose_total = bokeh.plotting.figure(
+        title='Total somites vs concentration',
+        width=580, height=380,
+        x_axis_label='Concentration', y_axis_label='Total somites (mean ± SEM)',
+        x_axis_type='log',
+        tools='pan,wheel_zoom,box_zoom,reset,save,hover',
+    )
+    p_dose_bad = bokeh.plotting.figure(
+        title='Defective somites vs concentration',
+        width=580, height=380,
+        x_axis_label='Concentration', y_axis_label='Defective somites (mean ± SEM)',
+        x_axis_type='log',
+        tools='pan,wheel_zoom,box_zoom,reset,save,hover',
+    )
+
+    # CDS columns: x (concentration), y (mean), upper / lower (y ± SEM),
+    # n (sample count per concentration — used in hover tooltip).
+    src_dose_total_pred = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], upper=[], lower=[], n=[]))
+    src_dose_total_ann  = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], upper=[], lower=[], n=[]))
+    src_dose_bad_pred   = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], upper=[], lower=[], n=[]))
+    src_dose_bad_ann    = bokeh.models.ColumnDataSource(data=dict(x=[], y=[], upper=[], lower=[], n=[]))
+
+    def _add_dose_series(fig, src, color, legend):
+        # connecting line (helps see dose-response trend across concentrations)
+        fig.line('x', 'y', source=src, color=color, line_width=2, alpha=0.6,
+                 legend_label=legend)
+        # markers
+        fig.scatter('x', 'y', source=src, size=10, fill_color=color,
+                    line_color='white', legend_label=legend)
+        # error bars
+        fig.add_layout(bokeh.models.Whisker(
+            base='x', upper='upper', lower='lower', source=src,
+            line_color=color, line_width=1.5,
+            upper_head=bokeh.models.TeeHead(size=10, line_color=color),
+            lower_head=bokeh.models.TeeHead(size=10, line_color=color),
+        ))
+
+    _add_dose_series(p_dose_total, src_dose_total_pred, '#2196F3', 'Predicted')
+    _add_dose_series(p_dose_total, src_dose_total_ann,  '#FF9800', 'Annotated')
+    _add_dose_series(p_dose_bad,   src_dose_bad_pred,   '#2196F3', 'Predicted')
+    _add_dose_series(p_dose_bad,   src_dose_bad_ann,    '#FF9800', 'Annotated')
+
+    for p in (p_dose_total, p_dose_bad):
+        p.legend.click_policy = 'hide'
+        p.legend.location = 'top_right'
+        # Hover shows concentration / mean / sample count
+        hover = p.select(dict(type=bokeh.models.HoverTool))
+        if hover:
+            hover[0].tooltips = [
+                ('Concentration', '@x'),
+                ('Mean',          '@y{0.00}'),
+                ('N',             '@n'),
+            ]
+
+    dose_note = bokeh.models.Div(
+        text=('<i style="color:#666; font-size:12px">'
+              'Dose-response: somite counts (valid fish only) grouped by '
+              '<code>Drug.concentration</code> for the selected derivation. '
+              'Log x-axis; concentrations &le; 0 are dropped. Each point is '
+              'the mean across all wells at that concentration; error bars are '
+              'standard error of the mean.</i>'),
+        width=1180)
+
     stats_div = bokeh.models.Div(text='', width=600, styles={'font-size': '13px', 'line-height': '1.6'})
 
     # --- Helpers ---
@@ -2151,6 +2219,9 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
             for s in SUBSET_COLORS:
                 src_scatter_total[s].data = dict(x=[], y=[])
                 src_scatter_bad[s].data = dict(x=[], y=[])
+            for s in (src_dose_total_pred, src_dose_total_ann,
+                      src_dose_bad_pred, src_dose_bad_ann):
+                s.data = dict(x=[], y=[], upper=[], lower=[], n=[])
             status_div.text = 'No experiments selected.'
             stats_div.text = ''
             return
@@ -2246,11 +2317,106 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
             diffs = [abs(a - p) for a, p in zip(d['ann'], d['pred'])]
             return sum(diffs) / len(diffs)
 
+        # --- Dose-response: aggregate per concentration ---
+        # We pull every Drug row with this derivation_name, walk through its
+        # source wells → dest wells → measurements, and build {concentration ->
+        # {total: [...], bad: [...]}} buckets. Two passes: one for predicted
+        # (resnet_v1), one for annotated. Both reuse the existing valid/subset
+        # filters that drive the histograms above.
+        #
+        # Important: the same dest well can be linked from a Drug row only via
+        # SourceWellPosition; we go through Drug.position to be explicit.
+        def _by_concentration(use_predictions: bool):
+            """Return {conc -> {'total': [...], 'bad': [...]}} for valid wells
+            of the selected drug in the selected experiments."""
+            buckets: dict = {}
+            drug_qs = Drug.objects.filter(
+                derivation_name=drug,
+                position__well_plate__experiment__name__in=selected,
+            ).distinct().prefetch_related('position')
+            for d in drug_qs:
+                conc = d.concentration
+                if conc is None or conc <= 0 or conc == -9999:
+                    continue
+                source_wells = list(d.position.all())
+                if not source_wells:
+                    continue
+                # Wells dosed at this concentration in the selected experiments
+                dest_qs = DestWellPosition.objects.filter(
+                    source_well__in=source_wells,
+                    well_plate__experiment__name__in=selected,
+                )
+                if use_predictions:
+                    pred_qs = DestWellPropertiesPredicted.objects.filter(
+                        dest_well__in=dest_qs,
+                        model_name=RESNET_MODEL_NAME,
+                    )
+                    if valid_filter is not None:
+                        pred_qs = pred_qs.filter(valid=valid_filter)
+                    rows = pred_qs
+                else:
+                    ann_qs = DestWellProperties.objects.filter(dest_well__in=dest_qs)
+                    if valid_filter is not None:
+                        ann_qs = ann_qs.filter(valid=valid_filter)
+                    if ann_filter == 'training':
+                        ann_qs = ann_qs.filter(use_for_training=True)
+                    elif ann_filter == 'validation':
+                        ann_qs = ann_qs.filter(use_for_validation=True)
+                    rows = ann_qs
+                b = buckets.setdefault(conc, {'total': [], 'bad': []})
+                for r in rows:
+                    if r.n_total_somites != -9999:
+                        b['total'].append(r.n_total_somites)
+                    if r.n_bad_somites != -9999:
+                        b['bad'].append(r.n_bad_somites)
+            return buckets
+
+        def _to_dose_cds(buckets: dict, field: str):
+            """{conc -> {'total':..., 'bad':...}} → CDS dict for plotting."""
+            xs, ys, ups, lows, ns = [], [], [], [], []
+            for conc in sorted(buckets.keys()):
+                vals = buckets[conc][field]
+                if not vals:
+                    continue
+                arr = np.array(vals, dtype=float)
+                mean = float(arr.mean())
+                sem = float(arr.std(ddof=1) / np.sqrt(len(arr))) if len(arr) > 1 else 0.0
+                xs.append(float(conc)); ys.append(mean)
+                ups.append(mean + sem); lows.append(mean - sem)
+                ns.append(len(arr))
+            return dict(x=xs, y=ys, upper=ups, lower=lows, n=ns)
+
+        if show_pred:
+            buckets_pred = _by_concentration(use_predictions=True)
+            src_dose_total_pred.data = _to_dose_cds(buckets_pred, 'total')
+            src_dose_bad_pred.data   = _to_dose_cds(buckets_pred, 'bad')
+        else:
+            src_dose_total_pred.data = dict(x=[], y=[], upper=[], lower=[], n=[])
+            src_dose_bad_pred.data   = dict(x=[], y=[], upper=[], lower=[], n=[])
+
+        if show_ann:
+            buckets_ann = _by_concentration(use_predictions=False)
+            src_dose_total_ann.data = _to_dose_cds(buckets_ann, 'total')
+            src_dose_bad_ann.data   = _to_dose_cds(buckets_ann, 'bad')
+        else:
+            src_dose_total_ann.data = dict(x=[], y=[], upper=[], lower=[], n=[])
+            src_dose_bad_ann.data   = dict(x=[], y=[], upper=[], lower=[], n=[])
+
+        # Count distinct concentrations for the title / banner
+        all_xs = set(src_dose_total_pred.data['x']) | set(src_dose_total_ann.data['x'])
+        n_conc = len(all_xs)
+
         valid_label = {0: 'valid', 1: 'invalid', 2: 'all'}[valid_radio.active]
         p_total.title.text = f'Total somites — {drug} ({valid_label} fish)'
         p_bad.title.text   = f'Defective somites — {drug} ({valid_label} fish)'
         p_scatter_total.title.text = f'Predicted vs annotated — total somites — {drug}'
         p_scatter_bad.title.text   = f'Predicted vs annotated — defective somites — {drug}'
+        p_dose_total.title.text = (
+            f'Total somites vs concentration — {drug} '
+            f'({n_conc} concentration{"s" if n_conc != 1 else ""})')
+        p_dose_bad.title.text = (
+            f'Defective somites vs concentration — {drug} '
+            f'({n_conc} concentration{"s" if n_conc != 1 else ""})')
 
         html  = f'<h3>{drug}</h3>'
         html += '<b>Total somites — distribution</b><br>'
@@ -2292,9 +2458,12 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
         width=370,
     )
     plots = bokeh.layouts.column(
-        bokeh.models.Div(text='<h4 style="margin:0">Distributions (histograms)</h4>'),
+        bokeh.models.Div(text='<h4 style="margin:0">Dose-response (somite count vs concentration)</h4>'),
+        dose_note,
+        bokeh.layouts.row(p_dose_total, p_dose_bad),
+        bokeh.models.Div(text='<h4 style="margin:18px 0 0">Distributions (histograms)</h4>'),
         bokeh.layouts.row(p_total, p_bad),
-        bokeh.models.Div(text='<h4 style="margin:14px 0 0">Predicted vs annotated (paired wells)</h4>'),
+        bokeh.models.Div(text='<h4 style="margin:18px 0 0">Predicted vs annotated (paired wells)</h4>'),
         bokeh.layouts.row(p_scatter_total, p_scatter_bad),
         stats_div,
     )
