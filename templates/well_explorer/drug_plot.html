@@ -2,7 +2,7 @@
 
 {% block title %}<title>VAST-DS · Drug somite plot</title>{% endblock %}
 {% block header_title %}Drug somite plot{% endblock %}
-{% block header_subtitle %}Interactive histograms and predicted-vs-annotated scatter plots per drug{% endblock %}
+{% block header_subtitle %}Dose-response, histograms, and predicted-vs-annotated scatters per drug{% endblock %}
 
 {% block breadcrumb %}
   <span class="sep">›</span> Well Explorer
@@ -25,10 +25,21 @@
 
 <p class="drug-plot-intro">
     Select a drug derivation and one or more experiments, then click <b>Update plot</b>.
-    Histograms show the distribution of total and defective somite counts; the scatter
-    plots show predicted-vs-annotated paired wells, coloured by which subset
-    (train / val / test) they belong to. Click legend labels to hide / show a series.
+    The page shows three views of the same data, all sharing the validity and
+    annotation-subset filters in the left panel:
 </p>
+<ul style="color:#55637a; font-size:13px; max-width:900px; margin-top:-12px;">
+    <li><b>Dose-response</b> &mdash; mean somite count (&plusmn; SEM) at each
+        <code>Drug.concentration</code> for the selected derivation, log x-axis.
+        Single-concentration drugs collapse to a single point with error bars.
+        Blue = predicted, orange = annotated; click a legend entry to hide
+        either series.</li>
+    <li><b>Histograms</b> &mdash; distributions of total / defective somite
+        counts across all selected wells, predicted vs annotated overlaid.</li>
+    <li><b>Predicted vs annotated</b> &mdash; per-well scatter, coloured by
+        which subset (train / val / test) the manual annotation belongs to.
+        Useful for spotting systematic over/under-prediction.</li>
+</ul>
 
 {% if script %}
     {{ script | safe }}
