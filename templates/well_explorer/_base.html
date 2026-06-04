@@ -128,6 +128,8 @@ The active sidebar link is auto-detected from the URL name.
        class="{% if current == 'drugs_listing' %}active{% endif %}">&#128138; Drug Listing</a>
     <a href="{% url 'stats_listing' %}"
        class="{% if current == 'stats_listing' %}active{% endif %}">&#128200; Statistics</a>
+    <a href="{% url 'model_eval' %}"
+       class="{% if current == 'model_eval' %}active{% endif %}">&#9874; Model Evaluation</a>
     <a href="{% url 'drug_plot' %}"
        class="{% if current == 'drug_plot' %}active{% endif %}">&#9654; Drug Somite Plot</a>
     <a href="{% url 'sam_dashboard' %}"

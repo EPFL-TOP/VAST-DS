@@ -98,6 +98,7 @@
     <a href="{% url 'experiment_listing' %}">&#128202; Experiment Listing</a>
     <a href="{% url 'drugs_listing' %}">&#128138; Drug Listing</a>
     <a href="{% url 'stats_listing' %}">&#128200; Statistics</a>
+    <a href="{% url 'model_eval' %}">&#9874; Model Evaluation</a>
     <a href="{% url 'drug_plot' %}">&#9654; Drug Somite Plot</a>
     <a href="{% url 'sam_dashboard' %}">&#9678; SAM Segmentation</a>
 
@@ -180,6 +181,19 @@
           annotations (agreement rate, MAE on total &amp; defective somites).
         </p>
         <a class="card-link" href="{% url 'stats_listing' %}">View statistics</a>
+      </div>
+
+      <div class="tool-card">
+        <div class="card-icon">&#9874;</div>
+        <p class="card-title">Model Evaluation</p>
+        <p class="card-desc">
+          Per-experiment scoring of model predictions against biologist
+          annotations. Aggregate metrics on held-out data plus a per-plate
+          heatmap of disagreements (spot microscope-driven patterns) and a
+          sortable per-well table. Click any cell or row to preview the
+          well's YFP / BF image and see why the numbers differ.
+        </p>
+        <a class="card-link" href="{% url 'model_eval' %}">Open dashboard</a>
       </div>
 
       <div class="tool-card">

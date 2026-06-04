@@ -2,6 +2,7 @@ from django.shortcuts import render
 
 from django.db import reset_queries
 from django.db import connection
+from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.contrib.auth.decorators import login_required, permission_required
 
@@ -2019,6 +2020,16 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
         options=all_exp_names, value=all_exp_names,
         height=180, width=350,
     )
+    # Concentration filter — narrows histograms + scatter to wells dosed at
+    # one specific concentration. Options auto-refresh when drug/experiment
+    # changes. Does NOT affect the dose-response plot (that always shows all).
+    ALL_CONC_LABEL = 'All concentrations'
+    concentration_select = bokeh.models.Select(
+        title='Concentration filter',
+        value=ALL_CONC_LABEL,
+        options=[ALL_CONC_LABEL],
+        width=350,
+    )
     source_radio = bokeh.models.RadioGroup(
         labels=['Predicted only', 'Annotated only', 'Both (overlay)'],
         active=0,
@@ -2203,6 +2214,38 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
                 f'mean={a.mean():.2f}, median={float(np.median(a)):.2f}, '
                 f'std={a.std():.2f}<br>')
 
+    def _refresh_concentrations():
+        """Repopulate `concentration_select` whenever the drug or selected
+        experiments change. Preserves the current selection if it still exists
+        in the new option list; falls back to 'All concentrations' otherwise."""
+        drug = drug_select.value
+        selected = exp_multi.value
+        if not drug or not selected:
+            concentration_select.options = [ALL_CONC_LABEL]
+            concentration_select.value = ALL_CONC_LABEL
+            return
+        raw = (Drug.objects
+               .filter(derivation_name=drug,
+                       position__well_plate__experiment__name__in=selected)
+               .values_list('concentration', flat=True)
+               .distinct())
+        concs = sorted({float(c) for c in raw
+                        if c is not None and c > 0 and c != -9999})
+        # Pretty-print: trim trailing zeros, keep at least one decimal place.
+        def _fmt_conc(c):
+            s = f'{c:.6g}'
+            return s
+        opts = [ALL_CONC_LABEL] + [_fmt_conc(c) for c in concs]
+        prev = concentration_select.value
+        concentration_select.options = opts
+        concentration_select.value = prev if prev in opts else ALL_CONC_LABEL
+
+    drug_select.on_change('value',
+                           lambda attr, old, new: _refresh_concentrations())
+    exp_multi.on_change('value',
+                         lambda attr, old, new: _refresh_concentrations())
+    _refresh_concentrations()   # populate once on page load
+
     # --- Update callback ---
     def do_update():
         drug         = drug_select.value
@@ -2228,6 +2271,26 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
 
         status_div.text = 'Fetching data…'
 
+        # Resolve concentration filter (None = all concentrations)
+        conc_filter = None
+        if concentration_select.value != ALL_CONC_LABEL:
+            try:
+                conc_filter = float(concentration_select.value)
+            except ValueError:
+                conc_filter = None
+
+        # Build the drug-related filters as a single kwargs dict so all M2M
+        # conditions land in the same Django join — that way derivation_name
+        # AND concentration apply to the SAME Drug row, not two different
+        # drugs at the source well.
+        drug_filters = {
+            'dest_well__source_well__isnull': False,
+            'dest_well__source_well__drugs__derivation_name': drug,
+            'dest_well__well_plate__experiment__name__in': selected,
+        }
+        if conc_filter is not None:
+            drug_filters['dest_well__source_well__drugs__concentration'] = conc_filter
+
         pred_total, pred_bad = [], []
         if show_pred:
             # NOTE: when SAM lands and produces 'sam_v1' rows, this query
@@ -2235,9 +2298,7 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
             # always read from the original ResNet predictions.
             qs = DestWellPropertiesPredicted.objects.filter(
                 model_name=RESNET_MODEL_NAME,
-                dest_well__source_well__isnull=False,
-                dest_well__source_well__drugs__derivation_name=drug,
-                dest_well__well_plate__experiment__name__in=selected,
+                **drug_filters,
             ).distinct()
             if valid_filter is not None:
                 qs = qs.filter(valid=valid_filter)
@@ -2249,11 +2310,7 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
 
         ann_total, ann_bad = [], []
         if show_ann:
-            qs = DestWellProperties.objects.filter(
-                dest_well__source_well__isnull=False,
-                dest_well__source_well__drugs__derivation_name=drug,
-                dest_well__well_plate__experiment__name__in=selected,
-            ).distinct()
+            qs = DestWellProperties.objects.filter(**drug_filters).distinct()
             if valid_filter is not None:
                 qs = qs.filter(valid=valid_filter)
             if ann_filter == 'training':
@@ -2279,9 +2336,7 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
         pair_bad   = {s: {'ann': [], 'pred': []} for s in SUBSET_COLORS}
 
         qs_pair = DestWellProperties.objects.filter(
-            dest_well__source_well__isnull=False,
-            dest_well__source_well__drugs__derivation_name=drug,
-            dest_well__well_plate__experiment__name__in=selected,
+            **drug_filters
         ).select_related('dest_well').distinct()
         if valid_filter is not None:
             qs_pair = qs_pair.filter(valid=valid_filter)
@@ -2447,6 +2502,7 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
         bokeh.models.Div(text='<h3 style="margin:0 0 8px">Controls</h3>'),
         drug_select,
         exp_multi,
+        concentration_select,
         bokeh.models.Div(text='<b>Data source:</b>'),
         source_radio,
         bokeh.models.Div(text='<b>Fish validity:</b>'),
@@ -2862,3 +2918,502 @@ def sam_dashboard(request: HttpRequest) -> HttpResponse:
     """Serve the SAM segmentation dashboard (Bokeh embed)."""
     script = bokeh.embed.server_document(request.build_absolute_uri())
     return render(request, 'well_explorer/sam_dashboard.html', {'script': script})
+
+
+#___________________________________________________________________________________________
+# Model evaluation dashboard
+#
+# Designed for the "is the model agreeing with the biologist?" question, with
+# explicit support for spotting microscope-driven per-well issues.
+#
+# Workflow:
+#   1. Pick an experiment (single, by design — disagreements are usually
+#      experiment-specific so we don't mix them up).
+#   2. Pick which prediction model_name to score (defaults to resnet_v1).
+#   3. Pick the subset of annotations to score against. Default is
+#      "Test + Unflagged" — these are wells the model never saw during
+#      training (either explicitly flagged use_for_test=True or never
+#      assigned to any of the three flags, which covers annotations
+#      added AFTER the model was trained).
+#   4. The page shows:
+#        - aggregate metrics (MAE/RMSE/R² for somites, confusion matrix for
+#          valid flag, agreement % for orientation)
+#        - a per-plate heatmap of |Δ total somites| so spatial patterns
+#          (microscope quadrant issues) jump out
+#        - a sortable per-well disagreement table
+#        - an image preview pane (YFP/BF tabs) that updates when you click
+#          a heatmap cell OR a table row
+def model_eval_handler(doc: bokeh.document.Document) -> None:
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+
+    # ----- Experiment + model choices -----
+    all_exp = sorted([e.name for e in Experiment.objects.all()])
+    if not all_exp:
+        doc.add_root(bokeh.models.Div(text='<b>No experiments in the database.</b>'))
+        return
+
+    model_names = sorted(
+        set(DestWellPropertiesPredicted.objects
+            .values_list('model_name', flat=True).distinct())) or [RESNET_MODEL_NAME]
+
+    exp_select   = bokeh.models.Select(title='Experiment',
+                                        value=all_exp[0], options=all_exp, width=320)
+    model_select = bokeh.models.Select(title='Model', value=model_names[0],
+                                        options=model_names, width=180)
+    plate_select = bokeh.models.Select(title='Plate', value='Both',
+                                        options=['Both', '1', '2'], width=110)
+    subset_radio = bokeh.models.RadioGroup(
+        labels=['Test + Unflagged (honest)',
+                'Test only (use_for_test=True)',
+                'Unflagged only',
+                'All annotated (incl. training/validation — biased!)'],
+        active=0,
+    )
+    valid_radio = bokeh.models.RadioGroup(
+        labels=['All fish', 'Valid only', 'Invalid only'],
+        active=0,
+    )
+    update_button = bokeh.models.Button(label='Update', button_type='primary', width=320)
+    metrics_div = bokeh.models.Div(
+        text='<i>Click Update to compute metrics.</i>',
+        width=900, styles={'font-size': '13px', 'line-height': '1.6'})
+    status_div = bokeh.models.Div(text='', width=900,
+                                   styles={'color': '#666', 'font-style': 'italic'})
+
+    # ----- Plate heatmaps (96-well; visualise |Δ total| per well) -----
+    X_LABELS = [str(i) for i in range(1, 13)]
+    Y_LABELS = list('HGFEDCBA')   # top row = H so axis reads A at the bottom
+
+    def _make_plate_fig(title):
+        f = bokeh.plotting.figure(
+            x_range=bokeh.models.FactorRange(*X_LABELS),
+            y_range=bokeh.models.FactorRange(*Y_LABELS),
+            title=title, width=440, height=320,
+            tools='tap,reset,save,hover', toolbar_location='above',
+        )
+        f.xaxis.major_label_text_font_size = '10pt'
+        f.yaxis.major_label_text_font_size = '10pt'
+        f.grid.visible = False
+        return f
+
+    plate_p1_fig = _make_plate_fig('Plate 1 — |Δ total somites|')
+    plate_p2_fig = _make_plate_fig('Plate 2 — |Δ total somites|')
+
+    cds_plate_p1 = bokeh.models.ColumnDataSource(
+        data=dict(x=[], y=[], abs_delta=[], idx=[], label=[]))
+    cds_plate_p2 = bokeh.models.ColumnDataSource(
+        data=dict(x=[], y=[], abs_delta=[], idx=[], label=[]))
+
+    color_mapper = bokeh.models.LinearColorMapper(palette='RdYlGn11', low=0, high=5)
+    color_mapper.high_color = '#67000d'
+
+    for fig, src in ((plate_p1_fig, cds_plate_p1), (plate_p2_fig, cds_plate_p2)):
+        # NOTE: we invert the palette so green = good agreement, red = bad.
+        # Color the cell by |Δ| (clipped to mapper's domain).
+        fig.rect(x='x', y='y', source=src, width=0.92, height=0.92,
+                 fill_color={'field': 'abs_delta',
+                             'transform': bokeh.models.LinearColorMapper(
+                                 palette=list(reversed(bokeh.palettes.RdYlGn11)),
+                                 low=0, high=5,
+                                 high_color='#67000d',
+                                 nan_color='#eee')},
+                 line_color='white', line_width=1)
+        # Hover tooltip
+        hover = fig.select(dict(type=bokeh.models.HoverTool))
+        if hover:
+            hover[0].tooltips = [('Well', '@label'), ('|Δ total|', '@abs_delta{0.0}')]
+
+    # Colorbar (just one, attached to plate 1 for legend)
+    cb_mapper = bokeh.models.LinearColorMapper(
+        palette=list(reversed(bokeh.palettes.RdYlGn11)),
+        low=0, high=5)
+    color_bar = bokeh.models.ColorBar(color_mapper=cb_mapper, width=12, location=(0, 0),
+                                       title='|Δ|')
+    plate_p1_fig.add_layout(color_bar, 'right')
+
+    # ----- Per-well disagreement table -----
+    table_source = bokeh.models.ColumnDataSource(data=dict(
+        idx=[], plate=[], well=[],
+        ann_total=[], pred_total=[], dt=[],
+        ann_bad=[], pred_bad=[], dd=[],
+        ann_valid=[], pred_valid=[],
+        ann_orient=[], pred_orient=[],
+        abs_dt=[],
+    ))
+    table = bokeh.models.DataTable(
+        source=table_source,
+        columns=[
+            bokeh.models.TableColumn(field='plate',       title='P',     width=30),
+            bokeh.models.TableColumn(field='well',        title='Well',  width=60),
+            bokeh.models.TableColumn(field='ann_total',   title='Ann T', width=60),
+            bokeh.models.TableColumn(field='pred_total',  title='Pred T', width=60),
+            bokeh.models.TableColumn(field='dt',          title='Δ T',   width=50),
+            bokeh.models.TableColumn(field='ann_bad',     title='Ann D', width=60),
+            bokeh.models.TableColumn(field='pred_bad',    title='Pred D', width=60),
+            bokeh.models.TableColumn(field='dd',          title='Δ D',   width=50),
+            bokeh.models.TableColumn(field='ann_valid',   title='Ann V', width=55),
+            bokeh.models.TableColumn(field='pred_valid',  title='Pred V', width=55),
+            bokeh.models.TableColumn(field='ann_orient',  title='Ann O', width=55),
+            bokeh.models.TableColumn(field='pred_orient', title='Pred O', width=55),
+        ],
+        width=900, height=320, index_position=None, sortable=True,
+        selectable=True,
+    )
+
+    # ----- Image preview pane -----
+    IMG_W = 520
+    img_size = 2048
+    img_yfp_fig = bokeh.plotting.figure(
+        width=IMG_W, height=IMG_W, x_range=(0, img_size), y_range=(0, img_size),
+        tools='pan,wheel_zoom,box_zoom,reset,save', toolbar_location='above')
+    img_bf_fig = bokeh.plotting.figure(
+        width=IMG_W, height=IMG_W, x_range=(0, img_size), y_range=(0, img_size),
+        tools='pan,wheel_zoom,box_zoom,reset,save', toolbar_location='above')
+    for f in (img_yfp_fig, img_bf_fig):
+        f.axis.visible = False
+        f.grid.visible = False
+
+    src_img_yfp = bokeh.models.ColumnDataSource(data=dict(image=[], dw=[], dh=[]))
+    src_img_bf  = bokeh.models.ColumnDataSource(data=dict(image=[], dw=[], dh=[]))
+    img_yfp_fig.image(image='image', x=0, y=0, dw='dw', dh='dh', source=src_img_yfp,
+                       palette='Greys256')
+    img_bf_fig.image(image='image', x=0, y=0, dw='dw', dh='dh', source=src_img_bf,
+                      palette='Greys256')
+
+    img_tabs = bokeh.models.Tabs(tabs=[
+        bokeh.models.TabPanel(child=img_yfp_fig, title='YFP'),
+        bokeh.models.TabPanel(child=img_bf_fig,  title='BF'),
+    ])
+    img_caption = bokeh.models.Div(
+        text='<i style="color:#666">Click a heatmap cell or a table row '
+             'to preview the well image.</i>',
+        width=IMG_W)
+
+    # ----- Shared state -----
+    state = {'records': []}   # list of dicts, one per (well with both ann + pred)
+
+    # ----- Helpers -----
+    def _subset_filter(qs, mode):
+        """Apply the subset radio's choice to an annotation queryset."""
+        if mode == 0:   # test + unflagged
+            return qs.filter(
+                Q(use_for_test=True) |
+                (Q(use_for_training=False) &
+                 Q(use_for_validation=False) &
+                 Q(use_for_test=False)))
+        if mode == 1:   # test only
+            return qs.filter(use_for_test=True)
+        if mode == 2:   # unflagged only
+            return qs.filter(use_for_training=False,
+                             use_for_validation=False,
+                             use_for_test=False)
+        return qs       # mode 3: all
+
+    def _valid_filter(qs, mode):
+        if mode == 1:
+            return qs.filter(valid=True)
+        if mode == 2:
+            return qs.filter(valid=False)
+        return qs
+
+    def _confmat(records):
+        """Confusion matrix for the valid flag (annotation = ground truth)."""
+        tp = tn = fp = fn = 0
+        for r in records:
+            a, p = bool(r['ann_valid']), bool(r['pred_valid'])
+            if a and p: tp += 1
+            elif (not a) and (not p): tn += 1
+            elif (not a) and p: fp += 1
+            else: fn += 1
+        return tp, tn, fp, fn
+
+    # ----- Main update -----
+    def do_update():
+        status_div.text = 'Fetching…'
+        exp = exp_select.value
+        model_name = model_select.value
+        plate_choice = plate_select.value
+
+        # Annotations in the chosen experiment + subset + validity
+        ann_qs = DestWellProperties.objects.filter(
+            dest_well__well_plate__experiment__name=exp,
+        ).select_related('dest_well__well_plate')
+        if plate_choice in ('1', '2'):
+            ann_qs = ann_qs.filter(dest_well__well_plate__plate_number=int(plate_choice))
+        ann_qs = _subset_filter(ann_qs, subset_radio.active)
+        ann_qs = _valid_filter(ann_qs, valid_radio.active)
+
+        # Build records: only wells where a prediction with the chosen
+        # model_name also exists. We use latest_prediction() so the schema
+        # change is opaque here.
+        from well_mapping.models import latest_prediction as _latest
+        records = []
+        for ann in ann_qs.iterator():
+            pred = _latest(ann.dest_well, model_name=model_name)
+            if pred is None:
+                continue
+            dest = ann.dest_well
+            plate = dest.well_plate.plate_number
+            col_str = f'{int(dest.position_col):02d}'
+            well = f'{dest.position_row}{col_str}'
+
+            ann_t = ann.n_total_somites if ann.n_total_somites != -9999 else None
+            pred_t = pred.n_total_somites if pred.n_total_somites != -9999 else None
+            ann_d = ann.n_bad_somites if ann.n_bad_somites != -9999 else None
+            pred_d = pred.n_bad_somites if pred.n_bad_somites != -9999 else None
+            dt = (pred_t - ann_t) if (ann_t is not None and pred_t is not None) else None
+            dd = (pred_d - ann_d) if (ann_d is not None and pred_d is not None) else None
+            records.append({
+                'plate': plate,
+                'pos_row': dest.position_row,
+                'pos_col': int(dest.position_col),
+                'well': well,
+                'ann_total': ann_t, 'pred_total': pred_t, 'dt': dt,
+                'ann_bad':   ann_d, 'pred_bad':   pred_d, 'dd': dd,
+                'ann_valid':  bool(ann.valid),
+                'pred_valid': bool(pred.valid),
+                'ann_orient':  bool(ann.correct_orientation),
+                'pred_orient': bool(pred.correct_orientation),
+                'abs_dt': abs(dt) if dt is not None else float('nan'),
+            })
+
+        # Sort by |Δ total| descending so worst cases are on top
+        records.sort(key=lambda r: (-(r['abs_dt']
+                                       if not np.isnan(r['abs_dt']) else -1)))
+        state['records'] = records
+
+        # ---- Aggregate metrics ----
+        if records:
+            t_arr  = np.array([(r['ann_total'], r['pred_total']) for r in records
+                               if r['dt'] is not None], dtype=float)
+            d_arr  = np.array([(r['ann_bad'],   r['pred_bad'])   for r in records
+                               if r['dd'] is not None], dtype=float)
+
+            def _scoring_block(arr, label):
+                if arr.size == 0:
+                    return f'<b>{label}</b>: no data<br>'
+                a, p = arr[:, 0], arr[:, 1]
+                diff = p - a
+                mae = float(np.abs(diff).mean())
+                rmse = float(np.sqrt((diff ** 2).mean()))
+                bias = float(diff.mean())
+                if a.var() > 0:
+                    r2 = 1.0 - float(((a - p) ** 2).sum()) / float(((a - a.mean()) ** 2).sum())
+                else:
+                    r2 = float('nan')
+                return (f'<b>{label}</b> &mdash; N={len(arr)}, '
+                        f'MAE={mae:.2f}, RMSE={rmse:.2f}, '
+                        f'bias={bias:+.2f}, R²={r2:.2f}<br>')
+
+            tp, tn, fp, fn = _confmat(records)
+            n_v = tp + tn + fp + fn
+            acc = (tp + tn) / max(n_v, 1)
+            prec = tp / max(tp + fp, 1)
+            rec = tp / max(tp + fn, 1)
+            f1 = 2 * prec * rec / max(prec + rec, 1e-9)
+
+            n_orient = sum(1 for r in records)
+            agree_orient = sum(1 for r in records
+                                if r['ann_orient'] == r['pred_orient'])
+            orient_pct = (agree_orient / n_orient * 100) if n_orient else 0
+
+            html = f'<b>Experiment:</b> {exp} · model = <code>{model_name}</code> · N = {len(records)}<br>'
+            html += _scoring_block(t_arr, 'Total somites')
+            html += _scoring_block(d_arr, 'Defective somites')
+            html += (f'<b>Valid flag</b> &mdash; '
+                     f'TP={tp} TN={tn} FP={fp} FN={fn} · '
+                     f'Acc={acc*100:.1f}% Prec={prec*100:.1f}% '
+                     f'Rec={rec*100:.1f}% F1={f1*100:.1f}%<br>')
+            html += (f'<b>Orientation</b> &mdash; agreement '
+                     f'{orient_pct:.1f}% ({agree_orient}/{n_orient})')
+            metrics_div.text = html
+        else:
+            metrics_div.text = (f'<b>Experiment:</b> {exp} · '
+                                f'<i>No wells matched.</i> Try widening the subset '
+                                f'or validity filter.')
+
+        # ---- Plate heatmaps ----
+        for plate_num, src in ((1, cds_plate_p1), (2, cds_plate_p2)):
+            xs, ys, abs_ds, idxs, labels = [], [], [], [], []
+            for i, r in enumerate(records):
+                if r['plate'] != plate_num:
+                    continue
+                if str(r['pos_col']) not in X_LABELS:
+                    continue
+                if r['pos_row'] not in Y_LABELS:
+                    continue
+                xs.append(str(r['pos_col']))
+                ys.append(r['pos_row'])
+                abs_ds.append(r['abs_dt'])
+                idxs.append(i)
+                labels.append(f"P{plate_num} {r['well']} (Δt={r['dt']:+d})"
+                              if r['dt'] is not None else f"P{plate_num} {r['well']}")
+            src.data = dict(x=xs, y=ys, abs_delta=abs_ds, idx=idxs, label=labels)
+            (plate_p1_fig if plate_num == 1 else plate_p2_fig).visible = (
+                plate_choice in ('Both', str(plate_num)))
+
+        # ---- Table ----
+        table_source.data = dict(
+            idx=list(range(len(records))),
+            plate=[r['plate'] for r in records],
+            well=[r['well'] for r in records],
+            ann_total=[r['ann_total'] for r in records],
+            pred_total=[r['pred_total'] for r in records],
+            dt=[r['dt'] for r in records],
+            ann_bad=[r['ann_bad'] for r in records],
+            pred_bad=[r['pred_bad'] for r in records],
+            dd=[r['dd'] for r in records],
+            ann_valid=[r['ann_valid'] for r in records],
+            pred_valid=[r['pred_valid'] for r in records],
+            ann_orient=[r['ann_orient'] for r in records],
+            pred_orient=[r['pred_orient'] for r in records],
+            abs_dt=[r['abs_dt'] for r in records],
+        )
+
+        status_div.text = f'Loaded {len(records)} well(s) with both annotation and prediction.'
+
+    update_button.on_click(do_update)
+
+    # ----- Image loading on selection -----
+    def _load_image_for_record(record):
+        """Read the canonicalised YFP + BF images for `record['well']`."""
+        exp = exp_select.value
+        plate_n = record['plate']
+        row = record['pos_row']
+        col = record['pos_col']
+        pad = f'{col:02d}'
+
+        # Find the local path (same probing as elsewhere)
+        localpath = None
+        for cand in (LOCALPATH_RAID5, LOCALPATH_HIVE, LOCALPATH_CH):
+            if os.path.isdir(os.path.join(cand, exp)):
+                localpath = cand
+                break
+        if localpath is None:
+            img_caption.text = f'<i style="color:#c00">No LOCALPATH found for {exp}.</i>'
+            return
+
+        well_dir = os.path.join(localpath, exp, 'Leica images',
+                                f'Plate {plate_n}', f'Well_{row}{pad}',
+                                'corrected_orientation')
+
+        def _load(channel):
+            files = glob.glob(os.path.join(well_dir, f'*{channel}*.tiff'))
+            files = [f for f in files if 'norm' not in f.lower()]
+            if not files:
+                return None
+            try:
+                arr = imread(files[0]).astype(np.float32)
+            except Exception:
+                return None
+            arr = arr / max(arr.max(), 1e-9)
+            return arr
+
+        yfp = _load('YFP')
+        bf  = _load('BF')
+
+        if yfp is not None:
+            h, w = yfp.shape[:2]
+            src_img_yfp.data = dict(image=[np.flipud(yfp)], dw=[w], dh=[h])
+        else:
+            src_img_yfp.data = dict(image=[], dw=[], dh=[])
+        if bf is not None:
+            h, w = bf.shape[:2]
+            src_img_bf.data = dict(image=[np.flipud(bf)], dw=[w], dh=[h])
+        else:
+            src_img_bf.data = dict(image=[], dw=[], dh=[])
+
+        dt = record['dt']
+        dd = record['dd']
+        dt_str = f'{dt:+d}' if dt is not None else '—'
+        dd_str = f'{dd:+d}' if dd is not None else '—'
+        img_caption.text = (
+            f'<b>Plate {plate_n} · {record["well"]}</b><br>'
+            f'<small>Annotated: total={record["ann_total"]} '
+            f'def={record["ann_bad"]} valid={record["ann_valid"]} '
+            f'orient={record["ann_orient"]}</small><br>'
+            f'<small>Predicted: total={record["pred_total"]} '
+            f'def={record["pred_bad"]} valid={record["pred_valid"]} '
+            f'orient={record["pred_orient"]}</small><br>'
+            f'<small>Δ total = <b>{dt_str}</b>, Δ defective = <b>{dd_str}</b></small>'
+        )
+
+    def _on_table_select(attr, old, new):
+        if not new:
+            return
+        try:
+            i = int(new[0])
+        except (TypeError, ValueError, IndexError):
+            return
+        if 0 <= i < len(state['records']):
+            _load_image_for_record(state['records'][i])
+
+    table_source.selected.on_change('indices', _on_table_select)
+
+    def _on_plate_tap(event, src):
+        # The tap event gives x/y as factors (strings). Find the matching index.
+        x_str = event.x if isinstance(event.x, str) else None
+        y_str = event.y if isinstance(event.y, str) else None
+        if x_str is None or y_str is None:
+            return
+        data = src.data
+        for k, (xx, yy) in enumerate(zip(data['x'], data['y'])):
+            if xx == x_str and yy == y_str:
+                rec_idx = data['idx'][k]
+                if 0 <= rec_idx < len(state['records']):
+                    # Also select the row in the table
+                    table_source.selected.indices = [rec_idx]
+                    _load_image_for_record(state['records'][rec_idx])
+                return
+
+    plate_p1_fig.on_event(bokeh.events.Tap,
+                          lambda e: _on_plate_tap(e, cds_plate_p1))
+    plate_p2_fig.on_event(bokeh.events.Tap,
+                          lambda e: _on_plate_tap(e, cds_plate_p2))
+
+    # ----- Layout -----
+    def _section(text):
+        return bokeh.models.Div(
+            text=(f'<div style="font-size:13px; font-weight:700; color:#1a2340;'
+                  f' border-bottom:2px solid #5b8dee;'
+                  f' padding:6px 4px; margin:4px 0 8px;">{text}</div>'))
+
+    filter_col = bokeh.layouts.column(
+        _section('Filters'),
+        exp_select, model_select, plate_select,
+        bokeh.models.Div(text='<b>Subset:</b>'),
+        subset_radio,
+        bokeh.models.Div(text='<b>Validity:</b>'),
+        valid_radio,
+        update_button, status_div,
+        width=340,
+    )
+
+    plate_col = bokeh.layouts.column(
+        _section('Spatial disagreement (|Δ total|)'),
+        plate_p1_fig, plate_p2_fig,
+    )
+    image_col = bokeh.layouts.column(
+        _section('Selected well'),
+        img_caption, img_tabs,
+    )
+
+    main_col = bokeh.layouts.column(
+        _section('Aggregate metrics'),
+        metrics_div,
+        bokeh.layouts.row(plate_col, bokeh.layouts.Spacer(width=20), image_col),
+        _section('Per-well disagreement (sorted by |Δ total|)'),
+        table,
+    )
+
+    doc.add_root(bokeh.layouts.row(filter_col, main_col))
+
+    # Auto-run once with default selection.
+    do_update()
+
+
+#___________________________________________________________________________________________
+def model_eval_page(request: HttpRequest) -> HttpResponse:
+    """Serve the model-evaluation dashboard (Bokeh embed)."""
+    script = bokeh.embed.server_document(request.build_absolute_uri())
+    return render(request, 'well_explorer/model_eval.html', {'script': script})

@@ -182,8 +182,12 @@
           <td>Plate filling / VAST efficiency / annotation stats / prediction-vs-annotation comparison split by training / validation / held-out subsets.</td>
         </tr>
         <tr>
+          <td><a href="{% url 'model_eval' %}">Model Evaluation</a></td>
+          <td>Per-experiment scoring of model predictions against biologist annotations &mdash; aggregate metrics, plate-level heatmap of disagreements (microscope-issue diagnostic), per-well sortable table, image preview pane.</td>
+        </tr>
+        <tr>
           <td><a href="{% url 'drug_plot' %}">Drug Somite Plot</a></td>
-          <td>Interactive histograms + predicted-vs-annotated scatter plots per drug, per experiment(s).</td>
+          <td>Dose-response, distribution histograms, and predicted-vs-annotated scatter plots per drug. Concentration filter narrows histograms+scatter to a single dose.</td>
         </tr>
       </tbody>
     </table>
