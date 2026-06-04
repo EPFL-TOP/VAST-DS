@@ -2999,10 +2999,18 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
     plate_p1_fig = _make_plate_fig('Plate 1 — |Δ total somites|')
     plate_p2_fig = _make_plate_fig('Plate 2 — |Δ total somites|')
 
-    cds_plate_p1 = bokeh.models.ColumnDataSource(
-        data=dict(x=[], y=[], abs_delta=[], idx=[], label=[]))
-    cds_plate_p2 = bokeh.models.ColumnDataSource(
-        data=dict(x=[], y=[], abs_delta=[], idx=[], label=[]))
+    # CDS columns include the full annotation + prediction so the hover
+    # tooltip can show everything at a glance — not just |Δ total|.
+    def _empty_plate_cds():
+        return dict(
+            x=[], y=[], abs_delta=[], idx=[], label=[],
+            ann_total=[], pred_total=[], dt=[],
+            ann_bad=[], pred_bad=[], dd=[],
+            ann_valid=[], pred_valid=[],
+            ann_orient=[], pred_orient=[],
+        )
+    cds_plate_p1 = bokeh.models.ColumnDataSource(data=_empty_plate_cds())
+    cds_plate_p2 = bokeh.models.ColumnDataSource(data=_empty_plate_cds())
 
     color_mapper = bokeh.models.LinearColorMapper(palette='RdYlGn11', low=0, high=5)
     color_mapper.high_color = '#67000d'
@@ -3018,10 +3026,19 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
                                  high_color='#67000d',
                                  nan_color='#eee')},
                  line_color='white', line_width=1)
-        # Hover tooltip
+        # Hover tooltip — show full annotation + prediction so the user can
+        # see WHY a cell is red without leaving the heatmap.
         hover = fig.select(dict(type=bokeh.models.HoverTool))
         if hover:
-            hover[0].tooltips = [('Well', '@label'), ('|Δ total|', '@abs_delta{0.0}')]
+            hover[0].tooltips = [
+                ('Well',          '@label'),
+                ('Δ total',       '@dt{+0}'),
+                ('Δ defective',   '@dd{+0}'),
+                ('Total somites', 'ann @ann_total · pred @pred_total'),
+                ('Defective',     'ann @ann_bad · pred @pred_bad'),
+                ('Valid',         'ann @ann_valid · pred @pred_valid'),
+                ('Orientation',   'ann @ann_orient · pred @pred_orient'),
+            ]
 
     # Colorbar (just one, attached to plate 1 for legend)
     cb_mapper = bokeh.models.LinearColorMapper(
@@ -3234,7 +3251,7 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
 
         # ---- Plate heatmaps ----
         for plate_num, src in ((1, cds_plate_p1), (2, cds_plate_p2)):
-            xs, ys, abs_ds, idxs, labels = [], [], [], [], []
+            buckets = _empty_plate_cds()
             for i, r in enumerate(records):
                 if r['plate'] != plate_num:
                     continue
@@ -3242,13 +3259,27 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
                     continue
                 if r['pos_row'] not in Y_LABELS:
                     continue
-                xs.append(str(r['pos_col']))
-                ys.append(r['pos_row'])
-                abs_ds.append(r['abs_dt'])
-                idxs.append(i)
-                labels.append(f"P{plate_num} {r['well']} (Δt={r['dt']:+d})"
-                              if r['dt'] is not None else f"P{plate_num} {r['well']}")
-            src.data = dict(x=xs, y=ys, abs_delta=abs_ds, idx=idxs, label=labels)
+                buckets['x'].append(str(r['pos_col']))
+                buckets['y'].append(r['pos_row'])
+                buckets['abs_delta'].append(r['abs_dt'])
+                buckets['idx'].append(i)
+                buckets['label'].append(f"P{plate_num} {r['well']}")
+                # Use blank string instead of None so hover renders cleanly.
+                buckets['ann_total'].append(
+                    r['ann_total'] if r['ann_total'] is not None else '—')
+                buckets['pred_total'].append(
+                    r['pred_total'] if r['pred_total'] is not None else '—')
+                buckets['dt'].append(r['dt'] if r['dt'] is not None else 0)
+                buckets['ann_bad'].append(
+                    r['ann_bad'] if r['ann_bad'] is not None else '—')
+                buckets['pred_bad'].append(
+                    r['pred_bad'] if r['pred_bad'] is not None else '—')
+                buckets['dd'].append(r['dd'] if r['dd'] is not None else 0)
+                buckets['ann_valid'].append('Y' if r['ann_valid'] else 'N')
+                buckets['pred_valid'].append('Y' if r['pred_valid'] else 'N')
+                buckets['ann_orient'].append('Y' if r['ann_orient'] else 'N')
+                buckets['pred_orient'].append('Y' if r['pred_orient'] else 'N')
+            src.data = buckets
             (plate_p1_fig if plate_num == 1 else plate_p2_fig).visible = (
                 plate_choice in ('Both', str(plate_num)))
 
@@ -3276,41 +3307,73 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
 
     # ----- Image loading on selection -----
     def _load_image_for_record(record):
-        """Read the canonicalised YFP + BF images for `record['well']`."""
+        """Read the canonicalised YFP + BF images for `record['well']`.
+
+        On failure (no LOCALPATH, no well folder, no canonicalised images)
+        the caption explicitly shows what was tried so the user can
+        diagnose. Common causes: experiment folder lives somewhere we don't
+        probe, or `manage.py refresh_orientation` hasn't been run yet so
+        there's no `corrected_orientation/` subfolder."""
         exp = exp_select.value
         plate_n = record['plate']
         row = record['pos_row']
         col = record['pos_col']
         pad = f'{col:02d}'
 
-        # Find the local path (same probing as elsewhere)
+        # ----- 1. Locate the experiment root -----
+        tried_roots = []
         localpath = None
         for cand in (LOCALPATH_RAID5, LOCALPATH_HIVE, LOCALPATH_CH):
-            if os.path.isdir(os.path.join(cand, exp)):
+            full = os.path.join(cand, exp)
+            tried_roots.append(full)
+            if os.path.isdir(full):
                 localpath = cand
                 break
         if localpath is None:
-            img_caption.text = f'<i style="color:#c00">No LOCALPATH found for {exp}.</i>'
+            src_img_yfp.data = dict(image=[], dw=[], dh=[])
+            src_img_bf.data  = dict(image=[], dw=[], dh=[])
+            img_caption.text = (
+                f'<b style="color:#c00">Experiment folder not found.</b><br>'
+                f'<small>Tried these paths:<br><code>'
+                + '<br>'.join(tried_roots)
+                + '</code></small>'
+            )
             return
 
+        # ----- 2. Locate the well's canonicalised image folder -----
         well_dir = os.path.join(localpath, exp, 'Leica images',
                                 f'Plate {plate_n}', f'Well_{row}{pad}',
                                 'corrected_orientation')
 
+        if not os.path.isdir(well_dir):
+            src_img_yfp.data = dict(image=[], dw=[], dh=[])
+            src_img_bf.data  = dict(image=[], dw=[], dh=[])
+            img_caption.text = (
+                f'<b style="color:#c00">No canonicalised image folder for '
+                f'P{plate_n} · {record["well"]}.</b><br>'
+                f'<small>Expected: <code>{well_dir}</code><br>'
+                f'Run <code>python manage.py refresh_orientation</code> '
+                f'to generate it.</small>'
+            )
+            return
+
+        # ----- 3. Load each channel; report which ones came back empty -----
         def _load(channel):
-            files = glob.glob(os.path.join(well_dir, f'*{channel}*.tiff'))
-            files = [f for f in files if 'norm' not in f.lower()]
+            # Accept .tif / .tiff and either case
+            files = (glob.glob(os.path.join(well_dir, f'*{channel}*.tiff'))
+                     + glob.glob(os.path.join(well_dir, f'*{channel}*.tif')))
+            files = [f for f in files if 'norm' not in os.path.basename(f).lower()]
             if not files:
-                return None
+                return None, f'no *{channel}*.tiff in {well_dir}'
             try:
                 arr = imread(files[0]).astype(np.float32)
-            except Exception:
-                return None
+            except Exception as e:
+                return None, f'imread failed for {files[0]}: {e}'
             arr = arr / max(arr.max(), 1e-9)
-            return arr
+            return arr, files[0]
 
-        yfp = _load('YFP')
-        bf  = _load('BF')
+        yfp, yfp_info = _load('YFP')
+        bf,  bf_info  = _load('BF')
 
         if yfp is not None:
             h, w = yfp.shape[:2]
@@ -3323,10 +3386,26 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
         else:
             src_img_bf.data = dict(image=[], dw=[], dh=[])
 
+        # ----- 4. Caption -----
         dt = record['dt']
         dd = record['dd']
         dt_str = f'{dt:+d}' if dt is not None else '—'
         dd_str = f'{dd:+d}' if dd is not None else '—'
+
+        info_parts = []
+        if yfp is None:
+            info_parts.append(
+                f'<span style="color:#c00">YFP not loaded ({yfp_info})</span>')
+        else:
+            info_parts.append(
+                f'<small style="color:#888">YFP: {os.path.basename(yfp_info)}</small>')
+        if bf is None:
+            info_parts.append(
+                f'<span style="color:#c00">BF not loaded ({bf_info})</span>')
+        else:
+            info_parts.append(
+                f'<small style="color:#888">BF: {os.path.basename(bf_info)}</small>')
+
         img_caption.text = (
             f'<b>Plate {plate_n} · {record["well"]}</b><br>'
             f'<small>Annotated: total={record["ann_total"]} '
@@ -3336,6 +3415,7 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
             f'def={record["pred_bad"]} valid={record["pred_valid"]} '
             f'orient={record["pred_orient"]}</small><br>'
             f'<small>Δ total = <b>{dt_str}</b>, Δ defective = <b>{dd_str}</b></small>'
+            f'<br>{"<br>".join(info_parts)}'
         )
 
     def _on_table_select(attr, old, new):
@@ -3350,26 +3430,32 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
 
     table_source.selected.on_change('indices', _on_table_select)
 
-    def _on_plate_tap(event, src):
-        # The tap event gives x/y as factors (strings). Find the matching index.
-        x_str = event.x if isinstance(event.x, str) else None
-        y_str = event.y if isinstance(event.y, str) else None
-        if x_str is None or y_str is None:
+    def _on_plate_select(attr, old, new, src):
+        # The TapTool already updates src.selected.indices when a rect is
+        # tapped — much more robust than parsing event.x/event.y because
+        # Bokeh maps FactorRange factors to numeric positions internally.
+        if not new:
             return
-        data = src.data
-        for k, (xx, yy) in enumerate(zip(data['x'], data['y'])):
-            if xx == x_str and yy == y_str:
-                rec_idx = data['idx'][k]
-                if 0 <= rec_idx < len(state['records']):
-                    # Also select the row in the table
-                    table_source.selected.indices = [rec_idx]
-                    _load_image_for_record(state['records'][rec_idx])
-                return
+        try:
+            k = int(new[0])
+        except (TypeError, ValueError, IndexError):
+            return
+        idx_list = src.data.get('idx', [])
+        if k >= len(idx_list):
+            return
+        rec_idx = int(idx_list[k])
+        if 0 <= rec_idx < len(state['records']):
+            # Mirror the selection in the disagreement table for visual
+            # consistency, then load the image.
+            table_source.selected.indices = [rec_idx]
+            _load_image_for_record(state['records'][rec_idx])
 
-    plate_p1_fig.on_event(bokeh.events.Tap,
-                          lambda e: _on_plate_tap(e, cds_plate_p1))
-    plate_p2_fig.on_event(bokeh.events.Tap,
-                          lambda e: _on_plate_tap(e, cds_plate_p2))
+    cds_plate_p1.selected.on_change(
+        'indices',
+        lambda attr, old, new: _on_plate_select(attr, old, new, cds_plate_p1))
+    cds_plate_p2.selected.on_change(
+        'indices',
+        lambda attr, old, new: _on_plate_select(attr, old, new, cds_plate_p2))
 
     # ----- Layout -----
     def _section(text):
