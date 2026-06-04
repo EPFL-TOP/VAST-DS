@@ -1,0 +1,63 @@
+{% extends "well_explorer/_base.html" %}
+
+{% block title %}<title>VAST-DS · Model evaluation</title>{% endblock %}
+{% block header_title %}Model evaluation{% endblock %}
+{% block header_subtitle %}Score the model against held-out biologist annotations &mdash; drill into per-well disagreements and spot microscope-driven patterns{% endblock %}
+
+{% block breadcrumb %}
+  <span class="sep">›</span> Well Explorer
+  <span class="sep">›</span> Model evaluation
+{% endblock %}
+
+{% block extra_css %}
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-3.7.3.min.css" rel="stylesheet" type="text/css">
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-widgets-3.7.3.min.css" rel="stylesheet" type="text/css">
+<style>
+    .me-intro {
+        color: #55637a; font-size: 13px; max-width: 940px;
+        background: #fff; border-left: 3px solid #5b8dee;
+        padding: 10px 14px; border-radius: 4px; margin-bottom: 20px;
+    }
+    .me-intro code { background: #eef2ff; padding: 1px 4px; border-radius: 3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<p class="me-intro">
+    Pick an experiment to compare the model's predictions against manual
+    annotations. By default the page restricts itself to the <b>honest</b>
+    subset &mdash; wells flagged <code>use_for_test=True</code> or with no
+    flag set at all (typical for annotations added <i>after</i> the model
+    was trained). Switch <b>Subset</b> if you want to see how it performs on
+    training/validation data too (those numbers are biased low &mdash; the
+    model has seen them).<br><br>
+    The page shows three views of the same set of wells, all linked:
+</p>
+<ul style="color:#55637a; font-size:13px; max-width:940px; margin-top:-12px;">
+    <li><b>Aggregate metrics</b> &mdash; MAE / RMSE / bias / R² for total
+        and defective somite counts; confusion matrix and accuracy /
+        precision / recall / F1 for the valid flag; agreement % for
+        orientation.</li>
+    <li><b>Plate heatmap</b> &mdash; each well coloured by
+        <code>|predicted total &minus; annotated total|</code>. Green = good
+        agreement, red = bad. Clusters in one corner usually mean a
+        microscope issue rather than a model issue. <b>Tap a cell</b> to
+        preview that well's image.</li>
+    <li><b>Per-well disagreement table</b> &mdash; sortable, default order
+        is largest |Δ total| first so the worst cases are on top. Click a
+        row to preview the image in the right pane.</li>
+</ul>
+
+{% if script %}
+    {{ script | safe }}
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-widgets-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-tables-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-api-3.7.3.min.js"></script>
+{% endblock %}
