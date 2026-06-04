@@ -2973,6 +2973,22 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
         labels=['All fish', 'Valid only', 'Invalid only'],
         active=0,
     )
+    # Heatmap colouring metric — count comparisons are only meaningful when
+    # the annotator marked the fish valid (otherwise the somite counts
+    # are leftover defaults), so this dropdown drives just the heatmap
+    # colour, not the underlying filter. Cells where ann.valid=False are
+    # always greyed out regardless of which metric is chosen.
+    COLOR_BY_OPTIONS = {
+        'Max(|Δ total|, |Δ def|)': 'max',
+        '|Δ total somites|':        'total',
+        '|Δ defective somites|':    'def',
+    }
+    color_by_select = bokeh.models.Select(
+        title='Heatmap colour metric',
+        value='Max(|Δ total|, |Δ def|)',
+        options=list(COLOR_BY_OPTIONS.keys()),
+        width=320,
+    )
     update_button = bokeh.models.Button(label='Update', button_type='primary', width=320)
     metrics_div = bokeh.models.Div(
         text='<i>Click Update to compute metrics.</i>',
@@ -3000,7 +3016,12 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
     plate_p2_fig = _make_plate_fig('Plate 2 — |Δ total somites|')
 
     # CDS columns include the full annotation + prediction so the hover
-    # tooltip can show everything at a glance — not just |Δ total|.
+    # tooltip can show everything at a glance, plus two display fields
+    # that the heatmap-colouring logic writes to:
+    #   color_value  — what the fill colour reads (NaN where ann.valid is
+    #                  False, so the cell renders in `nan_color`)
+    #   line_color   — per-cell border colour; red when the valid flag
+    #                  disagrees between annotation and prediction
     def _empty_plate_cds():
         return dict(
             x=[], y=[], abs_delta=[], idx=[], label=[],
@@ -3008,24 +3029,22 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
             ann_bad=[], pred_bad=[], dd=[],
             ann_valid=[], pred_valid=[],
             ann_orient=[], pred_orient=[],
+            color_value=[], line_color=[],
         )
     cds_plate_p1 = bokeh.models.ColumnDataSource(data=_empty_plate_cds())
     cds_plate_p2 = bokeh.models.ColumnDataSource(data=_empty_plate_cds())
 
-    color_mapper = bokeh.models.LinearColorMapper(palette='RdYlGn11', low=0, high=5)
-    color_mapper.high_color = '#67000d'
+    # One shared colour mapper for both plate heatmaps + the colorbar.
+    # green = good (Δ=0), red = bad. NaN → light gray (count comparison
+    # not meaningful, typically because ann.valid=False).
+    shared_cmap = bokeh.models.LinearColorMapper(
+        palette=list(reversed(bokeh.palettes.RdYlGn11)),
+        low=0, high=5, high_color='#67000d', nan_color='#eee')
 
     for fig, src in ((plate_p1_fig, cds_plate_p1), (plate_p2_fig, cds_plate_p2)):
-        # NOTE: we invert the palette so green = good agreement, red = bad.
-        # Color the cell by |Δ| (clipped to mapper's domain).
         fig.rect(x='x', y='y', source=src, width=0.92, height=0.92,
-                 fill_color={'field': 'abs_delta',
-                             'transform': bokeh.models.LinearColorMapper(
-                                 palette=list(reversed(bokeh.palettes.RdYlGn11)),
-                                 low=0, high=5,
-                                 high_color='#67000d',
-                                 nan_color='#eee')},
-                 line_color='white', line_width=1)
+                 fill_color={'field': 'color_value', 'transform': shared_cmap},
+                 line_color='line_color', line_width=2)
         # Hover tooltip — show full annotation + prediction so the user can
         # see WHY a cell is red without leaving the heatmap.
         hover = fig.select(dict(type=bokeh.models.HoverTool))
@@ -3040,12 +3059,9 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
                 ('Orientation',   'ann @ann_orient · pred @pred_orient'),
             ]
 
-    # Colorbar (just one, attached to plate 1 for legend)
-    cb_mapper = bokeh.models.LinearColorMapper(
-        palette=list(reversed(bokeh.palettes.RdYlGn11)),
-        low=0, high=5)
-    color_bar = bokeh.models.ColorBar(color_mapper=cb_mapper, width=12, location=(0, 0),
-                                       title='|Δ|')
+    # Colorbar uses the same mapper so domain changes auto-propagate.
+    color_bar = bokeh.models.ColorBar(color_mapper=shared_cmap, width=12,
+                                       location=(0, 0), title='|Δ|')
     plate_p1_fig.add_layout(color_bar, 'right')
 
     # ----- Per-well disagreement table -----
@@ -3143,6 +3159,50 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
             elif (not a) and p: fp += 1
             else: fn += 1
         return tp, tn, fp, fn
+
+    def _color_for_record(r):
+        """Compute (color_value, line_color) for one record based on the
+        currently selected `color_by_select` metric.
+
+        - color_value is NaN when ann.valid=False — those cells render in
+          the mapper's `nan_color` (gray) because comparing somite counts
+          on an invalid fish to the annotator's leftover defaults is
+          meaningless.
+        - line_color is red when the valid flag disagrees between
+          annotation and prediction, white otherwise. This way a gray
+          cell with a red border immediately reads as "annotator said
+          invalid, but model predicts valid" (or vice versa) without
+          conflating it with the count disagreement signal.
+        """
+        mode = COLOR_BY_OPTIONS[color_by_select.value]
+        if not r['ann_valid']:
+            cv = float('nan')
+        elif mode == 'total':
+            cv = float(abs(r['dt'])) if r['dt'] is not None else float('nan')
+        elif mode == 'def':
+            cv = float(abs(r['dd'])) if r['dd'] is not None else float('nan')
+        else:   # 'max'
+            parts = []
+            if r['dt'] is not None: parts.append(abs(r['dt']))
+            if r['dd'] is not None: parts.append(abs(r['dd']))
+            cv = float(max(parts)) if parts else float('nan')
+        lc = '#c00' if (bool(r['ann_valid']) != bool(r['pred_valid'])) else 'white'
+        return cv, lc
+
+    def _apply_cmap_for_mode():
+        """Tighten the colour-mapper domain based on the selected metric."""
+        mode = COLOR_BY_OPTIONS[color_by_select.value]
+        # Defective counts are typically 0–3; total can be 0–5+. Tighter
+        # `high` saturation is more informative for defective alone.
+        if mode == 'def':
+            shared_cmap.high = 3
+            color_bar.title = '|Δ def|'
+        elif mode == 'total':
+            shared_cmap.high = 5
+            color_bar.title = '|Δ total|'
+        else:
+            shared_cmap.high = 5
+            color_bar.title = 'max |Δ|'
 
     # ----- Main update -----
     def do_update():
@@ -3250,6 +3310,7 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
                                 f'or validity filter.')
 
         # ---- Plate heatmaps ----
+        _apply_cmap_for_mode()
         for plate_num, src in ((1, cds_plate_p1), (2, cds_plate_p2)):
             buckets = _empty_plate_cds()
             for i, r in enumerate(records):
@@ -3279,6 +3340,9 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
                 buckets['pred_valid'].append('Y' if r['pred_valid'] else 'N')
                 buckets['ann_orient'].append('Y' if r['ann_orient'] else 'N')
                 buckets['pred_orient'].append('Y' if r['pred_orient'] else 'N')
+                cv, lc = _color_for_record(r)
+                buckets['color_value'].append(cv)
+                buckets['line_color'].append(lc)
             src.data = buckets
             (plate_p1_fig if plate_num == 1 else plate_p2_fig).visible = (
                 plate_choice in ('Both', str(plate_num)))
@@ -3303,7 +3367,30 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
 
         status_div.text = f'Loaded {len(records)} well(s) with both annotation and prediction.'
 
+    def _recolor_heatmaps():
+        """Light-weight refresh — recompute only the colour fields of the
+        existing plate CDS, without re-running database queries. Triggered
+        when the user changes the 'Heatmap colour metric' dropdown."""
+        _apply_cmap_for_mode()
+        for plate_num, src in ((1, cds_plate_p1), (2, cds_plate_p2)):
+            d = dict(src.data)
+            if not d.get('idx'):
+                continue
+            new_cv, new_lc = [], []
+            for k in d['idx']:
+                k = int(k)
+                if 0 <= k < len(state['records']):
+                    cv, lc = _color_for_record(state['records'][k])
+                else:
+                    cv, lc = float('nan'), 'white'
+                new_cv.append(cv); new_lc.append(lc)
+            d['color_value'] = new_cv
+            d['line_color']  = new_lc
+            src.data = d
+
     update_button.on_click(do_update)
+    color_by_select.on_change('value',
+                                lambda attr, old, new: _recolor_heatmaps())
 
     # ----- Image loading on selection -----
     def _load_image_for_record(record):
@@ -3472,11 +3559,18 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
         bokeh.models.Div(text='<b>Validity:</b>'),
         valid_radio,
         update_button, status_div,
+        _section('Heatmap'),
+        color_by_select,
+        bokeh.models.Div(text=(
+            '<small style="color:#666">Gray cells = ann.valid=False '
+            '(count comparison not meaningful).<br>'
+            'Red border = valid-flag disagreement between annotation and '
+            'prediction.</small>'), width=320),
         width=340,
     )
 
     plate_col = bokeh.layouts.column(
-        _section('Spatial disagreement (|Δ total|)'),
+        _section('Spatial disagreement'),
         plate_p1_fig, plate_p2_fig,
     )
     image_col = bokeh.layouts.column(
