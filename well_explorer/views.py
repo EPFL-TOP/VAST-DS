@@ -3290,9 +3290,13 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
         # Build records: only wells where a prediction with the chosen
         # model_name also exists. We use latest_prediction() so the schema
         # change is opaque here.
+        # Note: `.iterator()` requires an explicit `chunk_size` when
+        # `prefetch_related()` is in play (Django ≥4), otherwise it errors
+        # to prevent prefetch caches blowing memory on big tables. 2000 is
+        # comfortable for our scale (single-experiment, <1000 wells).
         from well_mapping.models import latest_prediction as _latest
         records = []
-        for ann in ann_qs.iterator():
+        for ann in ann_qs.iterator(chunk_size=2000):
             pred = _latest(ann.dest_well, model_name=model_name)
             if pred is None:
                 continue
