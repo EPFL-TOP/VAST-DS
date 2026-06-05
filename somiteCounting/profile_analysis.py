@@ -212,6 +212,78 @@ def _cluster_peaks(strip_peaks: List[Tuple[int, int, float]],
     return clusters
 
 
+def detect_somites_from_strips(detrended_stack: np.ndarray,
+                                mean_profile: np.ndarray,
+                                peak_prominence: float = DEFAULTS['peak_prominence'],
+                                peak_distance: int = DEFAULTS['peak_distance'],
+                                sampling_window: int = DEFAULTS['cluster_window'],
+                                evidence_threshold: Optional[float] = None,
+                                ) -> List[Dict]:
+    """Find somite positions on the mean detrended profile, then score
+    per-strip evidence at each position.
+
+    `detrended_stack` is (n_strips, W) — the per-strip high-passed profiles.
+    The mean of this stack is fed to `find_peaks`. For each detected peak
+    we look at the max value of every strip's profile within
+    ±sampling_window of the peak — if that local max exceeds
+    `evidence_threshold`, the strip "saw" the somite.
+
+    Returns a list of dicts {centroid_x, confidence, upper_confidence,
+    lower_confidence, intensity} — same shape the downstream pipeline
+    already consumes; bbox + severity are applied afterwards.
+
+    Splitting detection from per-strip scoring decouples two things that
+    used to be tangled: WHERE the somites are (a robust 1-D problem on
+    the mean) vs. IS EACH ONE HEALTHY (a per-strip evidence question
+    around a now-known x).
+    """
+    if detrended_stack.size == 0:
+        return []
+    n_strips, w = detrended_stack.shape
+
+    # Detect on the mean detrended profile
+    mean_detrended = detrended_stack.mean(axis=0)
+    peaks, _ = find_peaks(mean_detrended,
+                           prominence=peak_prominence,
+                           distance=peak_distance)
+    if len(peaks) == 0:
+        return []
+
+    # Adaptive evidence threshold: a peak is "seen" by a strip if the
+    # strip's detrended max in the local window exceeds either the
+    # caller-supplied threshold OR a fraction of the global prominence
+    # (whichever is larger).
+    if evidence_threshold is None:
+        evidence_threshold = max(peak_prominence * 0.35, 0.003)
+
+    half = (n_strips + 1) // 2          # upper-half strip count
+
+    raw_somites: List[Dict] = []
+    for x_peak in peaks:
+        x_lo = max(0, int(x_peak) - sampling_window)
+        x_hi = min(w, int(x_peak) + sampling_window + 1)
+        if x_hi <= x_lo:
+            continue
+        # Per-strip evidence: each strip's max value in the local window
+        per_strip = detrended_stack[:, x_lo:x_hi].max(axis=1)
+        seen = per_strip > evidence_threshold
+        n_seen = int(seen.sum())
+        confidence = n_seen / n_strips
+        upper_seen = int(seen[:half].sum())
+        lower_seen = int(seen[half:].sum())
+        upper_conf = upper_seen / max(half, 1)
+        lower_conf = lower_seen / max(n_strips - half, 1)
+        intensity = float(mean_profile[int(x_peak)]) if int(x_peak) < len(mean_profile) else 0.0
+        raw_somites.append({
+            'centroid_x': float(x_peak),
+            'confidence': float(confidence),
+            'upper_confidence': float(upper_conf),
+            'lower_confidence': float(lower_conf),
+            'intensity': intensity,
+        })
+    return raw_somites
+
+
 def _classify_severity(conf: float, upper: float, lower: float,
                        intensity: float, median_intensity: float) -> Tuple[int, str]:
     """Map (confidence, asymmetry, intensity) → severity 0-3 + reason string."""
@@ -277,9 +349,8 @@ def analyze_image(image: np.ndarray,
     y_lo, y_hi = max(0, y_center - dy), min(h, y_center + dy)
     n_strips = max(2, n_strips)
     y_grid = np.linspace(y_lo, y_hi - 1, n_strips).astype(int)
-    half = (n_strips + 1) // 2          # upper-half strip count
 
-    # ---- per-strip peaks ----
+    # ---- per-strip profiles ----
     # Detrending: subtract a long-window blur from each strip profile so
     # the slowly-varying baseline (the spine itself is bright everywhere,
     # plus the head is generally brighter than the tail) is removed before
@@ -287,7 +358,6 @@ def analyze_image(image: np.ndarray,
     # with low *relative* prominence — once we subtract the baseline, the
     # oscillation peaks become high-prominence and easy to find. The
     # original (non-detrended) profile is still saved for plotting + kymo.
-    strip_peaks: List[Tuple[int, int, float]] = []   # (strip_idx, x, intensity)
     profiles: List[np.ndarray] = []
     detrended_profiles: List[np.ndarray] = []
     for i, y in enumerate(y_grid):
@@ -299,44 +369,35 @@ def analyze_image(image: np.ndarray,
         else:
             prof_for_peaks = prof
         detrended_profiles.append(prof_for_peaks)
-        for px in _peaks_for_strip(prof_for_peaks, peak_prominence, peak_distance):
-            strip_peaks.append((i, int(px), float(prof[px])))
 
     mean_profile = np.mean(profiles, axis=0) if profiles else np.zeros(w, dtype=np.float32)
     detrended_mean_profile = (np.mean(detrended_profiles, axis=0)
                               if detrended_profiles else np.zeros(w, dtype=np.float32))
     kymograph = np.stack(profiles, axis=0) if profiles else np.zeros((1, w), dtype=np.float32)
+    detrended_stack = (np.stack(detrended_profiles, axis=0)
+                       if detrended_profiles else np.zeros((1, w), dtype=np.float32))
 
-    # ---- cluster strip-peaks into somites ----
-    clusters = _cluster_peaks(strip_peaks, cluster_window)
-    raw_somites: List[Dict] = []
-    for cluster in clusters:
-        strip_indices = [t[0] for t in cluster]
-        xs = [t[1] for t in cluster]
-        intensities = [t[2] for t in cluster]
-        n_seen = len(set(strip_indices))   # distinct strips that detected this somite
-        conf = n_seen / n_strips
-        if conf < min_confidence:
-            continue
-        upper_seen = sum(1 for s in set(strip_indices) if s < half)
-        lower_seen = sum(1 for s in set(strip_indices) if s >= half)
-        upper_conf = upper_seen / half
-        lower_conf = lower_seen / (n_strips - half)
-        raw_somites.append({
-            'centroid_x': float(np.median(xs)),
-            'confidence': float(conf),
-            'upper_confidence': float(upper_conf),
-            'lower_confidence': float(lower_conf),
-            'intensity': float(np.mean(intensities)),
-        })
-
-    # ---- order by AP position; assign indices, bbox, severity ----
-    raw_somites.sort(key=lambda s: s['centroid_x'])
+    # ---- find peaks on the MEAN detrended profile ----
+    # Chevron arms tilt across y, so the same somite shows up at slightly
+    # different x in different strips. Averaging across strips collapses
+    # the tilt into one well-defined peak per somite — the mean profile is
+    # the cleanest signal we have. Per-strip clustering (the old approach)
+    # split each tilted chevron into multiple low-confidence clusters and
+    # then rejected them. This approach finds positions on the mean, then
+    # *samples* per-strip evidence at each known position — which is much
+    # easier than peak-finding in the per-strip signal.
+    raw_somites = detect_somites_from_strips(
+        detrended_stack, mean_profile,
+        peak_prominence=peak_prominence,
+        peak_distance=peak_distance,
+        sampling_window=cluster_window,
+    )
     if not raw_somites:
         return dict(somites=[], body_length=0.0,
                     spine_y_center=y_center, spine_dy=dy,
                     mean_profile=mean_profile,
                     detrended_mean_profile=detrended_mean_profile,
+                    detrended_stack=detrended_stack,
                     kymograph=kymograph,
                     y_spine_original=y_spine_original,
                     straightened_image=work_image,
@@ -388,6 +449,7 @@ def analyze_image(image: np.ndarray,
         spine_dy=dy,
         mean_profile=mean_profile,
         detrended_mean_profile=detrended_mean_profile,
+        detrended_stack=detrended_stack,
         kymograph=kymograph,
         y_spine_original=y_spine_original,
         straightened_image=work_image,

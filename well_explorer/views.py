@@ -3785,6 +3785,9 @@ def profile_handler(doc: bokeh.document.Document) -> None:
                                           button_type='primary', width=200)
     save_button   = bokeh.models.Button(label='Save', button_type='success',
                                          width=120)
+    autotune_button = bokeh.models.Button(
+        label='Auto-tune to model count',
+        button_type='warning', width=320)
     status_div    = bokeh.models.Div(text='', width=520,
                                       styles={'color': '#666',
                                               'font-style': 'italic'})
@@ -3947,7 +3950,7 @@ def profile_handler(doc: bokeh.document.Document) -> None:
                             if color != '#666' else msg)
 
     # ----- Well dropdown auto-populate -----
-    # ---- Per-well lookup used by both grid populate AND image load ----
+    # ---- Per-well lookups used by both grid populate AND image load ----
     def _ann_for_dest(dest):
         """Return (n_total, n_bad, valid) from DestWellProperties, or
         (None, None, None) if no annotation exists."""
@@ -3959,6 +3962,18 @@ def profile_handler(doc: bokeh.document.Document) -> None:
             p.n_total_somites if p.n_total_somites != -9999 else None,
             p.n_bad_somites if p.n_bad_somites != -9999 else None,
             bool(p.valid) if p.valid is not None else None,
+        )
+
+    def _resnet_pred_for_dest(dest):
+        """Return (n_total, n_bad) from the resnet_v1 prediction (if any),
+        else (None, None). Used as a hint for auto-tuning peak detection."""
+        from well_mapping.models import latest_prediction as _latest
+        pred = _latest(dest, model_name=RESNET_MODEL_NAME)
+        if pred is None:
+            return None, None
+        return (
+            pred.n_total_somites if pred.n_total_somites != -9999 else None,
+            pred.n_bad_somites if pred.n_bad_somites != -9999 else None,
         )
 
     def _populate_plate_grids():
@@ -4072,8 +4087,9 @@ def profile_handler(doc: bokeh.document.Document) -> None:
                                 upper_confidence=[], lower_confidence=[],
                                 intensity=[], severity=[],
                                 severity_reason=[], ap_position=[])
-        # Display annotation context (if any) above the Analyse button so
-        # the user can compare detection against the biologist's count.
+        # Display annotation + resnet_v1 prediction context (if any) above
+        # the Analyse button so the user can see what the profile detector
+        # is being asked to match.
         ann_t, ann_b, ann_v = _ann_for_dest(dest)
         ann_bits = []
         if ann_v is not None:
@@ -4084,10 +4100,19 @@ def profile_handler(doc: bokeh.document.Document) -> None:
             ann_bits.append(f"def={ann_b}")
         ann_html = (' · '.join(ann_bits) if ann_bits
                     else '<i>no annotation</i>')
+
+        pred_t, pred_b = _resnet_pred_for_dest(dest)
+        if pred_t is not None or pred_b is not None:
+            pred_html = (f"total={pred_t if pred_t is not None else '—'} · "
+                          f"def={pred_b if pred_b is not None else '—'}")
+        else:
+            pred_html = '<i>no prediction</i>'
+
         summary_div.text = (
-            f'<b>Plate {plate_n} · {row}{pad}</b> '
-            f'&nbsp;·&nbsp; '
-            f'<span style="color:#888">Annotation: {ann_html}</span>'
+            f'<b>Plate {plate_n} · {row}{pad}</b><br>'
+            f'<small style="color:#888">Annotation: {ann_html}</small><br>'
+            f'<small style="color:#2e4070">'
+            f'Model ({RESNET_MODEL_NAME}): {pred_html}</small>'
         )
         _set_status(
             f'Loaded {os.path.basename(files[0])} ({w}×{h}). '
@@ -4235,48 +4260,106 @@ def profile_handler(doc: bokeh.document.Document) -> None:
             f'<span style="color:{SEV_COLORS[k]}">■</span> {SEV_LABELS[k]}: {sev_counts[k]}'
             for k in range(4))
 
-        # Annotation comparison (if the user has annotated this well in the
-        # dashboard or elsewhere). The colours are chosen so that big Δ
-        # jumps out — green if detection matches the biologist, red if it
-        # doesn't.
-        ann_html = '<i>no annotation</i>'
+        # Comparison: side-by-side counts from biologist annotation, the
+        # resnet_v1 model, and this profile detection. Δ colours flag when
+        # the profile detector is well off from either reference.
+        cmp_html = '<i>(no annotation or prediction)</i>'
         dest = state.get('dest')
         if dest is not None:
             ann_t, ann_b, ann_v = _ann_for_dest(dest)
+            pred_t, pred_b = _resnet_pred_for_dest(dest)
             parts = []
-            if ann_t is not None:
-                dt = n - ann_t
-                col = '#1a9850' if abs(dt) <= 2 else '#d73027'
-                parts.append(
-                    f'total: ann <b>{ann_t}</b> · detected <b>{n}</b> '
-                    f'(Δ <span style="color:{col}">{dt:+d}</span>)')
-            else:
-                parts.append(f'total: ann — · detected <b>{n}</b>')
-            if ann_b is not None:
-                dd = n_def - ann_b
-                col = '#1a9850' if abs(dd) <= 1 else '#d73027'
-                parts.append(
-                    f'defective: ann <b>{ann_b}</b> · detected <b>{n_def}</b> '
-                    f'(Δ <span style="color:{col}">{dd:+d}</span>)')
-            else:
-                parts.append(f'defective: ann — · detected <b>{n_def}</b>')
+
+            def _row(label, ann_v, pred_v, detected_v, ok_tol):
+                ann_s = '—' if ann_v is None else f'<b>{ann_v}</b>'
+                pred_s = '—' if pred_v is None else f'<b>{pred_v}</b>'
+                d_ann = '' if ann_v is None else (
+                    ' (Δ vs ann '
+                    f'<span style="color:{"#1a9850" if abs(detected_v - ann_v) <= ok_tol else "#d73027"}">'
+                    f'{detected_v - ann_v:+d}</span>)')
+                d_mdl = '' if pred_v is None else (
+                    ' (Δ vs model '
+                    f'<span style="color:{"#1a9850" if abs(detected_v - pred_v) <= ok_tol else "#d73027"}">'
+                    f'{detected_v - pred_v:+d}</span>)')
+                return (f'{label}: ann {ann_s} · model {pred_s} · '
+                        f'detected <b>{detected_v}</b>{d_ann}{d_mdl}')
+
+            parts.append(_row('total',     ann_t, pred_t, n,     ok_tol=2))
+            parts.append(_row('defective', ann_b, pred_b, n_def, ok_tol=1))
             if ann_v is not None:
                 parts.append(f"valid (ann): {'Y' if ann_v else 'N'}")
-            ann_html = '<br>'.join(parts)
+            cmp_html = '<br>'.join(parts)
 
         summary_div.text = (
-            f'<b>Detection</b> &mdash; '
+            f'<b>Profile detection</b> &mdash; '
             f'<b>{n}</b> somite(s) · body length ≈ <b>{body_len_px:.0f} px</b> '
             f'· <b>{n_def}</b> non-healthy<br>'
             f'<small>{sev_html}</small><br><br>'
-            f'<b>Comparison with annotation</b><br>'
-            f'<small>{ann_html}</small>'
+            f'<b>Comparison: profile vs model vs annotation</b><br>'
+            f'<small>{cmp_html}</small>'
         )
         _set_status('Done. Press <b>Save</b> to write to '
                     f'<code>DestWellPropertiesPredicted</code> '
                     f'(model_name=<code>{PROFILE_MODEL_NAME}</code>).')
 
     analyze_button.on_click(_do_analyze)
+
+    # ----- Auto-tune to model count -----
+    def _do_autotune():
+        """Binary-search the prominence threshold to make the detected
+        somite count match the resnet_v1 model's prediction. The other
+        knobs (distance, n_strips, sigma, detrend) are left as the user
+        set them — only prominence is touched, because that's the knob
+        that most directly trades off sensitivity vs. false positives."""
+        if state['image_np'] is None:
+            _set_status('Load a well first.', '#c00'); return
+        dest = state.get('dest')
+        if dest is None:
+            _set_status('Load a well first.', '#c00'); return
+        target_t, _ = _resnet_pred_for_dest(dest)
+        if target_t is None:
+            _set_status(
+                f'No {RESNET_MODEL_NAME} prediction for this well — '
+                'cannot auto-tune.', '#c00')
+            return
+        if target_t <= 0:
+            _set_status('Model predicts 0 somites — nothing to tune to.', '#c00')
+            return
+
+        _set_status(f'Auto-tuning prominence to match model count = {target_t}…')
+        img = state['image_np']
+        common = dict(
+            n_strips=int(n_strips_slider.value),
+            smoothing_sigma=float(sigma_slider.value),
+            detrend_sigma=float(detrend_slider.value),
+            peak_distance=int(distance_slider.value),
+        )
+        lo, hi = 0.001, 0.30
+        best_prom, best_diff = float(prominence_slider.value), float('inf')
+        for _ in range(15):
+            mid = (lo + hi) / 2
+            r = analyze_image(img, peak_prominence=mid, **common)
+            n_found = len(r['somites'])
+            diff = abs(n_found - target_t)
+            if diff < best_diff:
+                best_diff, best_prom = diff, mid
+                if diff == 0:
+                    break
+            if n_found > target_t:
+                lo = mid     # too many peaks → raise prominence threshold
+            else:
+                hi = mid     # too few peaks → lower the threshold
+
+        # Apply the winning prominence and re-render normally
+        prominence_slider.value = round(best_prom, 4)
+        _do_analyze()
+        n_final = len(state.get('result', {}).get('somites', []))
+        _set_status(
+            f'Auto-tuned: prominence ≈ <b>{best_prom:.4f}</b>, '
+            f'detected <b>{n_final}</b> somites (target was <b>{target_t}</b>, '
+            f'Δ {n_final - target_t:+d}).')
+
+    autotune_button.on_click(_do_autotune)
 
     # ----- Save -----
     def _do_save():
@@ -4348,6 +4431,7 @@ def profile_handler(doc: bokeh.document.Document) -> None:
         prominence_slider, distance_slider, n_strips_slider, sigma_slider,
         detrend_slider,
         bokeh.layouts.row(analyze_button, save_button),
+        autotune_button,
         status_div,
         width=380,
     )
