@@ -51,7 +51,15 @@ DEFAULTS = dict(
     n_strips=20,            # how many y-positions to scan
     strip_thickness=3,      # half-height of each strip (rows averaged)
     smoothing_sigma=3.0,    # gaussian smoothing of the 1-D profile
-    peak_prominence=0.03,   # in normalised intensity units (0..1)
+    detrend_sigma=50.0,     # window for the high-pass baseline subtraction;
+                            # set to 0 to disable. Should be a few × somite
+                            # spacing so the per-somite oscillation is
+                            # preserved while the slow head→tail intensity
+                            # gradient is removed.
+    peak_prominence=0.015,  # in normalised intensity units (0..1) — applied
+                            # to the DETRENDED profile, so this is the
+                            # somite-oscillation amplitude, not the raw
+                            # signal amplitude
     peak_distance=15,       # min px between peaks ≈ shortest plausible somite
     cluster_window=12,      # px window to declare two strip-peaks the same somite
     min_confidence=0.30,    # discard candidates seen in fewer strips than this
@@ -224,6 +232,7 @@ def analyze_image(image: np.ndarray,
                   n_strips: int = DEFAULTS['n_strips'],
                   strip_thickness: int = DEFAULTS['strip_thickness'],
                   smoothing_sigma: float = DEFAULTS['smoothing_sigma'],
+                  detrend_sigma: float = DEFAULTS['detrend_sigma'],
                   peak_prominence: float = DEFAULTS['peak_prominence'],
                   peak_distance: int = DEFAULTS['peak_distance'],
                   cluster_window: int = DEFAULTS['cluster_window'],
@@ -271,15 +280,31 @@ def analyze_image(image: np.ndarray,
     half = (n_strips + 1) // 2          # upper-half strip count
 
     # ---- per-strip peaks ----
+    # Detrending: subtract a long-window blur from each strip profile so
+    # the slowly-varying baseline (the spine itself is bright everywhere,
+    # plus the head is generally brighter than the tail) is removed before
+    # peak detection. The somite oscillation sits on top of the baseline
+    # with low *relative* prominence — once we subtract the baseline, the
+    # oscillation peaks become high-prominence and easy to find. The
+    # original (non-detrended) profile is still saved for plotting + kymo.
     strip_peaks: List[Tuple[int, int, float]] = []   # (strip_idx, x, intensity)
     profiles: List[np.ndarray] = []
+    detrended_profiles: List[np.ndarray] = []
     for i, y in enumerate(y_grid):
         prof = _strip_profile(work_image, y, strip_thickness, smoothing_sigma)
         profiles.append(prof)
-        for px in _peaks_for_strip(prof, peak_prominence, peak_distance):
+        if detrend_sigma > 0:
+            baseline = gaussian_filter1d(prof, sigma=detrend_sigma)
+            prof_for_peaks = prof - baseline
+        else:
+            prof_for_peaks = prof
+        detrended_profiles.append(prof_for_peaks)
+        for px in _peaks_for_strip(prof_for_peaks, peak_prominence, peak_distance):
             strip_peaks.append((i, int(px), float(prof[px])))
 
     mean_profile = np.mean(profiles, axis=0) if profiles else np.zeros(w, dtype=np.float32)
+    detrended_mean_profile = (np.mean(detrended_profiles, axis=0)
+                              if detrended_profiles else np.zeros(w, dtype=np.float32))
     kymograph = np.stack(profiles, axis=0) if profiles else np.zeros((1, w), dtype=np.float32)
 
     # ---- cluster strip-peaks into somites ----
@@ -311,6 +336,7 @@ def analyze_image(image: np.ndarray,
         return dict(somites=[], body_length=0.0,
                     spine_y_center=y_center, spine_dy=dy,
                     mean_profile=mean_profile,
+                    detrended_mean_profile=detrended_mean_profile,
                     kymograph=kymograph,
                     y_spine_original=y_spine_original,
                     straightened_image=work_image,
@@ -361,6 +387,7 @@ def analyze_image(image: np.ndarray,
         spine_y_center=y_center,
         spine_dy=dy,
         mean_profile=mean_profile,
+        detrended_mean_profile=detrended_mean_profile,
         kymograph=kymograph,
         y_spine_original=y_spine_original,
         straightened_image=work_image,

@@ -3715,16 +3715,58 @@ def profile_handler(doc: bokeh.document.Document) -> None:
         return
 
     # ----- Selectors + algorithm knobs -----
-    exp_select   = bokeh.models.Select(title='Experiment', value=all_exp[0],
-                                        options=all_exp, width=320)
-    plate_select = bokeh.models.Select(title='Plate', value='1',
-                                        options=['1', '2'], width=120)
-    well_select  = bokeh.models.Select(title='Well', value='Select well',
-                                        options=['Select well'], width=160)
+    exp_select = bokeh.models.Select(title='Experiment', value=all_exp[0],
+                                      options=all_exp, width=320)
+
+    # Plate-grid selectors (replace the plate + well dropdowns). One cell
+    # per dest well, coloured by what's known about it:
+    #   gray   — no annotation yet (DestWellProperties missing)
+    #   green  — annotated, valid=True
+    #   red    — annotated, valid=False
+    # Cells with a border in dark blue already have a profile_v1 prediction
+    # saved. Tap a cell to load that well's image.
+    P_X_LABELS = [str(i) for i in range(1, 13)]
+    P_Y_LABELS = list('HGFEDCBA')
+
+    def _make_plate_fig(title):
+        f = bokeh.plotting.figure(
+            x_range=bokeh.models.FactorRange(*P_X_LABELS),
+            y_range=bokeh.models.FactorRange(*P_Y_LABELS),
+            title=title, width=360, height=240,
+            tools='tap,reset,hover', toolbar_location='above',
+        )
+        f.xaxis.major_label_text_font_size = '8pt'
+        f.yaxis.major_label_text_font_size = '8pt'
+        f.grid.visible = False
+        return f
+
+    plate1_fig = _make_plate_fig('Plate 1 — click a well')
+    plate2_fig = _make_plate_fig('Plate 2 — click a well')
+
+    def _empty_plate_grid_cds():
+        return dict(x=[], y=[], color=[], line_color=[],
+                    well=[], plate=[], dest_id=[],
+                    ann_total=[], ann_bad=[], ann_valid=[],
+                    has_profile=[])
+
+    src_plate1 = bokeh.models.ColumnDataSource(data=_empty_plate_grid_cds())
+    src_plate2 = bokeh.models.ColumnDataSource(data=_empty_plate_grid_cds())
+
+    for fig, src in ((plate1_fig, src_plate1), (plate2_fig, src_plate2)):
+        fig.rect(x='x', y='y', source=src, width=0.92, height=0.92,
+                 fill_color='color', line_color='line_color', line_width=2)
+        hover = fig.select(dict(type=bokeh.models.HoverTool))
+        if hover:
+            hover[0].tooltips = [
+                ('Well',        '@well'),
+                ('Annotated',   'total @ann_total · def @ann_bad · valid @ann_valid'),
+                ('profile_v1?', '@has_profile'),
+            ]
 
     prominence_slider = bokeh.models.Slider(
-        title='Peak prominence', value=PA_DEFAULTS['peak_prominence'],
-        start=0.01, end=0.30, step=0.01, width=320)
+        title='Peak prominence (on detrended profile)',
+        value=PA_DEFAULTS['peak_prominence'],
+        start=0.005, end=0.20, step=0.005, width=320)
     distance_slider = bokeh.models.Slider(
         title='Min peak distance (px)', value=PA_DEFAULTS['peak_distance'],
         start=5, end=80, step=1, width=320)
@@ -3734,6 +3776,10 @@ def profile_handler(doc: bokeh.document.Document) -> None:
     sigma_slider = bokeh.models.Slider(
         title='Smoothing σ (px)', value=PA_DEFAULTS['smoothing_sigma'],
         start=0.0, end=15.0, step=0.5, width=320)
+    detrend_slider = bokeh.models.Slider(
+        title='Detrend σ (baseline removal, 0 = off)',
+        value=PA_DEFAULTS['detrend_sigma'],
+        start=0.0, end=200.0, step=5.0, width=320)
 
     analyze_button = bokeh.models.Button(label='Analyse',
                                           button_type='primary', width=200)
@@ -3815,11 +3861,22 @@ def profile_handler(doc: bokeh.document.Document) -> None:
     profile_fig.yaxis.axis_label = 'mean intensity'
     src_profile = bokeh.models.ColumnDataSource(data=dict(x=[], y=[]))
     profile_fig.line('x', 'y', source=src_profile,
-                      color='#2196F3', line_width=2)
+                      color='#2196F3', line_width=2,
+                      legend_label='raw mean profile')
+    # Detrended profile (mean − baseline): this is what the peak detector
+    # actually operates on. Plotted on the same axis so the user can see
+    # how the long-window baseline subtraction makes the somite oscillation
+    # explicit. Shown as a dashed grey line under the peaks.
+    src_profile_detrended = bokeh.models.ColumnDataSource(data=dict(x=[], y=[]))
+    profile_fig.line('x', 'y', source=src_profile_detrended,
+                      color='#666', line_width=1, line_dash='dashed',
+                      legend_label='detrended (used for peaks)')
     src_peaks = bokeh.models.ColumnDataSource(
         data=dict(x=[], y=[], color=[], conf=[], idx=[]))
     profile_fig.scatter('x', 'y', source=src_peaks, size=10,
                          fill_color='color', line_color='white')
+    profile_fig.legend.location = 'top_right'
+    profile_fig.legend.click_policy = 'hide'
 
     # ----- Kymograph (per-strip profiles as a 2-D heatmap) -----
     # Each row is one y-strip's smoothed intensity profile. Chevron-shaped
@@ -3890,53 +3947,84 @@ def profile_handler(doc: bokeh.document.Document) -> None:
                             if color != '#666' else msg)
 
     # ----- Well dropdown auto-populate -----
-    def _refresh_wells():
-        exp_name = exp_select.value
-        plate_n  = plate_select.value
+    # ---- Per-well lookup used by both grid populate AND image load ----
+    def _ann_for_dest(dest):
+        """Return (n_total, n_bad, valid) from DestWellProperties, or
+        (None, None, None) if no annotation exists."""
         try:
-            plate = DestWellPlate.objects.get(experiment__name=exp_name,
-                                              plate_number=int(plate_n))
-        except DestWellPlate.DoesNotExist:
-            well_select.options = ['Select well']
-            well_select.value = 'Select well'
-            return
-        wells = []
-        for d in DestWellPosition.objects.filter(well_plate=plate):
-            try:
-                col = int(d.position_col)
-            except (TypeError, ValueError):
-                continue
-            wells.append(f'{d.position_row}{col:02d}')
-        wells = sorted(set(wells))
-        well_select.options = ['Select well'] + wells
-        well_select.value = 'Select well'
+            p = dest.dest_well_properties
+        except DestWellProperties.DoesNotExist:
+            return None, None, None
+        return (
+            p.n_total_somites if p.n_total_somites != -9999 else None,
+            p.n_bad_somites if p.n_bad_somites != -9999 else None,
+            bool(p.valid) if p.valid is not None else None,
+        )
 
-    exp_select.on_change('value',   lambda a, o, n: _refresh_wells())
-    plate_select.on_change('value', lambda a, o, n: _refresh_wells())
-    _refresh_wells()
+    def _populate_plate_grids():
+        """Walk dest wells for the selected experiment and fill the two
+        plate-grid CDSes. Called whenever exp_select changes."""
+        exp_name = exp_select.value
+        for plate_num, src in ((1, src_plate1), (2, src_plate2)):
+            buckets = _empty_plate_grid_cds()
+            try:
+                plate = DestWellPlate.objects.get(experiment__name=exp_name,
+                                                   plate_number=plate_num)
+            except DestWellPlate.DoesNotExist:
+                src.data = buckets
+                continue
+            dests = DestWellPosition.objects.filter(well_plate=plate)
+            # batch-check which dest wells already have a profile_v1 prediction
+            existing_profile = set(
+                DestWellPropertiesPredicted.objects.filter(
+                    dest_well__in=dests,
+                    model_name='profile_v1',
+                ).values_list('dest_well_id', flat=True))
+            for d in dests:
+                try:
+                    col = int(d.position_col)
+                except (TypeError, ValueError):
+                    continue
+                if str(col) not in P_X_LABELS or d.position_row not in P_Y_LABELS:
+                    continue
+                ann_t, ann_b, ann_v = _ann_for_dest(d)
+                if ann_v is None:
+                    fill = '#cccccc'
+                elif ann_v:
+                    fill = '#a6d96a'   # valid → green
+                else:
+                    fill = '#d73027'   # invalid → red
+                border = '#1a2340' if d.id in existing_profile else 'white'
+                buckets['x'].append(str(col))
+                buckets['y'].append(d.position_row)
+                buckets['color'].append(fill)
+                buckets['line_color'].append(border)
+                buckets['well'].append(f'{d.position_row}{col:02d}')
+                buckets['plate'].append(plate_num)
+                buckets['dest_id'].append(d.id)
+                buckets['ann_total'].append(ann_t if ann_t is not None else '—')
+                buckets['ann_bad'].append(ann_b if ann_b is not None else '—')
+                buckets['ann_valid'].append(
+                    'Y' if ann_v else 'N' if ann_v is False else '?')
+                buckets['has_profile'].append(
+                    'yes' if d.id in existing_profile else 'no')
+            src.data = buckets
+
+    exp_select.on_change('value', lambda a, o, n: _populate_plate_grids())
+    _populate_plate_grids()
 
     # ----- Image loading -----
-    def _load_well_image():
+    def _load_well_for_dest(dest, plate_n):
+        """Load the YFP image for `dest` and store it in state. Called by
+        the plate-grid selection callbacks below."""
         exp = exp_select.value
-        plate_n = plate_select.value
-        well_str = well_select.value
-        if well_str == 'Select well':
-            return
-        row = well_str[0]
+        row = dest.position_row
         try:
-            col = int(well_str[1:])
-        except ValueError:
+            col = int(dest.position_col)
+        except (TypeError, ValueError):
+            _set_status('Bad position_col on this dest_well.', '#c00')
             return
         pad = f'{col:02d}'
-        try:
-            plate = DestWellPlate.objects.get(experiment__name=exp,
-                                               plate_number=int(plate_n))
-            dest = DestWellPosition.objects.get(well_plate=plate,
-                                                 position_row=row,
-                                                 position_col=col)
-        except (DestWellPlate.DoesNotExist, DestWellPosition.DoesNotExist):
-            _set_status('Well not in DB.', '#c00')
-            return
         state['dest'] = dest
 
         localpath = None
@@ -3976,6 +4064,7 @@ def profile_handler(doc: bokeh.document.Document) -> None:
         src_centerline.data = dict(x=[], y=[])
         src_img_straight.data = dict(image=[], dw=[], dh=[])
         src_profile.data = dict(x=[], y=[])
+        src_profile_detrended.data = dict(x=[], y=[])
         src_peaks.data   = dict(x=[], y=[], color=[], conf=[], idx=[])
         src_kymo.data    = dict(image=[], dw=[], dh=[])
         src_kymo_peaks.data = dict(x=[], y=[])
@@ -3983,12 +4072,51 @@ def profile_handler(doc: bokeh.document.Document) -> None:
                                 upper_confidence=[], lower_confidence=[],
                                 intensity=[], severity=[],
                                 severity_reason=[], ap_position=[])
-        summary_div.text = ''
+        # Display annotation context (if any) above the Analyse button so
+        # the user can compare detection against the biologist's count.
+        ann_t, ann_b, ann_v = _ann_for_dest(dest)
+        ann_bits = []
+        if ann_v is not None:
+            ann_bits.append(f"valid={'Y' if ann_v else 'N'}")
+        if ann_t is not None:
+            ann_bits.append(f"total={ann_t}")
+        if ann_b is not None:
+            ann_bits.append(f"def={ann_b}")
+        ann_html = (' · '.join(ann_bits) if ann_bits
+                    else '<i>no annotation</i>')
+        summary_div.text = (
+            f'<b>Plate {plate_n} · {row}{pad}</b> '
+            f'&nbsp;·&nbsp; '
+            f'<span style="color:#888">Annotation: {ann_html}</span>'
+        )
         _set_status(
             f'Loaded {os.path.basename(files[0])} ({w}×{h}). '
             f'Press <b>Analyse</b>.')
 
-    well_select.on_change('value', lambda a, o, n: _load_well_image())
+    def _on_plate_select(attr, old, new, src, plate_n):
+        if not new:
+            return
+        try:
+            k = int(new[0])
+        except (TypeError, ValueError, IndexError):
+            return
+        ids = src.data.get('dest_id', [])
+        if k >= len(ids):
+            return
+        try:
+            dest = DestWellPosition.objects.select_related('well_plate').get(
+                id=int(ids[k]))
+        except DestWellPosition.DoesNotExist:
+            _set_status('Dest well went away.', '#c00')
+            return
+        _load_well_for_dest(dest, plate_n)
+
+    src_plate1.selected.on_change(
+        'indices',
+        lambda attr, old, new: _on_plate_select(attr, old, new, src_plate1, 1))
+    src_plate2.selected.on_change(
+        'indices',
+        lambda attr, old, new: _on_plate_select(attr, old, new, src_plate2, 2))
 
     # ----- Analyse -----
     def _do_analyze():
@@ -4002,6 +4130,7 @@ def profile_handler(doc: bokeh.document.Document) -> None:
             img,
             n_strips=int(n_strips_slider.value),
             smoothing_sigma=float(sigma_slider.value),
+            detrend_sigma=float(detrend_slider.value),
             peak_prominence=float(prominence_slider.value),
             peak_distance=int(distance_slider.value),
         )
@@ -4043,9 +4172,13 @@ def profile_handler(doc: bokeh.document.Document) -> None:
             kymo_fig.y_range.start = 0
             kymo_fig.y_range.end   = ks
 
-        # Profile
+        # Profile (raw + detrended overlay)
         prof = result['mean_profile']
         src_profile.data = dict(x=list(range(len(prof))), y=prof.tolist())
+        det = result.get('detrended_mean_profile')
+        if det is not None:
+            src_profile_detrended.data = dict(x=list(range(len(det))),
+                                               y=det.tolist())
 
         somites = result['somites']
 
@@ -4093,7 +4226,7 @@ def profile_handler(doc: bokeh.document.Document) -> None:
             ap_position=     [s['ap_position']       for s in somites],
         )
 
-        # Summary
+        # Summary — detection vs annotation side-by-side
         n = len(somites)
         n_def = sum(1 for s in somites if s['severity'] > 0)
         sev_counts = [sum(1 for s in somites if s['severity'] == k) for k in range(4)]
@@ -4101,10 +4234,43 @@ def profile_handler(doc: bokeh.document.Document) -> None:
         sev_html = ' · '.join(
             f'<span style="color:{SEV_COLORS[k]}">■</span> {SEV_LABELS[k]}: {sev_counts[k]}'
             for k in range(4))
+
+        # Annotation comparison (if the user has annotated this well in the
+        # dashboard or elsewhere). The colours are chosen so that big Δ
+        # jumps out — green if detection matches the biologist, red if it
+        # doesn't.
+        ann_html = '<i>no annotation</i>'
+        dest = state.get('dest')
+        if dest is not None:
+            ann_t, ann_b, ann_v = _ann_for_dest(dest)
+            parts = []
+            if ann_t is not None:
+                dt = n - ann_t
+                col = '#1a9850' if abs(dt) <= 2 else '#d73027'
+                parts.append(
+                    f'total: ann <b>{ann_t}</b> · detected <b>{n}</b> '
+                    f'(Δ <span style="color:{col}">{dt:+d}</span>)')
+            else:
+                parts.append(f'total: ann — · detected <b>{n}</b>')
+            if ann_b is not None:
+                dd = n_def - ann_b
+                col = '#1a9850' if abs(dd) <= 1 else '#d73027'
+                parts.append(
+                    f'defective: ann <b>{ann_b}</b> · detected <b>{n_def}</b> '
+                    f'(Δ <span style="color:{col}">{dd:+d}</span>)')
+            else:
+                parts.append(f'defective: ann — · detected <b>{n_def}</b>')
+            if ann_v is not None:
+                parts.append(f"valid (ann): {'Y' if ann_v else 'N'}")
+            ann_html = '<br>'.join(parts)
+
         summary_div.text = (
-            f'<b>{n}</b> somite(s) detected · body length ≈ <b>{body_len_px:.0f} px</b> '
+            f'<b>Detection</b> &mdash; '
+            f'<b>{n}</b> somite(s) · body length ≈ <b>{body_len_px:.0f} px</b> '
             f'· <b>{n_def}</b> non-healthy<br>'
-            f'<small>{sev_html}</small>'
+            f'<small>{sev_html}</small><br><br>'
+            f'<b>Comparison with annotation</b><br>'
+            f'<small>{ann_html}</small>'
         )
         _set_status('Done. Press <b>Save</b> to write to '
                     f'<code>DestWellPropertiesPredicted</code> '
@@ -4138,6 +4304,7 @@ def profile_handler(doc: bokeh.document.Document) -> None:
                         peak_prominence=float(prominence_slider.value),
                         peak_distance=int(distance_slider.value),
                         smoothing_sigma=float(sigma_slider.value),
+                        detrend_sigma=float(detrend_slider.value),
                     ),
                 },
             },
@@ -4163,14 +4330,26 @@ def profile_handler(doc: bokeh.document.Document) -> None:
               + '</small>'),
         width=820)
 
+    grid_legend = bokeh.models.Div(text=(
+        '<small style="color:#666">'
+        '<b>Plate grid legend</b> &mdash; '
+        '<span style="color:#a6d96a">■</span> annotated valid · '
+        '<span style="color:#d73027">■</span> annotated invalid · '
+        '<span style="color:#cccccc">■</span> no annotation · '
+        '<span style="color:#1a2340">▢</span> profile_v1 saved'
+        '</small>'), width=360)
     left = bokeh.layouts.column(
         _section('Selection'),
-        exp_select, plate_select, well_select,
+        exp_select,
+        plate1_fig,
+        plate2_fig,
+        grid_legend,
         _section('Algorithm knobs'),
         prominence_slider, distance_slider, n_strips_slider, sigma_slider,
+        detrend_slider,
         bokeh.layouts.row(analyze_button, save_button),
         status_div,
-        width=360,
+        width=380,
     )
     right = bokeh.layouts.column(
         _section('Image (original) + spine centerline'),
