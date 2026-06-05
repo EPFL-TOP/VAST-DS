@@ -43,20 +43,94 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, medfilt
 
 
 # Sensible defaults for ~512×512 corrected YFP fish images.
 DEFAULTS = dict(
     n_strips=20,            # how many y-positions to scan
     strip_thickness=3,      # half-height of each strip (rows averaged)
-    smoothing_sigma=4.0,    # gaussian smoothing of the 1-D profile
-    peak_prominence=0.05,   # in normalised intensity units (0..1)
-    peak_distance=18,       # min px between peaks ≈ shortest plausible somite
-    cluster_window=14,      # px window to declare two strip-peaks the same somite
-    min_confidence=0.40,    # discard candidates seen in fewer strips than this
-    spine_frac=0.6,         # FWHM-like fraction used to derive spine half-height
+    smoothing_sigma=3.0,    # gaussian smoothing of the 1-D profile
+    peak_prominence=0.03,   # in normalised intensity units (0..1)
+    peak_distance=15,       # min px between peaks ≈ shortest plausible somite
+    cluster_window=12,      # px window to declare two strip-peaks the same somite
+    min_confidence=0.30,    # discard candidates seen in fewer strips than this
+    spine_frac=0.5,         # FWHM-like fraction used to derive spine half-height
+    straighten=True,        # follow the spine curve before scanning strips
+    centerline_smooth=21,   # median-filter window for centerline (odd integer)
+    centerline_poly=3,      # degree of polynomial fit over the centerline
 )
+
+
+# ---------------------------------------------------------------------------
+# Spine centerline & image straightening
+# ---------------------------------------------------------------------------
+def find_spine_centerline(image: np.ndarray,
+                          vert_sigma: float = 3.0,
+                          smooth_window: int = DEFAULTS['centerline_smooth'],
+                          poly_deg: int = DEFAULTS['centerline_poly'],
+                          ) -> Tuple[np.ndarray, np.ndarray]:
+    """Return (y_spine, valid_mask) — y position of the spine per x column.
+
+    For each x column we find the y of maximum (vertically smoothed)
+    intensity, then median-filter the resulting curve to suppress hot
+    pixels and fit a low-order polynomial to globally smooth it. The
+    polynomial is fit only on columns bright enough to contain the fish;
+    the rest of the columns are extrapolated by the polynomial, so the
+    output is defined for every x.
+    """
+    h, w = image.shape
+    smoothed = gaussian_filter1d(image, sigma=vert_sigma, axis=0)
+    y_peak = smoothed.argmax(axis=0).astype(np.float32)
+
+    # Mask out columns where the fish almost certainly isn't (dark cols).
+    col_max = image.max(axis=0)
+    threshold = max(0.1 * col_max.max(), 0.05)
+    valid = col_max > threshold
+    if valid.sum() < 10:
+        valid = col_max > col_max.mean() * 0.5
+
+    # Median-smooth to reject outliers
+    if smooth_window % 2 == 0:
+        smooth_window += 1
+    y_smooth = medfilt(y_peak, kernel_size=smooth_window)
+
+    # Polynomial fit on valid columns; evaluated everywhere
+    if valid.sum() > poly_deg + 2:
+        xs = np.arange(w, dtype=np.float32)[valid]
+        ys = y_smooth[valid]
+        coeffs = np.polyfit(xs, ys, deg=poly_deg)
+        y_smooth = np.polyval(coeffs, np.arange(w, dtype=np.float32))
+    # Clip to image bounds
+    y_smooth = np.clip(y_smooth, 0, h - 1).astype(np.float32)
+    return y_smooth, valid
+
+
+def straighten_image(image: np.ndarray,
+                     y_spine: np.ndarray,
+                     target_y: Optional[int] = None,
+                     ) -> Tuple[np.ndarray, np.ndarray]:
+    """Vertically shift each column so that y_spine(x) → target_y.
+
+    After this transform the spine is horizontal at row `target_y` and
+    the existing horizontal-strip analysis recovers chevron peaks that
+    would otherwise drift out of any single strip when the fish is curved.
+    Returns the straightened image AND the per-column shift array.
+    """
+    h, w = image.shape
+    if target_y is None:
+        target_y = h // 2
+    shifts = (target_y - y_spine).astype(np.int32)
+    out = np.zeros_like(image)
+    for x in range(w):
+        s = int(shifts[x])
+        if s > 0:
+            out[s:, x] = image[:h - s, x]
+        elif s < 0:
+            out[:h + s, x] = image[-s:, x]
+        else:
+            out[:, x] = image[:, x]
+    return out, shifts
 
 
 # ---------------------------------------------------------------------------
@@ -154,19 +228,43 @@ def analyze_image(image: np.ndarray,
                   peak_distance: int = DEFAULTS['peak_distance'],
                   cluster_window: int = DEFAULTS['cluster_window'],
                   min_confidence: float = DEFAULTS['min_confidence'],
+                  straighten: bool = DEFAULTS['straighten'],
                   ) -> Dict:
     """Run the profile-based detector on a single 2-D image.
 
     `image` should already be normalised (e.g. through `_common.preprocess_image`
-    so values are in [0, 1]). Returns the dict documented in the module
-    docstring.
+    so values are in [0, 1]). When `straighten=True` (the default) the
+    spine is first fitted as a polynomial in (x, y) and the image is
+    vertically warped so the fish lies along a horizontal line — without
+    this step, the AP-axis-aligned strip scan misses peaks on the curved
+    half of the fish.
+
+    Returns a dict with:
+        somites             : list of per-somite dicts (see module docstring)
+        body_length         : float
+        spine_y_center      : int — used for the spine ROI band overlay
+        spine_dy            : int — half-height of the spine band
+        mean_profile        : 1-D mean intensity profile (smoothed)
+        kymograph           : 2-D array [n_strips × W] of the per-strip profiles
+        y_spine_original    : 1-D centerline curve y(x) on the ORIGINAL image
+        straightened_image  : 2-D float array — the warped image (or the
+                              original if straighten=False)
+        n_strips            : echoed back
     """
     if image.ndim != 2:
         raise ValueError(f'analyze_image expects a 2-D array, got shape {image.shape}')
     h, w = image.shape
 
-    # ---- spine ROI ----
-    y_center, dy = find_spine_roi(image)
+    # ---- fit spine, then straighten so subsequent analysis works on a
+    # horizontal fish ----
+    y_spine_original, _ = find_spine_centerline(image)
+    if straighten:
+        work_image, _shifts = straighten_image(image, y_spine_original)
+    else:
+        work_image = image
+
+    # ---- spine ROI on the (straightened) image ----
+    y_center, dy = find_spine_roi(work_image)
     y_lo, y_hi = max(0, y_center - dy), min(h, y_center + dy)
     n_strips = max(2, n_strips)
     y_grid = np.linspace(y_lo, y_hi - 1, n_strips).astype(int)
@@ -176,12 +274,13 @@ def analyze_image(image: np.ndarray,
     strip_peaks: List[Tuple[int, int, float]] = []   # (strip_idx, x, intensity)
     profiles: List[np.ndarray] = []
     for i, y in enumerate(y_grid):
-        prof = _strip_profile(image, y, strip_thickness, smoothing_sigma)
+        prof = _strip_profile(work_image, y, strip_thickness, smoothing_sigma)
         profiles.append(prof)
         for px in _peaks_for_strip(prof, peak_prominence, peak_distance):
             strip_peaks.append((i, int(px), float(prof[px])))
 
     mean_profile = np.mean(profiles, axis=0) if profiles else np.zeros(w, dtype=np.float32)
+    kymograph = np.stack(profiles, axis=0) if profiles else np.zeros((1, w), dtype=np.float32)
 
     # ---- cluster strip-peaks into somites ----
     clusters = _cluster_peaks(strip_peaks, cluster_window)
@@ -211,7 +310,11 @@ def analyze_image(image: np.ndarray,
     if not raw_somites:
         return dict(somites=[], body_length=0.0,
                     spine_y_center=y_center, spine_dy=dy,
-                    mean_profile=mean_profile, n_strips=n_strips)
+                    mean_profile=mean_profile,
+                    kymograph=kymograph,
+                    y_spine_original=y_spine_original,
+                    straightened_image=work_image,
+                    n_strips=n_strips)
 
     x_first = raw_somites[0]['centroid_x']
     x_last  = raw_somites[-1]['centroid_x']
@@ -258,5 +361,8 @@ def analyze_image(image: np.ndarray,
         spine_y_center=y_center,
         spine_dy=dy,
         mean_profile=mean_profile,
+        kymograph=kymograph,
+        y_spine_original=y_spine_original,
+        straightened_image=work_image,
         n_strips=n_strips,
     )

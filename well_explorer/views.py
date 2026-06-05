@@ -3786,6 +3786,26 @@ def profile_handler(doc: bokeh.document.Document) -> None:
                   source=src_bboxes, fill_alpha=0, line_color='#888',
                   line_width=1, line_dash='dotted')
 
+    # Spine centerline overlay (the polynomial fit) — shows the user the
+    # curve we're following before straightening.
+    src_centerline = bokeh.models.ColumnDataSource(data=dict(x=[], y=[]))
+    img_fig.line('x', 'y', source=src_centerline,
+                  color='#5b8dee', line_width=1.5, line_dash='dashed')
+
+    # ----- Straightened-image figure (second view) -----
+    img_straight_fig = bokeh.plotting.figure(
+        title='Straightened image (spine forced horizontal)',
+        width=720, height=260,
+        x_range=img_fig.x_range,            # ← share x-axis with the original
+        y_range=(0, img_size),
+        tools='pan,wheel_zoom,box_zoom,reset,save')
+    img_straight_fig.axis.visible = False
+    img_straight_fig.grid.visible = False
+    src_img_straight = bokeh.models.ColumnDataSource(
+        data=dict(image=[], dw=[], dh=[]))
+    img_straight_fig.image(image='image', x=0, y=0, dw='dw', dh='dh',
+                            source=src_img_straight, palette='Greys256')
+
     # ----- Profile (1-D) figure, x-axis LINKED to image -----
     profile_fig = bokeh.plotting.figure(
         title='Mean intensity profile (smoothed)', width=720, height=240,
@@ -3800,6 +3820,34 @@ def profile_handler(doc: bokeh.document.Document) -> None:
         data=dict(x=[], y=[], color=[], conf=[], idx=[]))
     profile_fig.scatter('x', 'y', source=src_peaks, size=10,
                          fill_color='color', line_color='white')
+
+    # ----- Kymograph (per-strip profiles as a 2-D heatmap) -----
+    # Each row is one y-strip's smoothed intensity profile. Chevron-shaped
+    # somites show as V-shaped bright streaks here — the kymograph is the
+    # ground-truth view of the data the algorithm is actually working on.
+    kymo_fig = bokeh.plotting.figure(
+        title='Per-strip profile kymograph (y-strip vs x)',
+        width=720, height=200,
+        x_range=img_fig.x_range,             # share x with image+profile
+        y_range=(0, 1),                       # placeholder; reset on analyse
+        tools='pan,wheel_zoom,box_zoom,reset,save,hover')
+    kymo_fig.xaxis.axis_label = 'x (AP axis)'
+    kymo_fig.yaxis.axis_label = 'strip #  (top↑)'
+    src_kymo = bokeh.models.ColumnDataSource(
+        data=dict(image=[], dw=[], dh=[]))
+    kymo_color_mapper = bokeh.models.LinearColorMapper(
+        palette='Viridis256', low=0, high=1)
+    kymo_fig.image(image='image', x=0, y=0, dw='dw', dh='dh',
+                    source=src_kymo, color_mapper=kymo_color_mapper)
+    # Detected peaks overlaid as scatter — column index = x, row index = strip
+    src_kymo_peaks = bokeh.models.ColumnDataSource(
+        data=dict(x=[], y=[]))
+    kymo_fig.scatter('x', 'y', source=src_kymo_peaks, size=4,
+                      fill_color='#ff3030', line_color='white', line_width=0.5)
+    hover = kymo_fig.select(dict(type=bokeh.models.HoverTool))
+    if hover:
+        hover[0].tooltips = [('x', '$x{0}'), ('strip', '$y{0}'),
+                              ('intensity', '@image{0.000}')]
 
     # ----- Per-somite table -----
     table_src = bokeh.models.ColumnDataSource(data=dict(
@@ -3925,8 +3973,12 @@ def profile_handler(doc: bokeh.document.Document) -> None:
         # Clear previous analysis overlays
         src_lines.data   = dict(x0=[], y0=[], x1=[], y1=[], color=[], idx=[])
         src_bboxes.data  = dict(left=[], right=[], top=[], bottom=[])
+        src_centerline.data = dict(x=[], y=[])
+        src_img_straight.data = dict(image=[], dw=[], dh=[])
         src_profile.data = dict(x=[], y=[])
         src_peaks.data   = dict(x=[], y=[], color=[], conf=[], idx=[])
+        src_kymo.data    = dict(image=[], dw=[], dh=[])
+        src_kymo_peaks.data = dict(x=[], y=[])
         table_src.data   = dict(idx=[], centroid_x=[], confidence=[],
                                 upper_confidence=[], lower_confidence=[],
                                 intensity=[], severity=[],
@@ -3961,6 +4013,35 @@ def profile_handler(doc: bokeh.document.Document) -> None:
         y_hi_disp = h - (result['spine_y_center'] - result['spine_dy'])
         roi_top.location    = y_hi_disp
         roi_bottom.location = y_lo_disp
+
+        # Spine centerline (the polynomial fit) shown on the ORIGINAL image.
+        # Flip y for display.
+        y_spine_orig = result.get('y_spine_original')
+        if y_spine_orig is not None:
+            src_centerline.data = dict(
+                x=list(range(len(y_spine_orig))),
+                y=(h - y_spine_orig).tolist(),
+            )
+
+        # Straightened image — second figure underneath the original
+        straight = result.get('straightened_image')
+        if straight is not None:
+            sh, sw = straight.shape
+            src_img_straight.data = dict(image=[np.flipud(straight)],
+                                          dw=[sw], dh=[sh])
+            img_straight_fig.y_range.start = 0
+            img_straight_fig.y_range.end = sh
+
+        # Kymograph — per-strip profiles stacked as a 2-D heatmap
+        kym = result.get('kymograph')
+        if kym is not None and kym.size > 0:
+            ks, kw = kym.shape
+            # Auto-scale colour mapper to this image's intensity range
+            kymo_color_mapper.low  = float(kym.min())
+            kymo_color_mapper.high = float(kym.max())
+            src_kymo.data = dict(image=[kym], dw=[kw], dh=[ks])
+            kymo_fig.y_range.start = 0
+            kymo_fig.y_range.end   = ks
 
         # Profile
         prof = result['mean_profile']
@@ -4092,9 +4173,14 @@ def profile_handler(doc: bokeh.document.Document) -> None:
         width=360,
     )
     right = bokeh.layouts.column(
-        _section('Image and profile'),
+        _section('Image (original) + spine centerline'),
         img_fig,
+        _section('Image (straightened)'),
+        img_straight_fig,
+        _section('Mean profile + detected peaks'),
         profile_fig,
+        _section('Kymograph (per-strip profile · chevron pattern)'),
+        kymo_fig,
         _section('Per-somite detections'),
         summary_div,
         legend_div,
