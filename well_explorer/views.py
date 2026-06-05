@@ -2035,7 +2035,10 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
         active=0,
     )
     valid_radio = bokeh.models.RadioGroup(
-        labels=['Valid fish only', 'Invalid fish only', 'All fish'],
+        labels=['Valid fish only',
+                'Invalid fish only',
+                'All fish',
+                'Valid in BOTH ann & pred (intersection)'],
         active=0,
     )
     ann_subset_radio = bokeh.models.RadioGroup(
@@ -2252,8 +2255,18 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
         selected     = exp_multi.value
         show_pred    = source_radio.active in (0, 2)
         show_ann     = source_radio.active in (1, 2)
-        valid_map    = {0: True, 1: False, 2: None}
-        valid_filter = valid_map[valid_radio.active]
+        # Validity filter modes:
+        #   0: Valid fish only        — `valid=True`  on whichever side we're querying
+        #   1: Invalid fish only      — `valid=False`
+        #   2: All fish               — no filter on validity
+        #   3: Valid in BOTH (∩)      — same as mode 0 on the primary side, AND we also
+        #                               require the OTHER side's `valid=True` via a join.
+        #                               This is the "compare like-for-like" mode where
+        #                               both annotation and prediction agree the fish
+        #                               is valid before we score the somite counts.
+        valid_map      = {0: True, 1: False, 2: None, 3: True}
+        valid_filter   = valid_map[valid_radio.active]
+        intersect_valid = (valid_radio.active == 3)
         ann_filter   = {0: None, 1: 'training', 2: 'validation'}[ann_subset_radio.active]
 
         if not selected:
@@ -2302,6 +2315,11 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
             ).distinct()
             if valid_filter is not None:
                 qs = qs.filter(valid=valid_filter)
+            if intersect_valid:
+                # Intersection: also require the annotation on the same
+                # dest_well to be valid=True. Walks the reverse OneToOne
+                # from DestWellPosition to DestWellProperties.
+                qs = qs.filter(dest_well__dest_well_properties__valid=True)
             for d in qs:
                 if d.n_total_somites != -9999:
                     pred_total.append(d.n_total_somites)
@@ -2317,6 +2335,15 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
                 qs = qs.filter(use_for_training=True)
             elif ann_filter == 'validation':
                 qs = qs.filter(use_for_validation=True)
+            if intersect_valid:
+                # Intersection: also require a prediction on the same
+                # dest_well with valid=True. Both filter conditions live
+                # in the same .filter() call so they apply to the SAME
+                # prediction row (multi-row FK reverse manager).
+                qs = qs.filter(
+                    dest_well__predictions__valid=True,
+                    dest_well__predictions__model_name=RESNET_MODEL_NAME,
+                )
             for d in qs:
                 if d.n_total_somites != -9999:
                     ann_total.append(d.n_total_somites)
@@ -2340,10 +2367,14 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
         ).select_related('dest_well').distinct()
         if valid_filter is not None:
             qs_pair = qs_pair.filter(valid=valid_filter)
+        # In intersection mode the pred-side validity is enforced when we
+        # look up the paired prediction below.
 
         for ann in qs_pair:
             pred_obj = latest_prediction(ann.dest_well, model_name=RESNET_MODEL_NAME)
             if pred_obj is None:
+                continue
+            if intersect_valid and not pred_obj.valid:
                 continue
             # Bucket by explicit subset flag; skip annotations with no flag
             # set so the "Test" colour stays an honest generalisation set.
@@ -2408,11 +2439,19 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
                     )
                     if valid_filter is not None:
                         pred_qs = pred_qs.filter(valid=valid_filter)
+                    if intersect_valid:
+                        pred_qs = pred_qs.filter(
+                            dest_well__dest_well_properties__valid=True)
                     rows = pred_qs
                 else:
                     ann_qs = DestWellProperties.objects.filter(dest_well__in=dest_qs)
                     if valid_filter is not None:
                         ann_qs = ann_qs.filter(valid=valid_filter)
+                    if intersect_valid:
+                        ann_qs = ann_qs.filter(
+                            dest_well__predictions__valid=True,
+                            dest_well__predictions__model_name=RESNET_MODEL_NAME,
+                        )
                     if ann_filter == 'training':
                         ann_qs = ann_qs.filter(use_for_training=True)
                     elif ann_filter == 'validation':
@@ -2461,7 +2500,8 @@ def drug_plot_handler(doc: bokeh.document.Document) -> None:
         all_xs = set(src_dose_total_pred.data['x']) | set(src_dose_total_ann.data['x'])
         n_conc = len(all_xs)
 
-        valid_label = {0: 'valid', 1: 'invalid', 2: 'all'}[valid_radio.active]
+        valid_label = {0: 'valid', 1: 'invalid', 2: 'all',
+                        3: 'valid in both ann & pred'}[valid_radio.active]
         p_total.title.text = f'Total somites — {drug} ({valid_label} fish)'
         p_bad.title.text   = f'Defective somites — {drug} ({valid_label} fish)'
         p_scatter_total.title.text = f'Predicted vs annotated — total somites — {drug}'
@@ -3025,6 +3065,7 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
     def _empty_plate_cds():
         return dict(
             x=[], y=[], abs_delta=[], idx=[], label=[],
+            drug=[], concentration=[],
             ann_total=[], pred_total=[], dt=[],
             ann_bad=[], pred_bad=[], dd=[],
             ann_valid=[], pred_valid=[],
@@ -3069,6 +3110,8 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
         if hover:
             hover[0].tooltips = [
                 ('Well',          '@label'),
+                ('Drug',          '@drug'),
+                ('Concentration', '@concentration'),
                 ('Δ total',       '@dt{+0}'),
                 ('Δ defective',   '@dd{+0}'),
                 ('Total somites', 'ann @ann_total · pred @pred_total'),
@@ -3229,10 +3272,16 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
         model_name = model_select.value
         plate_choice = plate_select.value
 
-        # Annotations in the chosen experiment + subset + validity
+        # Annotations in the chosen experiment + subset + validity. Also
+        # prefetch the source well and its drugs so we can show what was
+        # in each well on the heatmap hover and the image caption without
+        # an N+1 query.
         ann_qs = DestWellProperties.objects.filter(
             dest_well__well_plate__experiment__name=exp,
-        ).select_related('dest_well__well_plate')
+        ).select_related(
+            'dest_well__well_plate',
+            'dest_well__source_well',
+        ).prefetch_related('dest_well__source_well__drugs')
         if plate_choice in ('1', '2'):
             ann_qs = ann_qs.filter(dest_well__well_plate__plate_number=int(plate_choice))
         ann_qs = _subset_filter(ann_qs, subset_radio.active)
@@ -3252,6 +3301,18 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
             col_str = f'{int(dest.position_col):02d}'
             well = f'{dest.position_row}{col_str}'
 
+            # Drug(s) dosed in this well: read through source_well → drugs.
+            # Cocktails / multi-drug wells get a comma-separated label.
+            drug_names, drug_concs = [], []
+            src = dest.source_well
+            if src is not None:
+                for drg in src.drugs.all():
+                    drug_names.append(drg.derivation_name or '—')
+                    drug_concs.append('—' if drg.concentration in (None, -9999)
+                                       else f'{drg.concentration:g}')
+            drug_label = ', '.join(drug_names) if drug_names else '—'
+            conc_label = ', '.join(drug_concs) if drug_concs else '—'
+
             ann_t = ann.n_total_somites if ann.n_total_somites != -9999 else None
             pred_t = pred.n_total_somites if pred.n_total_somites != -9999 else None
             ann_d = ann.n_bad_somites if ann.n_bad_somites != -9999 else None
@@ -3263,6 +3324,8 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
                 'pos_row': dest.position_row,
                 'pos_col': int(dest.position_col),
                 'well': well,
+                'drug': drug_label,
+                'concentration': conc_label,
                 'ann_total': ann_t, 'pred_total': pred_t, 'dt': dt,
                 'ann_bad':   ann_d, 'pred_bad':   pred_d, 'dd': dd,
                 'ann_valid':  bool(ann.valid),
@@ -3343,6 +3406,8 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
                 buckets['abs_delta'].append(r['abs_dt'])
                 buckets['idx'].append(i)
                 buckets['label'].append(f"P{plate_num} {r['well']}")
+                buckets['drug'].append(r['drug'])
+                buckets['concentration'].append(r['concentration'])
                 # Use blank string instead of None so hover renders cleanly.
                 buckets['ann_total'].append(
                     r['ann_total'] if r['ann_total'] is not None else '—')
@@ -3512,7 +3577,10 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
                 f'<small style="color:#888">BF: {os.path.basename(bf_info)}</small>')
 
         img_caption.text = (
-            f'<b>Plate {plate_n} · {record["well"]}</b><br>'
+            f'<b>Plate {plate_n} · {record["well"]}</b> '
+            f'&nbsp;·&nbsp; <span style="color:#2e4070">'
+            f'{record.get("drug", "—")} @ {record.get("concentration", "—")}'
+            f'</span><br>'
             f'<small>Annotated: total={record["ann_total"]} '
             f'def={record["ann_bad"]} valid={record["ann_valid"]} '
             f'orient={record["ann_orient"]}</small><br>'
