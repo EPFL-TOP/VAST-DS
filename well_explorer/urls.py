@@ -14,4 +14,5 @@ urlpatterns = [
     path(r"docs", views.docs_page, name="docs"),
     path(r"sam_dashboard", views.sam_dashboard, name="sam_dashboard"),
     path(r"model_eval", views.model_eval_page, name="model_eval"),
+    path(r"profile_dashboard", views.profile_dashboard, name="profile_dashboard"),
 ]

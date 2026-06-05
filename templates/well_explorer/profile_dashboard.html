@@ -1,0 +1,52 @@
+{% extends "well_explorer/_base.html" %}
+
+{% block title %}<title>VAST-DS · Profile somite analysis</title>{% endblock %}
+{% block header_title %}Profile somite analysis{% endblock %}
+{% block header_subtitle %}1-D intensity-profile detection of somite positions, body length and per-somite asymmetry &mdash; alternative to SAM-based segmentation{% endblock %}
+
+{% block breadcrumb %}
+  <span class="sep">›</span> Well Explorer
+  <span class="sep">›</span> Profile somite analysis
+{% endblock %}
+
+{% block extra_css %}
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-3.7.3.min.css" rel="stylesheet" type="text/css">
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-widgets-3.7.3.min.css" rel="stylesheet" type="text/css">
+<style>
+    .pf-intro {
+        color: #55637a; font-size: 13px; max-width: 940px;
+        background: #fff; border-left: 3px solid #5b8dee;
+        padding: 10px 14px; border-radius: 4px; margin-bottom: 20px;
+    }
+    .pf-intro code { background: #eef2ff; padding: 1px 4px; border-radius: 3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<p class="pf-intro">
+    Pick a well; the canonicalised YFP image loads above and the mean
+    intensity profile along the AP (head&rarr;tail) axis is shown below it,
+    with x-axis linked so panning the image pans the profile too. Press
+    <b>Analyse</b> to detect somites: each strip of y-rows produces an
+    intensity profile, peaks are clustered across strips, and confidence is
+    split into upper-half vs lower-half so asymmetric defects (one somite
+    fine at the top but missing at the bottom) show up explicitly. <b>Save</b>
+    writes the per-somite data &mdash; including each per-somite ROI
+    bounding box, ready for cropping into tiles for a future defect-severity
+    classifier &mdash; to <code>DestWellPropertiesPredicted</code> under
+    <code>model_name='profile_v1'</code>.
+</p>
+
+{% if script %}
+    {{ script | safe }}
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-widgets-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-tables-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-api-3.7.3.min.js"></script>
+{% endblock %}

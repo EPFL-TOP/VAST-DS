@@ -101,6 +101,7 @@
     <a href="{% url 'model_eval' %}">&#9874; Model Evaluation</a>
     <a href="{% url 'drug_plot' %}">&#9654; Drug Somite Plot</a>
     <a href="{% url 'sam_dashboard' %}">&#9678; SAM Segmentation</a>
+    <a href="{% url 'profile_dashboard' %}">&#9776; Profile Analysis</a>
 
     {% if user.is_staff %}
     <hr>
@@ -219,6 +220,20 @@
           (centroid, area, AP position, severity) ready for cross-fish queries.
         </p>
         <a class="card-link" href="{% url 'sam_dashboard' %}">Open dashboard</a>
+      </div>
+
+      <div class="tool-card">
+        <div class="card-icon">&#9776;</div>
+        <p class="card-title">Profile Analysis</p>
+        <p class="card-desc">
+          1-D intensity-profile detection. Scans the canonicalised YFP image
+          in y, finds intensity peaks per strip, clusters them across strips
+          to get per-somite positions, body length, and upper/lower-half
+          confidence (catches asymmetric defects). Stores per-somite ROI
+          bounding boxes ready for cropping into tiles for a future
+          defect-severity classifier.
+        </p>
+        <a class="card-link" href="{% url 'profile_dashboard' %}">Open dashboard</a>
       </div>
 
     </div>

@@ -189,6 +189,10 @@
           <td><a href="{% url 'drug_plot' %}">Drug Somite Plot</a></td>
           <td>Dose-response, distribution histograms, and predicted-vs-annotated scatter plots per drug. Concentration filter narrows histograms+scatter to a single dose.</td>
         </tr>
+        <tr>
+          <td><a href="{% url 'profile_dashboard' %}">Profile Analysis</a></td>
+          <td>1-D intensity-profile somite detection. Scans the canonicalised YFP image in y, finds intensity peaks per strip, clusters across strips, gives per-somite x position + upper/lower confidence (catches asymmetric defects) + per-somite ROI bbox for downstream defect-classifier training. Saves under <code>model_name='profile_v1'</code>.</td>
+        </tr>
       </tbody>
     </table>
 

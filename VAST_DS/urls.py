@@ -55,4 +55,5 @@ bokeh_apps = [
     autoload("well_explorer/drug_plot", views_we.drug_plot_handler),
     autoload("well_explorer/sam_dashboard", views_we.sam_handler),
     autoload("well_explorer/model_eval", views_we.model_eval_handler),
+    autoload("well_explorer/profile_dashboard", views_we.profile_handler),
 ]

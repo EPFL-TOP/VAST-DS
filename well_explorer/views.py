@@ -3687,3 +3687,424 @@ def model_eval_page(request: HttpRequest) -> HttpResponse:
     """Serve the model-evaluation dashboard (Bokeh embed)."""
     script = bokeh.embed.server_document(request.build_absolute_uri())
     return render(request, 'well_explorer/model_eval.html', {'script': script})
+
+
+#___________________________________________________________________________________________
+# Profile-based somite dashboard
+#
+# Alternative to SAM: scan the canonicalised YFP image in y, build per-strip
+# intensity profiles, find peaks, cluster them across strips. Gives:
+#   - per-somite x position
+#   - per-somite asymmetry (upper-half confidence vs lower-half confidence)
+#   - body length
+# Per-somite bounding boxes are also stored so future work can train a
+# dedicated defect-severity classifier on the cropped tiles.
+PROFILE_MODEL_NAME = 'profile_v1'
+
+
+def profile_handler(doc: bokeh.document.Document) -> None:
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+    from somiteCounting._common import preprocess_image
+    from somiteCounting.profile_analysis import (
+        DEFAULTS as PA_DEFAULTS, analyze_image,
+    )
+
+    all_exp = sorted([e.name for e in Experiment.objects.all()])
+    if not all_exp:
+        doc.add_root(bokeh.models.Div(text='<b>No experiments in the database.</b>'))
+        return
+
+    # ----- Selectors + algorithm knobs -----
+    exp_select   = bokeh.models.Select(title='Experiment', value=all_exp[0],
+                                        options=all_exp, width=320)
+    plate_select = bokeh.models.Select(title='Plate', value='1',
+                                        options=['1', '2'], width=120)
+    well_select  = bokeh.models.Select(title='Well', value='Select well',
+                                        options=['Select well'], width=160)
+
+    prominence_slider = bokeh.models.Slider(
+        title='Peak prominence', value=PA_DEFAULTS['peak_prominence'],
+        start=0.01, end=0.30, step=0.01, width=320)
+    distance_slider = bokeh.models.Slider(
+        title='Min peak distance (px)', value=PA_DEFAULTS['peak_distance'],
+        start=5, end=80, step=1, width=320)
+    n_strips_slider = bokeh.models.Slider(
+        title='Number of y-strips', value=PA_DEFAULTS['n_strips'],
+        start=4, end=60, step=2, width=320)
+    sigma_slider = bokeh.models.Slider(
+        title='Smoothing σ (px)', value=PA_DEFAULTS['smoothing_sigma'],
+        start=0.0, end=15.0, step=0.5, width=320)
+
+    analyze_button = bokeh.models.Button(label='Analyse',
+                                          button_type='primary', width=200)
+    save_button   = bokeh.models.Button(label='Save', button_type='success',
+                                         width=120)
+    status_div    = bokeh.models.Div(text='', width=520,
+                                      styles={'color': '#666',
+                                              'font-style': 'italic'})
+    summary_div   = bokeh.models.Div(text='', width=820,
+                                      styles={'font-size': '13px',
+                                              'line-height': '1.6'})
+
+    # ----- Image figure -----
+    img_size = 2048
+    img_fig = bokeh.plotting.figure(
+        title='YFP image', width=720, height=480,
+        x_range=(0, img_size), y_range=(0, img_size),
+        tools='pan,wheel_zoom,box_zoom,reset,save',
+        match_aspect=True)
+    img_fig.axis.visible = False
+    img_fig.grid.visible = False
+
+    img_src = bokeh.models.ColumnDataSource(data=dict(image=[], dw=[], dh=[]))
+    img_fig.image(image='image', x=0, y=0, dw='dw', dh='dh', source=img_src,
+                   palette='Greys256')
+
+    # Spine ROI horizontal band shown via two horizontal lines
+    roi_top    = bokeh.models.Span(location=0, dimension='width',
+                                    line_color='#5b8dee', line_dash='dashed',
+                                    line_width=1)
+    roi_bottom = bokeh.models.Span(location=0, dimension='width',
+                                    line_color='#5b8dee', line_dash='dashed',
+                                    line_width=1)
+    img_fig.add_layout(roi_top)
+    img_fig.add_layout(roi_bottom)
+
+    # Vertical line at every detected somite; colour by severity. Drawn via
+    # a `segment` glyph so we can reflect severity per-cell.
+    SEV_COLORS = ['#1a9850', '#fdae61', '#f46d43', '#a50026']
+    SEV_LABELS = ['healthy', 'dim', 'asymmetric', 'weak detection']
+    src_lines = bokeh.models.ColumnDataSource(
+        data=dict(x0=[], y0=[], x1=[], y1=[], color=[], idx=[]))
+    img_fig.segment(x0='x0', y0='y0', x1='x1', y1='y1',
+                     source=src_lines, color='color', line_width=3)
+
+    # Per-somite ROI bounding boxes (thin overlay)
+    src_bboxes = bokeh.models.ColumnDataSource(
+        data=dict(left=[], right=[], top=[], bottom=[]))
+    img_fig.quad(left='left', right='right', top='top', bottom='bottom',
+                  source=src_bboxes, fill_alpha=0, line_color='#888',
+                  line_width=1, line_dash='dotted')
+
+    # ----- Profile (1-D) figure, x-axis LINKED to image -----
+    profile_fig = bokeh.plotting.figure(
+        title='Mean intensity profile (smoothed)', width=720, height=240,
+        x_range=img_fig.x_range,     # ← shared with image
+        tools='pan,wheel_zoom,box_zoom,reset,save')
+    profile_fig.xaxis.axis_label = 'x (AP axis)'
+    profile_fig.yaxis.axis_label = 'mean intensity'
+    src_profile = bokeh.models.ColumnDataSource(data=dict(x=[], y=[]))
+    profile_fig.line('x', 'y', source=src_profile,
+                      color='#2196F3', line_width=2)
+    src_peaks = bokeh.models.ColumnDataSource(
+        data=dict(x=[], y=[], color=[], conf=[], idx=[]))
+    profile_fig.scatter('x', 'y', source=src_peaks, size=10,
+                         fill_color='color', line_color='white')
+
+    # ----- Per-somite table -----
+    table_src = bokeh.models.ColumnDataSource(data=dict(
+        idx=[], centroid_x=[], confidence=[],
+        upper_confidence=[], lower_confidence=[],
+        intensity=[], severity=[], severity_reason=[],
+        ap_position=[],
+    ))
+    table = bokeh.models.DataTable(
+        source=table_src,
+        columns=[
+            bokeh.models.TableColumn(field='idx',              title='#',         width=35),
+            bokeh.models.TableColumn(field='centroid_x',       title='x',         width=60,
+                formatter=bokeh.models.NumberFormatter(format='0')),
+            bokeh.models.TableColumn(field='ap_position',      title='AP',        width=55,
+                formatter=bokeh.models.NumberFormatter(format='0.00')),
+            bokeh.models.TableColumn(field='confidence',       title='Conf',      width=60,
+                formatter=bokeh.models.NumberFormatter(format='0.00')),
+            bokeh.models.TableColumn(field='upper_confidence', title='Conf ↑',    width=60,
+                formatter=bokeh.models.NumberFormatter(format='0.00')),
+            bokeh.models.TableColumn(field='lower_confidence', title='Conf ↓',    width=60,
+                formatter=bokeh.models.NumberFormatter(format='0.00')),
+            bokeh.models.TableColumn(field='intensity',        title='I',         width=55,
+                formatter=bokeh.models.NumberFormatter(format='0.00')),
+            bokeh.models.TableColumn(field='severity',         title='Sev',       width=40),
+            bokeh.models.TableColumn(field='severity_reason',  title='Notes',     width=260),
+        ],
+        width=820, height=320, index_position=None, selectable=True,
+    )
+
+    # ----- Shared state -----
+    state = {
+        'image_np':  None,         # 2-D float [0,1], canonicalised YFP
+        'dest':      None,
+        'result':    None,
+    }
+
+    def _set_status(msg, color='#666'):
+        status_div.text = (f'<span style="color:{color}">{msg}</span>'
+                            if color != '#666' else msg)
+
+    # ----- Well dropdown auto-populate -----
+    def _refresh_wells():
+        exp_name = exp_select.value
+        plate_n  = plate_select.value
+        try:
+            plate = DestWellPlate.objects.get(experiment__name=exp_name,
+                                              plate_number=int(plate_n))
+        except DestWellPlate.DoesNotExist:
+            well_select.options = ['Select well']
+            well_select.value = 'Select well'
+            return
+        wells = []
+        for d in DestWellPosition.objects.filter(well_plate=plate):
+            try:
+                col = int(d.position_col)
+            except (TypeError, ValueError):
+                continue
+            wells.append(f'{d.position_row}{col:02d}')
+        wells = sorted(set(wells))
+        well_select.options = ['Select well'] + wells
+        well_select.value = 'Select well'
+
+    exp_select.on_change('value',   lambda a, o, n: _refresh_wells())
+    plate_select.on_change('value', lambda a, o, n: _refresh_wells())
+    _refresh_wells()
+
+    # ----- Image loading -----
+    def _load_well_image():
+        exp = exp_select.value
+        plate_n = plate_select.value
+        well_str = well_select.value
+        if well_str == 'Select well':
+            return
+        row = well_str[0]
+        try:
+            col = int(well_str[1:])
+        except ValueError:
+            return
+        pad = f'{col:02d}'
+        try:
+            plate = DestWellPlate.objects.get(experiment__name=exp,
+                                               plate_number=int(plate_n))
+            dest = DestWellPosition.objects.get(well_plate=plate,
+                                                 position_row=row,
+                                                 position_col=col)
+        except (DestWellPlate.DoesNotExist, DestWellPosition.DoesNotExist):
+            _set_status('Well not in DB.', '#c00')
+            return
+        state['dest'] = dest
+
+        localpath = None
+        for cand in (LOCALPATH_RAID5, LOCALPATH_HIVE, LOCALPATH_CH):
+            if os.path.isdir(os.path.join(cand, exp)):
+                localpath = cand
+                break
+        if localpath is None:
+            _set_status(f'No LOCALPATH found for {exp}.', '#c00')
+            return
+        well_dir = os.path.join(localpath, exp, 'Leica images',
+                                f'Plate {plate_n}', f'Well_{row}{pad}',
+                                'corrected_orientation')
+        files = glob.glob(os.path.join(well_dir, '*YFP*.tiff'))
+        files = [f for f in files if 'norm' not in os.path.basename(f).lower()]
+        if not files:
+            _set_status(f'No YFP image in {well_dir}.', '#c00')
+            return
+        try:
+            raw = imread(files[0]).astype(np.float32)
+        except Exception as e:
+            _set_status(f'imread failed: {e}', '#c00')
+            return
+
+        # Normalise via the same percentile-clip used everywhere else.
+        # preprocess_image returns a tensor (1,H,W); take .numpy()[0].
+        normed = preprocess_image(raw, resize=raw.shape[:2]).numpy()[0]
+
+        h, w = normed.shape
+        img_src.data = dict(image=[np.flipud(normed)], dw=[w], dh=[h])
+        img_fig.x_range.start = 0; img_fig.x_range.end = w
+        img_fig.y_range.start = 0; img_fig.y_range.end = h
+        state['image_np'] = normed
+        # Clear previous analysis overlays
+        src_lines.data   = dict(x0=[], y0=[], x1=[], y1=[], color=[], idx=[])
+        src_bboxes.data  = dict(left=[], right=[], top=[], bottom=[])
+        src_profile.data = dict(x=[], y=[])
+        src_peaks.data   = dict(x=[], y=[], color=[], conf=[], idx=[])
+        table_src.data   = dict(idx=[], centroid_x=[], confidence=[],
+                                upper_confidence=[], lower_confidence=[],
+                                intensity=[], severity=[],
+                                severity_reason=[], ap_position=[])
+        summary_div.text = ''
+        _set_status(
+            f'Loaded {os.path.basename(files[0])} ({w}×{h}). '
+            f'Press <b>Analyse</b>.')
+
+    well_select.on_change('value', lambda a, o, n: _load_well_image())
+
+    # ----- Analyse -----
+    def _do_analyze():
+        if state['image_np'] is None:
+            _set_status('Load a well image first.', '#c00')
+            return
+        img = state['image_np']
+        h, w = img.shape
+        _set_status('Analysing…')
+        result = analyze_image(
+            img,
+            n_strips=int(n_strips_slider.value),
+            smoothing_sigma=float(sigma_slider.value),
+            peak_prominence=float(prominence_slider.value),
+            peak_distance=int(distance_slider.value),
+        )
+        state['result'] = result
+
+        # Spine ROI band markers (image is flipped vertically for Bokeh,
+        # so we draw at h - y_center ± dy)
+        y_lo_disp = h - (result['spine_y_center'] + result['spine_dy'])
+        y_hi_disp = h - (result['spine_y_center'] - result['spine_dy'])
+        roi_top.location    = y_hi_disp
+        roi_bottom.location = y_lo_disp
+
+        # Profile
+        prof = result['mean_profile']
+        src_profile.data = dict(x=list(range(len(prof))), y=prof.tolist())
+
+        somites = result['somites']
+
+        # Peak markers on the profile (one circle per somite, coloured by severity)
+        src_peaks.data = dict(
+            x=[s['centroid_x'] for s in somites],
+            y=[float(prof[int(s['centroid_x'])]) if 0 <= s['centroid_x'] < len(prof) else 0
+               for s in somites],
+            color=[SEV_COLORS[s['severity']] for s in somites],
+            conf=[s['confidence'] for s in somites],
+            idx=[s['index'] for s in somites],
+        )
+
+        # Vertical lines on the image, one per somite, severity-coloured
+        src_lines.data = dict(
+            x0=[s['centroid_x'] for s in somites],
+            x1=[s['centroid_x'] for s in somites],
+            y0=[max(0, h - (result['spine_y_center'] + result['spine_dy']) - 8)
+                for _ in somites],
+            y1=[min(h, h - (result['spine_y_center'] - result['spine_dy']) + 8)
+                for _ in somites],
+            color=[SEV_COLORS[s['severity']] for s in somites],
+            idx=[s['index'] for s in somites],
+        )
+
+        # Per-somite bounding boxes (dotted gray; only on demand later if it
+        # clutters the view, the user can switch off the glyph)
+        src_bboxes.data = dict(
+            left  =[s['bbox'][0] for s in somites],
+            right =[s['bbox'][2] for s in somites],
+            top   =[h - s['bbox'][1] for s in somites],     # flip for display
+            bottom=[h - s['bbox'][3] for s in somites],
+        )
+
+        # Table
+        table_src.data = dict(
+            idx=             [s['index']             for s in somites],
+            centroid_x=      [s['centroid_x']        for s in somites],
+            confidence=      [s['confidence']        for s in somites],
+            upper_confidence=[s['upper_confidence']  for s in somites],
+            lower_confidence=[s['lower_confidence']  for s in somites],
+            intensity=       [s['intensity']         for s in somites],
+            severity=        [s['severity']          for s in somites],
+            severity_reason= [s['severity_reason']   for s in somites],
+            ap_position=     [s['ap_position']       for s in somites],
+        )
+
+        # Summary
+        n = len(somites)
+        n_def = sum(1 for s in somites if s['severity'] > 0)
+        sev_counts = [sum(1 for s in somites if s['severity'] == k) for k in range(4)]
+        body_len_px = result['body_length']
+        sev_html = ' · '.join(
+            f'<span style="color:{SEV_COLORS[k]}">■</span> {SEV_LABELS[k]}: {sev_counts[k]}'
+            for k in range(4))
+        summary_div.text = (
+            f'<b>{n}</b> somite(s) detected · body length ≈ <b>{body_len_px:.0f} px</b> '
+            f'· <b>{n_def}</b> non-healthy<br>'
+            f'<small>{sev_html}</small>'
+        )
+        _set_status('Done. Press <b>Save</b> to write to '
+                    f'<code>DestWellPropertiesPredicted</code> '
+                    f'(model_name=<code>{PROFILE_MODEL_NAME}</code>).')
+
+    analyze_button.on_click(_do_analyze)
+
+    # ----- Save -----
+    def _do_save():
+        dest = state['dest']
+        result = state['result']
+        if dest is None or result is None:
+            _set_status('Nothing to save — analyse first.', '#c00')
+            return
+        somites = result['somites']
+        n_total = len(somites)
+        n_bad   = sum(1 for s in somites if s['severity'] > 0)
+
+        DestWellPropertiesPredicted.objects.update_or_create(
+            dest_well=dest,
+            model_name=PROFILE_MODEL_NAME,
+            model_version='',
+            defaults={
+                'n_total_somites': n_total,
+                'n_bad_somites':   n_bad,
+                'per_somite_data': {
+                    'somites':     somites,
+                    'body_length': result['body_length'],
+                    'algorithm_params': dict(
+                        n_strips=int(n_strips_slider.value),
+                        peak_prominence=float(prominence_slider.value),
+                        peak_distance=int(distance_slider.value),
+                        smoothing_sigma=float(sigma_slider.value),
+                    ),
+                },
+            },
+        )
+        _set_status(
+            f'Saved {n_total} somite(s) under '
+            f'<code>model_name="{PROFILE_MODEL_NAME}"</code>.', '#1a9850')
+
+    save_button.on_click(_do_save)
+
+    # ----- Layout -----
+    def _section(text):
+        return bokeh.models.Div(
+            text=(f'<div style="font-size:13px; font-weight:700; color:#1a2340;'
+                  f' border-bottom:2px solid #5b8dee;'
+                  f' padding:6px 4px; margin:4px 0 8px;">{text}</div>'))
+
+    legend_div = bokeh.models.Div(
+        text=('<small>Severity legend: '
+              + ' &nbsp;·&nbsp; '.join(
+                  f'<span style="color:{SEV_COLORS[k]}">■</span> {SEV_LABELS[k]}'
+                  for k in range(4))
+              + '</small>'),
+        width=820)
+
+    left = bokeh.layouts.column(
+        _section('Selection'),
+        exp_select, plate_select, well_select,
+        _section('Algorithm knobs'),
+        prominence_slider, distance_slider, n_strips_slider, sigma_slider,
+        bokeh.layouts.row(analyze_button, save_button),
+        status_div,
+        width=360,
+    )
+    right = bokeh.layouts.column(
+        _section('Image and profile'),
+        img_fig,
+        profile_fig,
+        _section('Per-somite detections'),
+        summary_div,
+        legend_div,
+        table,
+    )
+    doc.add_root(bokeh.layouts.row(left, right))
+
+
+#___________________________________________________________________________________________
+def profile_dashboard(request: HttpRequest) -> HttpResponse:
+    """Serve the profile-based somite dashboard (Bokeh embed)."""
+    script = bokeh.embed.server_document(request.build_absolute_uri())
+    return render(request, 'well_explorer/profile_dashboard.html', {'script': script})
