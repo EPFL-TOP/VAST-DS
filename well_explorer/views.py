@@ -3035,11 +3035,29 @@ def model_eval_handler(doc: bokeh.document.Document) -> None:
     cds_plate_p2 = bokeh.models.ColumnDataSource(data=_empty_plate_cds())
 
     # One shared colour mapper for both plate heatmaps + the colorbar.
-    # green = good (Δ=0), red = bad. NaN → light gray (count comparison
+    # GREEN = good (Δ=0), RED = bad. NaN → light gray (count comparison
     # not meaningful, typically because ann.valid=False).
+    #
+    # Palette is hand-coded green→red so there's zero ambiguity about
+    # which end is which — `reversed(bokeh.palettes.RdYlGn11)` worked but
+    # was easy to second-guess.
+    GREEN_TO_RED = [
+        '#1a9850',  # dark green     (Δ ≈ 0,   perfect agreement)
+        '#66bd63',
+        '#a6d96a',
+        '#d9ef8b',
+        '#fee08b',
+        '#fdae61',
+        '#f46d43',
+        '#d73027',
+        '#a50026',  # dark red       (Δ ≈ high, worst disagreement)
+    ]
     shared_cmap = bokeh.models.LinearColorMapper(
-        palette=list(reversed(bokeh.palettes.RdYlGn11)),
-        low=0, high=5, high_color='#67000d', nan_color='#eee')
+        palette=GREEN_TO_RED,
+        low=0, high=5,
+        high_color='#67000d',   # off-scale (>= high) → even darker red
+        nan_color='#eee',
+    )
 
     for fig, src in ((plate_p1_fig, cds_plate_p1), (plate_p2_fig, cds_plate_p2)):
         fig.rect(x='x', y='y', source=src, width=0.92, height=0.92,
