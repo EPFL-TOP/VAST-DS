@@ -117,6 +117,29 @@ class Command(BaseCommand):
         if exp_filter:
             qs = qs.filter(dest_well__well_plate__experiment__name__icontains=exp_filter)
 
+        # Upfront diagnostic — most common failure mode is "no predictions
+        # saved yet". Print a one-liner of what *is* in the table so the
+        # user can tell whether to seed via the dashboard / a batch save.
+        n_match = qs.count()
+        self.stdout.write(f"Matching profile_v1 rows: {n_match}")
+        if n_match == 0:
+            from django.db.models import Count
+            by_model = (DestWellPropertiesPredicted.objects
+                        .values("model_name")
+                        .annotate(n=Count("id"))
+                        .order_by("-n"))
+            if by_model:
+                self.stdout.write("DB has predictions for these model_names:")
+                for row in by_model:
+                    self.stdout.write(f"  {row['model_name']!r}: {row['n']}")
+            else:
+                self.stdout.write("No prediction rows of any kind in DB.")
+            self.stdout.write(self.style.WARNING(
+                "Nothing to extract. Run profile detection from the dashboard "
+                "(Save button) for the wells you care about, or add a batch "
+                "command — see README 'Per-somite tile extraction'."))
+            return
+
         manifest: List[Dict] = []
         stats = Counter()
 
