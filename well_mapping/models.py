@@ -258,6 +258,48 @@ class DestWellPropertiesPredicted(models.Model):
             self.n_total_somites, self.n_bad_somites, self.valid)
 
 
+class SomiteAnnotation(models.Model):
+    """Human label of a single somite's defect severity.
+
+    One row per ``(dest_well, somite_index, annotator)`` — multiple
+    annotators can rate the same somite for inter-rater agreement.
+    ``somite_index`` matches the ``index`` field inside
+    ``DestWellPropertiesPredicted.per_somite_data['somites']`` for the
+    well's ``profile_v1`` row, which is the spatial AP order along the
+    fish. ``severity=None`` means the annotator marked it 'unsure' (the row
+    still exists so we don't keep re-showing it).
+    """
+    SEVERITY_CHOICES = (
+        (0, 'healthy'),
+        (1, 'mild'),
+        (2, 'moderate'),
+        (3, 'severe'),
+    )
+
+    dest_well     = models.ForeignKey(DestWellPosition, on_delete=models.CASCADE,
+                                      related_name='somite_annotations')
+    somite_index  = models.IntegerField(
+        help_text="Matches per_somite_data['somites'][i]['index'] for the well's profile_v1 row.")
+    severity      = models.IntegerField(
+        choices=SEVERITY_CHOICES, null=True, blank=True,
+        help_text="Annotator's rating. NULL = 'unsure', row still consumes the queue slot.")
+    annotator     = models.CharField(max_length=120, default='unknown', db_index=True)
+    annotated_at  = models.DateTimeField(auto_now=True)
+    notes         = models.TextField(blank=True, default='')
+
+    class Meta:
+        unique_together = (('dest_well', 'somite_index', 'annotator'),)
+        indexes = [
+            models.Index(fields=['dest_well', 'somite_index']),
+            models.Index(fields=['annotator', '-annotated_at']),
+        ]
+
+    def __str__(self):
+        sev = 'unsure' if self.severity is None else dict(self.SEVERITY_CHOICES)[self.severity]
+        return (f"{self.dest_well} somite#{self.somite_index} "
+                f"= {sev} (by {self.annotator})")
+
+
 def latest_prediction(dest_well, model_name='resnet_v1', model_version=None):
     """Return the most recent DestWellPropertiesPredicted row for a given
     well/model, or None. Optional model_version constrains further.

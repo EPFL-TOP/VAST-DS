@@ -29,7 +29,7 @@ import bokeh.layouts
 from well_mapping.models import (
     Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition,
     DestWellPosition, Drug, DestWellProperties, DestWellPropertiesPredicted,
-    latest_prediction,
+    SomiteAnnotation, latest_prediction,
 )
 
 # Default model_name used when reading/writing predictions from the original
@@ -4484,3 +4484,322 @@ def profile_dashboard(request: HttpRequest) -> HttpResponse:
     """Serve the profile-based somite dashboard (Bokeh embed)."""
     script = bokeh.embed.server_document(request.build_absolute_uri())
     return render(request, 'well_explorer/profile_dashboard.html', {'script': script})
+
+
+#___________________________________________________________________________________________
+# Per-somite annotation dashboard
+#
+# Walks every saved profile_v1 prediction in an experiment, shows the
+# annotator one somite tile + the full straightened well as spatial
+# context, and writes their severity rating into the SomiteAnnotation
+# table. The tile is cropped on-the-fly via somiteCounting.tile_crops so
+# the annotator sees the exact same pixels the future classifier will see.
+
+SEV_LABELS = {0: 'healthy', 1: 'mild', 2: 'moderate', 3: 'severe'}
+SEV_COLORS = {0: '#1a9850', 1: '#fdae61', 2: '#f46d43', 3: '#a50026'}
+
+
+def annotate_handler(doc: bokeh.document.Document) -> None:
+    """Bokeh app for severity-labelling individual somites."""
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+
+    # Lazy imports — same pattern as profile_handler.
+    from somiteCounting.tile_crops import straighten_yfp, crop_tile
+
+    # Reuse the LOCALPATH constants the profile dashboard already defined.
+    # They're set at module import; if your prod machine layout changes,
+    # update them in one place near LOCALPATH_RAID5/HIVE/CH above.
+
+    all_exp = sorted([e.name for e in Experiment.objects.all()])
+    if not all_exp:
+        doc.add_root(bokeh.models.Div(text='<b>No experiments in the database.</b>'))
+        return
+
+    state = {
+        'queue':           [],   # list of (pred_row, somite_dict, dest_well)
+        'idx':             0,    # cursor into queue
+        'straight_cache':  {},   # dest_well_id -> straightened np.ndarray
+        'current':         None, # the (pred, somite, dest) being shown
+    }
+
+    # ---- Controls ----
+    exp_select = bokeh.models.Select(
+        title='Experiment', value=all_exp[0], options=all_exp, width=320)
+    annotator_input = bokeh.models.TextInput(
+        title='Annotator (your name — used as the row key)',
+        value='', placeholder='e.g. clement', width=320)
+    load_button = bokeh.models.Button(label='Load queue', button_type='primary', width=160)
+
+    progress_div = bokeh.models.Div(
+        text='<i>Pick an experiment and enter your name, then press Load queue.</i>',
+        width=900)
+    status_div = bokeh.models.Div(text='', width=900)
+
+    def _set_status(msg, color='#1a2340'):
+        status_div.text = f'<span style="color:{color}">{msg}</span>'
+
+    # ---- Display panels ----
+    # Big tile (what the classifier will see).
+    tile_src = bokeh.models.ColumnDataSource(
+        dict(image=[], dw=[], dh=[]))
+    tile_fig = bokeh.plotting.figure(
+        title='Current somite tile (classifier input)',
+        width=420, height=360,
+        x_range=(0, 1), y_range=(0, 1),
+        tools='reset,save', toolbar_location='right')
+    tile_fig.image(image='image', x=0, y=0, dw='dw', dh='dh',
+                   source=tile_src, palette='Greys256')
+    tile_fig.xaxis.visible = False; tile_fig.yaxis.visible = False
+
+    # Context: full straightened well, with current somite's bbox highlighted.
+    ctx_src = bokeh.models.ColumnDataSource(dict(image=[], dw=[], dh=[]))
+    ctx_bbox = bokeh.models.ColumnDataSource(
+        dict(left=[], right=[], top=[], bottom=[]))
+    ctx_fig = bokeh.plotting.figure(
+        title='Well context — current somite in red',
+        width=900, height=240,
+        x_range=(0, 1), y_range=(0, 1),
+        tools='pan,wheel_zoom,reset,save', toolbar_location='right')
+    ctx_fig.image(image='image', x=0, y=0, dw='dw', dh='dh',
+                  source=ctx_src, palette='Greys256')
+    ctx_fig.quad(left='left', right='right', top='top', bottom='bottom',
+                 source=ctx_bbox,
+                 fill_alpha=0, line_color='#d73027', line_width=2)
+    ctx_fig.xaxis.visible = False; ctx_fig.yaxis.visible = False
+
+    info_div = bokeh.models.Div(text='', width=420)
+
+    # ---- Queue helpers ----
+    def _build_queue(exp_name, annotator):
+        """Pull every profile_v1 row for the experiment, walk its somites,
+        and skip the (dest_well, somite_index) pairs that *this annotator*
+        has already labelled. Returns a list of (pred, somite_dict, dest)."""
+        preds = (DestWellPropertiesPredicted.objects
+                 .filter(model_name=PROFILE_MODEL_NAME,
+                         per_somite_data__isnull=False,
+                         dest_well__well_plate__experiment__name=exp_name)
+                 .select_related('dest_well__well_plate__experiment'))
+
+        already = set(SomiteAnnotation.objects.filter(
+            annotator=annotator,
+            dest_well__well_plate__experiment__name=exp_name,
+        ).values_list('dest_well_id', 'somite_index'))
+
+        out = []
+        for p in preds:
+            dest = p.dest_well
+            psd = p.per_somite_data or {}
+            for s in (psd.get('somites') or []):
+                si = int(s.get('index', -1))
+                if si < 0:
+                    continue
+                if (dest.id, si) in already:
+                    continue
+                out.append((p, s, dest))
+        return out
+
+    def _yfp_path_for_dest(dest):
+        """Mirror profile_handler._load_well_for_dest's path probing."""
+        try:
+            col = int(dest.position_col)
+        except (TypeError, ValueError):
+            return None
+        plate = dest.well_plate
+        exp_name = plate.experiment.name
+        for cand in (LOCALPATH_RAID5, LOCALPATH_HIVE, LOCALPATH_CH):
+            well_dir = os.path.join(
+                cand, exp_name, 'Leica images',
+                f'Plate {plate.plate_number}',
+                f'Well_{dest.position_row}{col:02d}',
+                'corrected_orientation')
+            if os.path.isdir(well_dir):
+                files = glob.glob(os.path.join(well_dir, '*YFP*.tiff'))
+                files = [f for f in files
+                         if 'norm' not in os.path.basename(f).lower()]
+                if files:
+                    return files[0]
+        return None
+
+    # ---- Render current item ----
+    def _render_current():
+        if not state['queue']:
+            _set_status('Queue is empty — nothing left to annotate '
+                        '(or nothing matches).', '#1a9850')
+            return
+        if state['idx'] >= len(state['queue']):
+            _set_status(
+                '<b>All done!</b> No more somites in this queue. '
+                'Switch experiment or come back later for new wells.',
+                '#1a9850')
+            tile_src.data = dict(image=[], dw=[], dh=[])
+            ctx_src.data = dict(image=[], dw=[], dh=[])
+            ctx_bbox.data = dict(left=[], right=[], top=[], bottom=[])
+            info_div.text = ''
+            return
+
+        pred, somite, dest = state['queue'][state['idx']]
+        state['current'] = (pred, somite, dest)
+
+        # Cache straightened images per well — switching somites within the
+        # same fish doesn't redo the polyfit.
+        straight = state['straight_cache'].get(dest.id)
+        if straight is None:
+            yfp_path = _yfp_path_for_dest(dest)
+            if yfp_path is None:
+                _set_status(f'No YFP image for {dest.position_row}'
+                            f'{dest.position_col} — skipping.', '#c00')
+                state['idx'] += 1
+                _render_current()
+                return
+            try:
+                straight, _ = straighten_yfp(yfp_path)
+            except Exception as e:
+                _set_status(f'Straighten failed: {e} — skipping.', '#c00')
+                state['idx'] += 1
+                _render_current()
+                return
+            # Keep cache bounded so we don't OOM on a long session.
+            if len(state['straight_cache']) > 20:
+                state['straight_cache'].pop(
+                    next(iter(state['straight_cache'])))
+            state['straight_cache'][dest.id] = straight
+
+        # Crop the tile via the shared helper — byte-identical to what
+        # extract_somite_tiles writes and the classifier will train on.
+        img, meta = crop_tile(straight, somite, padding=10,
+                              centre_marker=False)
+        if img is None:
+            _set_status('Bad bbox on this somite — skipping.', '#c00')
+            state['idx'] += 1
+            _render_current()
+            return
+
+        tile_np = np.array(img).astype(np.float32)  # mode L → (h,w) float
+        th, tw = tile_np.shape
+        tile_src.data = dict(image=[np.flipud(tile_np)], dw=[tw], dh=[th])
+        tile_fig.x_range.start = 0; tile_fig.x_range.end = tw
+        tile_fig.y_range.start = 0; tile_fig.y_range.end = th
+
+        sh, sw = straight.shape
+        ctx_src.data = dict(image=[np.flipud(straight)], dw=[sw], dh=[sh])
+        ctx_fig.x_range.start = 0; ctx_fig.x_range.end = sw
+        ctx_fig.y_range.start = 0; ctx_fig.y_range.end = sh
+
+        bbox = somite.get('bbox') or [0, 0, 0, 0]
+        x0, y0, x1, y1 = (int(v) for v in bbox)
+        ctx_bbox.data = dict(
+            left=[x0], right=[x1],
+            top=[sh - y0],          # flipud → y' = sh - y
+            bottom=[sh - y1])
+
+        # Heuristic suggestion (greyed out — we don't want to anchor)
+        heur = int(somite.get('severity', 0))
+        heur_label = SEV_LABELS.get(heur, str(heur))
+        plate_n = dest.well_plate.plate_number
+        info_div.text = (
+            f'<div style="font-size:13px; line-height:1.5">'
+            f'<b>{dest.well_plate.experiment.name}</b> &middot; '
+            f'Plate {plate_n} &middot; '
+            f'Well {dest.position_row}{int(dest.position_col):02d}<br>'
+            f'Somite index <b>{int(somite.get("index", -1))}</b> '
+            f'(AP {float(somite.get("ap_position", -1)):.2f}, '
+            f'conf {float(somite.get("confidence", 0)):.2f})<br>'
+            f'<small style="color:#888">algorithm guess: '
+            f'<span style="color:{SEV_COLORS[heur]}">{heur_label}</span> '
+            f'(this is just a hint — trust your eyes)</small>'
+            f'</div>')
+
+        progress_div.text = (
+            f'<b>{state["idx"] + 1} / {len(state["queue"])}</b> '
+            f'somites to annotate in this queue '
+            f'<small>(annotator: <code>{annotator_input.value}</code>)</small>')
+
+    # ---- Save + advance ----
+    def _record(severity):
+        cur = state['current']
+        if cur is None:
+            _set_status('Nothing loaded.', '#c00'); return
+        annot = annotator_input.value.strip()
+        if not annot:
+            _set_status('Set your annotator name first.', '#c00'); return
+        _, somite, dest = cur
+        si = int(somite.get('index', -1))
+        SomiteAnnotation.objects.update_or_create(
+            dest_well=dest, somite_index=si, annotator=annot,
+            defaults={'severity': severity},
+        )
+        label = 'unsure' if severity is None else SEV_LABELS[severity]
+        _set_status(f'Saved {dest.position_row}{int(dest.position_col):02d} '
+                    f'#{si} = <b>{label}</b>')
+        state['idx'] += 1
+        _render_current()
+
+    btn_h = bokeh.models.Button(label='0 · Healthy',  button_type='success', width=130)
+    btn_m = bokeh.models.Button(label='1 · Mild',     button_type='warning', width=130)
+    btn_d = bokeh.models.Button(label='2 · Moderate', button_type='warning', width=130)
+    btn_s = bokeh.models.Button(label='3 · Severe',   button_type='danger',  width=130)
+    btn_u = bokeh.models.Button(label='Unsure',       button_type='default', width=100)
+    btn_skip = bokeh.models.Button(label='Skip (don\'t save)', button_type='default', width=160)
+    btn_back = bokeh.models.Button(label='← Back',    button_type='default', width=80)
+
+    btn_h.on_click(lambda: _record(0))
+    btn_m.on_click(lambda: _record(1))
+    btn_d.on_click(lambda: _record(2))
+    btn_s.on_click(lambda: _record(3))
+    btn_u.on_click(lambda: _record(None))
+
+    def _skip():
+        state['idx'] += 1
+        _render_current()
+    btn_skip.on_click(_skip)
+
+    def _back():
+        if state['idx'] > 0:
+            state['idx'] -= 1
+            _render_current()
+    btn_back.on_click(_back)
+
+    # ---- Load queue ----
+    def _do_load():
+        annot = annotator_input.value.strip()
+        if not annot:
+            _set_status('Enter your annotator name first.', '#c00'); return
+        _set_status('Building queue…')
+        q = _build_queue(exp_select.value, annot)
+        state['queue'] = q
+        state['idx'] = 0
+        state['straight_cache'].clear()
+        if not q:
+            progress_div.text = (
+                f'<b>All caught up</b> for <code>{annot}</code> on '
+                f'<code>{exp_select.value}</code>.')
+            tile_src.data = dict(image=[], dw=[], dh=[])
+            ctx_src.data = dict(image=[], dw=[], dh=[])
+            ctx_bbox.data = dict(left=[], right=[], top=[], bottom=[])
+            info_div.text = ''
+            _set_status('Nothing to do here — switch experiment.', '#1a9850')
+            return
+        _set_status(f'Loaded {len(q)} somite(s).')
+        _render_current()
+
+    load_button.on_click(_do_load)
+
+    # ---- Layout ----
+    controls = bokeh.layouts.row(exp_select, annotator_input, load_button)
+    button_row = bokeh.layouts.row(btn_h, btn_m, btn_d, btn_s, btn_u, btn_skip, btn_back)
+    top_pane = bokeh.layouts.row(tile_fig, info_div)
+    doc.add_root(bokeh.layouts.column(
+        controls,
+        progress_div,
+        status_div,
+        top_pane,
+        button_row,
+        ctx_fig,
+    ))
+
+
+def annotate_somites(request: HttpRequest) -> HttpResponse:
+    """Serve the per-somite annotation dashboard (Bokeh embed)."""
+    script = bokeh.embed.server_document(request.build_absolute_uri())
+    return render(request, 'well_explorer/annotate_somites.html',
+                  {'script': script})

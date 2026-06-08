@@ -30,7 +30,6 @@ import os
 from collections import Counter
 from typing import Dict, List, Optional
 
-import numpy as np
 from django.core.management.base import BaseCommand, CommandError
 
 
@@ -90,14 +89,8 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
     def handle(self, *args, **opts):
         # Lazy imports — torch/skimage are heavy and irrelevant for help text.
-        from PIL import Image, ImageDraw
-        from skimage.io import imread
-
         from well_mapping.models import DestWellPropertiesPredicted
-        from somiteCounting._common import preprocess_image
-        from somiteCounting.profile_analysis import (
-            find_spine_centerline, straighten_image,
-        )
+        from somiteCounting.tile_crops import straighten_yfp, crop_tile
 
         out_dir = opts["output_dir"]
         exp_filter = opts["experiment"]
@@ -185,67 +178,26 @@ class Command(BaseCommand):
                 stats["skipped_exists"] += 1
                 continue
 
-            # Re-straighten so bbox coords (which were computed on the
-            # straightened image when profile_v1 saved) match the pixels
-            # we're about to crop. Cheap — a single 1-D polyfit + per-column
-            # shift, ~10 ms per image.
             try:
-                raw = imread(yfp_path).astype(np.float32)
-                normed = preprocess_image(raw, resize=raw.shape[:2]).numpy()[0]
-                y_spine, _ = find_spine_centerline(normed)
-                straight, _ = straighten_image(normed, y_spine)
+                straight, _ = straighten_yfp(yfp_path)
             except Exception as e:
                 stats["preprocess_err"] += 1
                 self.stderr.write(self.style.ERROR(
                     f"  [err]  {exp} P{plate.plate_number} {dest.position_row}{col:02d}: {e}"))
                 continue
 
-            sh, sw = straight.shape
-
             for s in somites:
-                bbox = s.get("bbox")
-                if not bbox or len(bbox) != 4:
+                img, meta = crop_tile(straight, s, padding=padding,
+                                      centre_marker=centre)
+                if img is None:
                     continue
-                x0, y0, x1, y1 = (int(v) for v in bbox)
-                # Apply padding, then clamp to image bounds
-                x0p = max(0, x0 - padding)
-                y0p = max(0, y0 - padding)
-                x1p = min(sw, x1 + padding)
-                y1p = min(sh, y1 + padding)
-                if x1p <= x0p or y1p <= y0p:
-                    continue
-
-                # Crop, scale to uint8 PNG
-                patch = straight[y0p:y1p, x0p:x1p]
-                if patch.size == 0:
-                    continue
-                lo, hi = float(patch.min()), float(patch.max())
-                if hi > lo:
-                    patch_u8 = ((patch - lo) / (hi - lo) * 255).astype(np.uint8)
-                else:
-                    patch_u8 = np.zeros_like(patch, dtype=np.uint8)
-
-                img = Image.fromarray(patch_u8, mode="L")
-
-                # Optional centre marker — small cross at the somite x,
-                # in the cropped (and possibly padded) coordinate frame.
-                if centre:
-                    cx = int(s.get("centroid_x", (x0 + x1) / 2)) - x0p
-                    cy = int(s.get("centroid_y", (y0 + y1) / 2)) - y0p
-                    img_rgb = img.convert("RGB")
-                    draw = ImageDraw.Draw(img_rgb)
-                    arm = 4
-                    draw.line([(cx - arm, cy), (cx + arm, cy)],
-                               fill=(255, 64, 64), width=1)
-                    draw.line([(cx, cy - arm), (cx, cy + arm)],
-                               fill=(255, 64, 64), width=1)
-                    img = img_rgb
 
                 tile_name = f"{stem}_somite_{int(s.get('index', 0)):03d}.png"
                 tile_path = os.path.join(exp_subdir, tile_name)
                 if not dry:
                     img.save(tile_path)
 
+                bbox = s.get("bbox") or [None, None, None, None]
                 manifest.append({
                     "tile_path": os.path.relpath(tile_path, out_dir),
                     "experiment": exp,
@@ -254,12 +206,12 @@ class Command(BaseCommand):
                     "dest_well_id": dest.id,
                     "somite_index": int(s.get("index", -1)),
                     "ap_position": float(s.get("ap_position", -1)),
-                    "bbox_straightened": [x0, y0, x1, y1],
-                    "bbox_padded": [x0p, y0p, x1p, y1p],
-                    "centre_xy_in_tile": [cx, cy] if centre else None,
+                    "bbox_straightened": [int(v) for v in bbox],
+                    "bbox_padded": meta["bbox_padded"],
+                    "centre_xy_in_tile": meta["centre_xy_in_tile"],
                     "severity_heuristic": int(s.get("severity", 0)),
                     "severity_reason": s.get("severity_reason", ""),
-                    "severity_annotated": None,  # filled in by annotation tool later
+                    "severity_annotated": None,  # see SomiteAnnotation table
                     "confidence": float(s.get("confidence", 0)),
                     "upper_confidence": float(s.get("upper_confidence", 0)),
                     "lower_confidence": float(s.get("lower_confidence", 0)),

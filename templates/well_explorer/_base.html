@@ -136,6 +136,8 @@ The active sidebar link is auto-detected from the URL name.
        class="{% if current == 'sam_dashboard' %}active{% endif %}">&#9678; SAM Segmentation</a>
     <a href="{% url 'profile_dashboard' %}"
        class="{% if current == 'profile_dashboard' %}active{% endif %}">&#9776; Profile Analysis</a>
+    <a href="{% url 'annotate_somites' %}"
+       class="{% if current == 'annotate_somites' %}active{% endif %}">&#9998; Annotate Somites</a>
 
     {% block sidebar_extra %}{% endblock %}
   </nav>

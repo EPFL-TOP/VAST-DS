@@ -374,17 +374,33 @@ which one in the patch to score. Whether the overlap helps (extra spatial
 context) or hurts (label noise from neighbours) is itself a question the
 classifier training will answer.
 
-Next steps in the pipeline (not yet built):
+**Step 3 — Annotate (Bokeh dashboard)**: `/well_explorer/annotate_somites`
+walks every saved `profile_v1` somite in an experiment and presents them
+one at a time. The tile shown is cropped on-the-fly via the shared
+`somiteCounting/tile_crops.py` helper — **byte-identical** to what
+`extract_somite_tiles` writes and what the classifier will see at
+inference, so annotator and classifier never disagree about what they're
+looking at. Pick severity 0/1/2/3 (or *Unsure*), and the label is written
+to the `SomiteAnnotation` table keyed by `(dest_well, somite_index,
+annotator)`. Re-loading the same experiment under the same annotator name
+skips tiles already done, so the workflow is resumable.
 
-1. **Annotation tool** — a small Bokeh page that walks the manifest, shows
-   each tile, and lets a biologist tag severity 0/1/2/3. Writes labels back
-   into `manifest.json`'s `severity_annotated` field.
-2. **Classifier training** — a `somiteCounting/training_severity.py` that
-   reads the labelled manifest, trains a small CNN (probably ResNet18
-   transfer like the other classifiers), and writes
-   `checkpoints/severity_best.pth` + test metrics.
-3. **Plumb it into `profile_v1`** — replace `_classify_severity` with a
-   forward pass over each somite's tile.
+Why a DB table and not a JSON file: multiple annotators can rate the same
+somite for inter-rater agreement, the training script can pull a clean SQL
+join, and there's no file-locking hazard if someone runs the extractor
+mid-annotation. Migration is `well_mapping/0037_somiteannotation_*.py` —
+run `python manage.py migrate well_mapping` after pulling.
+
+Still to build:
+
+- **Classifier training** — a `somiteCounting/training_severity.py` that
+  reads the `SomiteAnnotation` table (filtered to a chosen annotator or
+  to inter-rater consensus), re-crops via `tile_crops.crop_tile`, and
+  trains a small CNN. Writes `checkpoints/severity_best.pth` + test
+  metrics.
+- **Plumb it into `profile_v1`** — replace the neighbour-comparison
+  `_classify_severity` heuristic with a forward pass over each somite's
+  tile through the trained checkpoint.
 
 ## Roadmap
 

@@ -1,0 +1,50 @@
+{% extends "well_explorer/_base.html" %}
+
+{% block title %}<title>VAST-DS · Annotate somites</title>{% endblock %}
+{% block header_title %}Annotate somites{% endblock %}
+{% block header_subtitle %}Label per-somite defect severity for classifier training &mdash; one tile at a time, paired with its well context.{% endblock %}
+
+{% block breadcrumb %}
+  <span class="sep">›</span> Well Explorer
+  <span class="sep">›</span> Annotate somites
+{% endblock %}
+
+{% block extra_css %}
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-3.7.3.min.css" rel="stylesheet" type="text/css">
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-widgets-3.7.3.min.css" rel="stylesheet" type="text/css">
+<style>
+    .an-intro {
+        color: #55637a; font-size: 13px; max-width: 940px;
+        background: #fff; border-left: 3px solid #5b8dee;
+        padding: 10px 14px; border-radius: 4px; margin-bottom: 20px;
+    }
+    .an-intro code { background: #eef2ff; padding: 1px 4px; border-radius: 3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<p class="an-intro">
+    Pick an experiment, enter your annotator name, press <b>Load queue</b>.
+    You'll get one somite tile at a time (exactly the crop the future
+    severity classifier will see) plus the full straightened well for
+    spatial context, with the current somite outlined in red. Pick a
+    severity (<b>0</b>=healthy &middot; <b>1</b>=mild &middot; <b>2</b>=moderate
+    &middot; <b>3</b>=severe) or <b>Unsure</b>; <b>Skip</b> moves on without
+    saving. Labels are written to the <code>SomiteAnnotation</code> table,
+    keyed by <code>(dest_well, somite_index, annotator)</code> so multiple
+    raters can co-exist. Re-loading skips tiles you've already labelled.
+</p>
+
+{% if script %}
+    {{ script | safe }}
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-widgets-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-tables-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-api-3.7.3.min.js"></script>
+{% endblock %}
