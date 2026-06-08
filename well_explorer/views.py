@@ -4528,6 +4528,12 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
     annotator_input = bokeh.models.TextInput(
         title='Annotator (your name — used as the row key)',
         value='', placeholder='e.g. clement', width=320)
+    # Default ON: a per-somite label is only really useful as training data
+    # if the whole fish has a ground-truth count to anchor it. Untick to
+    # also annotate unvalidated wells (e.g. for unsupervised use).
+    valid_only_cb = bokeh.models.CheckboxGroup(
+        labels=['Only fish with manual valid=True (have ground-truth count)'],
+        active=[0], width=480)
     load_button = bokeh.models.Button(label='Load queue', button_type='primary', width=160)
 
     progress_div = bokeh.models.Div(
@@ -4570,15 +4576,23 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
     info_div = bokeh.models.Div(text='', width=420)
 
     # ---- Queue helpers ----
-    def _build_queue(exp_name, annotator):
+    def _build_queue(exp_name, annotator, valid_only):
         """Pull every profile_v1 row for the experiment, walk its somites,
         and skip the (dest_well, somite_index) pairs that *this annotator*
-        has already labelled. Returns a list of (pred, somite_dict, dest)."""
+        has already labelled. Returns a list of (pred, somite_dict, dest).
+
+        If ``valid_only`` is True, restrict to wells whose manual
+        DestWellProperties.valid == True (i.e. a biologist confirmed it's a
+        usable fish image and the ground-truth count is meaningful). Wells
+        with no manual annotation row, or valid=False/NULL, are excluded.
+        """
         preds = (DestWellPropertiesPredicted.objects
                  .filter(model_name=PROFILE_MODEL_NAME,
                          per_somite_data__isnull=False,
                          dest_well__well_plate__experiment__name=exp_name)
                  .select_related('dest_well__well_plate__experiment'))
+        if valid_only:
+            preds = preds.filter(dest_well__dest_well_properties__valid=True)
 
         already = set(SomiteAnnotation.objects.filter(
             annotator=annotator,
@@ -4765,7 +4779,8 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
         if not annot:
             _set_status('Enter your annotator name first.', '#c00'); return
         _set_status('Building queue…')
-        q = _build_queue(exp_select.value, annot)
+        valid_only = (0 in valid_only_cb.active)
+        q = _build_queue(exp_select.value, annot, valid_only)
         state['queue'] = q
         state['idx'] = 0
         state['straight_cache'].clear()
@@ -4785,7 +4800,9 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
     load_button.on_click(_do_load)
 
     # ---- Layout ----
-    controls = bokeh.layouts.row(exp_select, annotator_input, load_button)
+    controls = bokeh.layouts.column(
+        bokeh.layouts.row(exp_select, annotator_input, load_button),
+        valid_only_cb)
     button_row = bokeh.layouts.row(btn_h, btn_m, btn_d, btn_s, btn_u, btn_skip, btn_back)
     top_pane = bokeh.layouts.row(tile_fig, info_div)
     doc.add_root(bokeh.layouts.column(
