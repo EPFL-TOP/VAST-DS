@@ -306,11 +306,39 @@ healthy fish and isolated defects — but breaks on uniformly-defective fish
 to. Replacing the heuristic with a small CNN trained on labelled per-somite
 crops is the planned fix.
 
-Step 1, **extract tiles**, is the
-`extract_somite_tiles` management command. It walks every `profile_v1`
-prediction in the DB, re-straightens the well's canonicalised YFP image with
-the same spine fit `profile_analysis` uses, then crops each somite's
-`bbox` (with configurable padding) into a PNG.
+The pipeline is two commands.
+
+**Step 1 — `batch_profile_predict`**: the dashboard's Save button writes a
+`profile_v1` row for one well at a time, which doesn't scale. This batch
+command walks every dest well in the DB (optionally filtered by
+experiment/plate), runs `profile_analysis.analyze_image` on its YFP image,
+and persists the result with the same shape Save would write.
+
+```bash
+# Predict everything with the tuned DEFAULTS from profile_analysis
+python manage.py batch_profile_predict
+
+# Limit to one experiment and one plate, override the prominence knob
+python manage.py batch_profile_predict \
+    --experiment VAST_2026-05 --plate 2 \
+    --peak_prominence 0.025 --peak_distance 35
+
+# Re-predict wells that already have a profile_v1 row (after a tuning change)
+python manage.py batch_profile_predict --overwrite
+
+# Quick smoke test — first 10 wells, don't write
+python manage.py batch_profile_predict --limit 10 --dry_run
+```
+
+By default it **skips** wells that already have a `profile_v1` row, so
+incremental runs are cheap; pass `--overwrite` after a meaningful parameter
+change. Use `--model_version <tag>` to keep multiple parameter sweeps
+side-by-side instead of overwriting.
+
+**Step 2 — `extract_somite_tiles`**: walks every `profile_v1` prediction in
+the DB, re-straightens the well's canonicalised YFP image with the same
+spine fit `profile_analysis` uses, then crops each somite's `bbox` (with
+configurable padding) into a PNG.
 
 ```bash
 # All experiments, default 10 px padding, no marker
