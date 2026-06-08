@@ -297,6 +297,67 @@ Set `VAST_SAM_CHECKPOINT` to override the path or `VAST_SAM_MODEL_TYPE` to
 use a different ViT size (`vit_b` / `vit_l` / `vit_h`). MedSAM weights work
 through the same code path; drop them at the same default location.
 
+## Per-somite tile extraction (for the defect classifier)
+
+The current per-somite severity heuristic in `profile_v1` compares each
+somite's confidence to its neighbours (±3). That works for the easy cases —
+healthy fish and isolated defects — but breaks on uniformly-defective fish
+(test MAE ≈ 9 on the bad column) where there's no clean baseline to compare
+to. Replacing the heuristic with a small CNN trained on labelled per-somite
+crops is the planned fix.
+
+Step 1, **extract tiles**, is the
+`extract_somite_tiles` management command. It walks every `profile_v1`
+prediction in the DB, re-straightens the well's canonicalised YFP image with
+the same spine fit `profile_analysis` uses, then crops each somite's
+`bbox` (with configurable padding) into a PNG.
+
+```bash
+# All experiments, default 10 px padding, no marker
+python manage.py extract_somite_tiles
+
+# One experiment, bigger padding, with a centre-cross overlay so the
+# downstream classifier knows which somite in the patch to score
+python manage.py extract_somite_tiles \
+    --experiment VAST_2026-05-11 \
+    --padding 12 --centre-marker
+```
+
+Output layout:
+
+```text
+data/somite_tiles/
+├── <experiment>/
+│   ├── Plate1_A03_somite_000.png
+│   ├── Plate1_A03_somite_001.png
+│   └── ...
+└── manifest.json
+```
+
+`manifest.json` carries the full provenance per tile (`experiment`,
+`dest_well_id`, `somite_index`, `ap_position`, `bbox_straightened`,
+`bbox_padded`, `severity_heuristic`, `confidence` triple, …) plus a
+`severity_annotated: null` slot for the annotation tool to fill in.
+
+Tiles overlap by design — chevron-shaped somites can't be cleanly cut
+without including pieces of their neighbours. The `--centre-marker` flag
+draws a small red cross at the central somite's centroid so a CNN can tell
+which one in the patch to score. Whether the overlap helps (extra spatial
+context) or hurts (label noise from neighbours) is itself a question the
+classifier training will answer.
+
+Next steps in the pipeline (not yet built):
+
+1. **Annotation tool** — a small Bokeh page that walks the manifest, shows
+   each tile, and lets a biologist tag severity 0/1/2/3. Writes labels back
+   into `manifest.json`'s `severity_annotated` field.
+2. **Classifier training** — a `somiteCounting/training_severity.py` that
+   reads the labelled manifest, trains a small CNN (probably ResNet18
+   transfer like the other classifiers), and writes
+   `checkpoints/severity_best.pth` + test metrics.
+3. **Plumb it into `profile_v1`** — replace `_classify_severity` with a
+   forward pass over each somite's tile.
+
 ## Roadmap
 
 Planned, in order:

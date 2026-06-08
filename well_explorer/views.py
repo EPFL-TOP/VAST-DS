@@ -3747,6 +3747,7 @@ def profile_handler(doc: bokeh.document.Document) -> None:
         return dict(x=[], y=[], color=[], line_color=[],
                     well=[], plate=[], dest_id=[],
                     ann_total=[], ann_bad=[], ann_valid=[],
+                    pred_total=[], pred_bad=[],
                     has_profile=[])
 
     src_plate1 = bokeh.models.ColumnDataSource(data=_empty_plate_grid_cds())
@@ -3760,6 +3761,7 @@ def profile_handler(doc: bokeh.document.Document) -> None:
             hover[0].tooltips = [
                 ('Well',        '@well'),
                 ('Annotated',   'total @ann_total · def @ann_bad · valid @ann_valid'),
+                ('Model (resnet_v1)', 'total @pred_total · def @pred_bad'),
                 ('profile_v1?', '@has_profile'),
             ]
 
@@ -3995,6 +3997,15 @@ def profile_handler(doc: bokeh.document.Document) -> None:
                     dest_well__in=dests,
                     model_name='profile_v1',
                 ).values_list('dest_well_id', flat=True))
+            # batch-fetch the resnet_v1 predictions in one query so the
+            # hover tooltip can show the model count without per-well lookups
+            resnet_preds = {
+                row['dest_well_id']: (row['n_total_somites'], row['n_bad_somites'])
+                for row in DestWellPropertiesPredicted.objects.filter(
+                    dest_well__in=dests,
+                    model_name=RESNET_MODEL_NAME,
+                ).values('dest_well_id', 'n_total_somites', 'n_bad_somites')
+            }
             for d in dests:
                 try:
                     col = int(d.position_col)
@@ -4010,6 +4021,9 @@ def profile_handler(doc: bokeh.document.Document) -> None:
                 else:
                     fill = '#d73027'   # invalid → red
                 border = '#1a2340' if d.id in existing_profile else 'white'
+                pred_t_raw, pred_b_raw = resnet_preds.get(d.id, (None, None))
+                pred_t = pred_t_raw if pred_t_raw not in (None, -9999) else None
+                pred_b = pred_b_raw if pred_b_raw not in (None, -9999) else None
                 buckets['x'].append(str(col))
                 buckets['y'].append(d.position_row)
                 buckets['color'].append(fill)
@@ -4021,6 +4035,8 @@ def profile_handler(doc: bokeh.document.Document) -> None:
                 buckets['ann_bad'].append(ann_b if ann_b is not None else '—')
                 buckets['ann_valid'].append(
                     'Y' if ann_v else 'N' if ann_v is False else '?')
+                buckets['pred_total'].append(pred_t if pred_t is not None else '—')
+                buckets['pred_bad'].append(pred_b if pred_b is not None else '—')
                 buckets['has_profile'].append(
                     'yes' if d.id in existing_profile else 'no')
             src.data = buckets
@@ -4136,12 +4152,23 @@ def profile_handler(doc: bokeh.document.Document) -> None:
             return
         _load_well_for_dest(dest, plate_n)
 
-    src_plate1.selected.on_change(
-        'indices',
-        lambda attr, old, new: _on_plate_select(attr, old, new, src_plate1, 1))
-    src_plate2.selected.on_change(
-        'indices',
-        lambda attr, old, new: _on_plate_select(attr, old, new, src_plate2, 2))
+    # Wrap the selection handler so picking a well on one plate clears any
+    # selection on the OTHER plate — only one well is "active" at a time.
+    # Setting `selected.indices = []` retriggers the other plate's
+    # on_change with `new=[]`, which short-circuits at the `if not new:`
+    # guard inside _on_plate_select, so no infinite loop.
+    def _plate1_changed(attr, old, new):
+        if new and src_plate2.selected.indices:
+            src_plate2.selected.indices = []
+        _on_plate_select(attr, old, new, src_plate1, 1)
+
+    def _plate2_changed(attr, old, new):
+        if new and src_plate1.selected.indices:
+            src_plate1.selected.indices = []
+        _on_plate_select(attr, old, new, src_plate2, 2)
+
+    src_plate1.selected.on_change('indices', _plate1_changed)
+    src_plate2.selected.on_change('indices', _plate2_changed)
 
     # ----- Analyse -----
     def _do_analyze():
