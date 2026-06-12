@@ -75,8 +75,11 @@ class Command(BaseCommand):
                             help=f"Output folder (default: {DEFAULT_OUTPUT})")
         parser.add_argument("--experiment", default=None,
                             help="Limit to experiments whose name contains this substring.")
-        parser.add_argument("--padding", type=int, default=10,
-                            help="Extra pixels to add around each bbox (default: 10).")
+        from somiteCounting.tile_crops import DEFAULT_PADDING
+        parser.add_argument("--padding", type=int, default=DEFAULT_PADDING,
+                            help=f"Extra pixels around each bbox (default: {DEFAULT_PADDING}). "
+                                 "Keep this in sync with the annotation dashboard or the "
+                                 "classifier will see different pixels at train vs inference.")
         parser.add_argument("--centre-marker", action="store_true",
                             default=False,
                             help="Draw a small cross at the somite centre in each tile, "

@@ -19,6 +19,15 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 
 
+# Default padding around each bbox. Tuned so the typical somite tile
+# (~50×150 px bbox at 2048² source resolution) ends up at ~110×210 px —
+# close to ResNet18's 224×224 input, so the train-time upsample is small
+# and the annotator-side display isn't a blurry mess. Annotator and
+# extractor MUST agree, or the classifier sees different pixels at train
+# vs inference, so both sides import this constant.
+DEFAULT_PADDING = 30
+
+
 def straighten_yfp(yfp_input):
     """Load (or accept a pre-loaded array) + spine-straighten a YFP image.
 
@@ -56,7 +65,7 @@ def straighten_yfp(yfp_input):
 
 
 def crop_tile(straight: np.ndarray, somite: Dict, *,
-              padding: int = 10,
+              padding: int = DEFAULT_PADDING,
               centre_marker: bool = False):
     """Crop a single somite tile from an already-straightened image.
 

@@ -275,6 +275,16 @@ class SomiteAnnotation(models.Model):
         (2, 'moderate'),
         (3, 'severe'),
     )
+    # Whether the bbox cleanly contains one somite. Training filters to
+    # 'single'; everything else is recorded so we can later (a) audit the
+    # detector's failure modes, (b) feed the bad boxes into a box-quality
+    # head if we ever want one.
+    BOX_QUALITY_CHOICES = (
+        ('single',        'single somite, well-centred'),
+        ('multiple',      'multiple somites in the box'),
+        ('empty',         'no somite — false positive from detector'),
+        ('mispositioned', 'somite is partly out of the box / off-centre'),
+    )
 
     dest_well     = models.ForeignKey(DestWellPosition, on_delete=models.CASCADE,
                                       related_name='somite_annotations')
@@ -282,7 +292,12 @@ class SomiteAnnotation(models.Model):
         help_text="Matches per_somite_data['somites'][i]['index'] for the well's profile_v1 row.")
     severity      = models.IntegerField(
         choices=SEVERITY_CHOICES, null=True, blank=True,
-        help_text="Annotator's rating. NULL = 'unsure', row still consumes the queue slot.")
+        help_text="Annotator's rating. NULL = 'unsure' OR box_quality != 'single' "
+                  "(severity is undefined when the box doesn't contain exactly one somite).")
+    box_quality   = models.CharField(
+        max_length=20, choices=BOX_QUALITY_CHOICES, default='single',
+        help_text="Quality of the detector's bounding box. Only 'single' rows "
+                  "are usable for severity-classifier training.")
     annotator     = models.CharField(max_length=120, default='unknown', db_index=True)
     annotated_at  = models.DateTimeField(auto_now=True)
     notes         = models.TextField(blank=True, default='')

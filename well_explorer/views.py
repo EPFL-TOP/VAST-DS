@@ -4520,6 +4520,7 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
         'idx':             0,    # cursor into queue
         'straight_cache':  {},   # dest_well_id -> straightened np.ndarray
         'current':         None, # the (pred, somite, dest) being shown
+        'fish_totals':     {},   # dest_well_id -> total somites in that fish
     }
 
     # ---- Controls ----
@@ -4579,12 +4580,14 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
     def _build_queue(exp_name, annotator, valid_only):
         """Pull every profile_v1 row for the experiment, walk its somites,
         and skip the (dest_well, somite_index) pairs that *this annotator*
-        has already labelled. Returns a list of (pred, somite_dict, dest).
+        has already labelled. Returns a list of (pred, somite_dict, dest)
+        sorted defective-first so the annotator hits the interesting cases
+        (and gets class balance into the training set) without having to
+        wade through fields of healthy somites.
 
         If ``valid_only`` is True, restrict to wells whose manual
         DestWellProperties.valid == True (i.e. a biologist confirmed it's a
-        usable fish image and the ground-truth count is meaningful). Wells
-        with no manual annotation row, or valid=False/NULL, are excluded.
+        usable fish image and the ground-truth count is meaningful).
         """
         preds = (DestWellPropertiesPredicted.objects
                  .filter(model_name=PROFILE_MODEL_NAME,
@@ -4593,6 +4596,9 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
                  .select_related('dest_well__well_plate__experiment'))
         if valid_only:
             preds = preds.filter(dest_well__dest_well_properties__valid=True)
+        # Most-defective fish first → class balance from the start.
+        # Within a fish, somites stay in AP order (their stored 'index').
+        preds = preds.order_by('-n_bad_somites', 'dest_well_id')
 
         already = set(SomiteAnnotation.objects.filter(
             annotator=annotator,
@@ -4600,16 +4606,20 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
         ).values_list('dest_well_id', 'somite_index'))
 
         out = []
+        fish_totals = {}   # dest_id -> total somites that exist in fish
         for p in preds:
             dest = p.dest_well
             psd = p.per_somite_data or {}
-            for s in (psd.get('somites') or []):
+            somites = psd.get('somites') or []
+            fish_totals[dest.id] = len(somites)
+            for s in somites:
                 si = int(s.get('index', -1))
                 if si < 0:
                     continue
                 if (dest.id, si) in already:
                     continue
                 out.append((p, s, dest))
+        state['fish_totals'] = fish_totals
         return out
 
     def _yfp_path_for_dest(dest):
@@ -4680,8 +4690,9 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
 
         # Crop the tile via the shared helper — byte-identical to what
         # extract_somite_tiles writes and the classifier will train on.
-        img, meta = crop_tile(straight, somite, padding=10,
-                              centre_marker=False)
+        # Padding comes from tile_crops.DEFAULT_PADDING (single source of
+        # truth) so annotator and trainer never diverge.
+        img, _ = crop_tile(straight, somite, centre_marker=False)
         if img is None:
             _set_status('Bad bbox on this somite — skipping.', '#c00')
             state['idx'] += 1
@@ -4706,7 +4717,35 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
             top=[sh - y0],          # flipud → y' = sh - y
             bottom=[sh - y1])
 
-        # Heuristic suggestion (greyed out — we don't want to anchor)
+        # Existing annotation (if any) — Back / re-loading might land on a
+        # somite this annotator already labelled. Don't anchor the eye:
+        # show the prior label below the algorithm hint, plainly.
+        annot = annotator_input.value.strip()
+        si = int(somite.get('index', -1))
+        prior = SomiteAnnotation.objects.filter(
+            dest_well=dest, somite_index=si, annotator=annot).first()
+        if prior is not None:
+            if prior.box_quality != 'single':
+                prior_txt = f'box:{prior.box_quality}'
+                prior_color = '#888'
+            elif prior.severity is None:
+                prior_txt = 'unsure'
+                prior_color = '#888'
+            else:
+                prior_txt = SEV_LABELS[prior.severity]
+                prior_color = SEV_COLORS[prior.severity]
+            prior_html = (f'<br><b>Already annotated</b> by you as '
+                          f'<span style="color:{prior_color}">{prior_txt}</span> '
+                          f'(re-clicking will overwrite).')
+        else:
+            prior_html = ''
+
+        # Per-fish progress: how many somites in THIS fish does this
+        # annotator already have a label for (any box_quality / severity)?
+        fish_total = state['fish_totals'].get(dest.id, 0)
+        fish_done = SomiteAnnotation.objects.filter(
+            dest_well=dest, annotator=annot).count()
+
         heur = int(somite.get('severity', 0))
         heur_label = SEV_LABELS.get(heur, str(heur))
         plate_n = dest.well_plate.plate_number
@@ -4715,21 +4754,28 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
             f'<b>{dest.well_plate.experiment.name}</b> &middot; '
             f'Plate {plate_n} &middot; '
             f'Well {dest.position_row}{int(dest.position_col):02d}<br>'
-            f'Somite index <b>{int(somite.get("index", -1))}</b> '
+            f'Somite index <b>{si}</b> '
             f'(AP {float(somite.get("ap_position", -1)):.2f}, '
             f'conf {float(somite.get("confidence", 0)):.2f})<br>'
+            f'<small style="color:#666">Fish progress: '
+            f'<b>{fish_done}/{fish_total}</b> somites annotated</small><br>'
             f'<small style="color:#888">algorithm guess: '
             f'<span style="color:{SEV_COLORS[heur]}">{heur_label}</span> '
             f'(this is just a hint — trust your eyes)</small>'
+            f'{prior_html}'
             f'</div>')
 
         progress_div.text = (
             f'<b>{state["idx"] + 1} / {len(state["queue"])}</b> '
-            f'somites to annotate in this queue '
-            f'<small>(annotator: <code>{annotator_input.value}</code>)</small>')
+            f'somites left in this queue '
+            f'<small>(annotator: <code>{annotator_input.value}</code>; '
+            f'queue sorted defective-first)</small>')
 
     # ---- Save + advance ----
-    def _record(severity):
+    def _record(severity, box_quality='single'):
+        """Persist one annotation and advance. severity is ignored (stored
+        as NULL) when box_quality != 'single' — there's no defensible
+        severity rating for a box that doesn't cleanly contain one somite."""
         cur = state['current']
         if cur is None:
             _set_status('Nothing loaded.', '#c00'); return
@@ -4738,29 +4784,54 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
             _set_status('Set your annotator name first.', '#c00'); return
         _, somite, dest = cur
         si = int(somite.get('index', -1))
+        if box_quality != 'single':
+            severity = None
         SomiteAnnotation.objects.update_or_create(
             dest_well=dest, somite_index=si, annotator=annot,
-            defaults={'severity': severity},
+            defaults={'severity': severity, 'box_quality': box_quality},
         )
-        label = 'unsure' if severity is None else SEV_LABELS[severity]
+        if box_quality != 'single':
+            label = f'box:{box_quality}'
+        elif severity is None:
+            label = 'unsure'
+        else:
+            label = SEV_LABELS[severity]
         _set_status(f'Saved {dest.position_row}{int(dest.position_col):02d} '
                     f'#{si} = <b>{label}</b>')
         state['idx'] += 1
         _render_current()
 
-    btn_h = bokeh.models.Button(label='0 · Healthy',  button_type='success', width=130)
-    btn_m = bokeh.models.Button(label='1 · Mild',     button_type='warning', width=130)
+    # Severity row (only meaningful when box_quality='single')
+    btn_h = bokeh.models.Button(label='0 · Healthy',  button_type='success', width=120)
+    btn_m = bokeh.models.Button(label='1 · Mild',     button_type='warning', width=110)
     btn_d = bokeh.models.Button(label='2 · Moderate', button_type='warning', width=130)
-    btn_s = bokeh.models.Button(label='3 · Severe',   button_type='danger',  width=130)
+    btn_s = bokeh.models.Button(label='3 · Severe',   button_type='danger',  width=110)
     btn_u = bokeh.models.Button(label='Unsure',       button_type='default', width=100)
-    btn_skip = bokeh.models.Button(label='Skip (don\'t save)', button_type='default', width=160)
-    btn_back = bokeh.models.Button(label='← Back',    button_type='default', width=80)
-
     btn_h.on_click(lambda: _record(0))
     btn_m.on_click(lambda: _record(1))
     btn_d.on_click(lambda: _record(2))
     btn_s.on_click(lambda: _record(3))
     btn_u.on_click(lambda: _record(None))
+
+    # Box-quality row (the detector's bbox is broken — record why, severity
+    # goes to NULL and the row is excluded from severity training).
+    btn_bq_multi = bokeh.models.Button(
+        label='Box: multi somites', button_type='default', width=160)
+    btn_bq_empty = bokeh.models.Button(
+        label='Box: empty / FP',    button_type='default', width=140)
+    btn_bq_mis   = bokeh.models.Button(
+        label='Box: mispositioned', button_type='default', width=170)
+    btn_bq_multi.on_click(lambda: _record(None, box_quality='multiple'))
+    btn_bq_empty.on_click(lambda: _record(None, box_quality='empty'))
+    btn_bq_mis.on_click(  lambda: _record(None, box_quality='mispositioned'))
+
+    # Navigation row
+    btn_skip = bokeh.models.Button(label='Skip (don\'t save)', button_type='default', width=150)
+    btn_back = bokeh.models.Button(label='← Back',             button_type='default', width=80)
+    btn_next_fish = bokeh.models.Button(
+        label='Next fish →', button_type='primary', width=110)
+    btn_mark_healthy = bokeh.models.Button(
+        label='Mark rest of fish healthy', button_type='success', width=210)
 
     def _skip():
         state['idx'] += 1
@@ -4772,6 +4843,48 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
             state['idx'] -= 1
             _render_current()
     btn_back.on_click(_back)
+
+    def _jump_next_fish():
+        """Advance queue idx past every entry of the current fish."""
+        if state['current'] is None:
+            _set_status('Nothing loaded.', '#c00'); return
+        _, _, cur_dest = state['current']
+        i = state['idx']
+        n = len(state['queue'])
+        while i < n and state['queue'][i][2].id == cur_dest.id:
+            i += 1
+        state['idx'] = i
+        _render_current()
+    btn_next_fish.on_click(_jump_next_fish)
+
+    def _mark_rest_healthy():
+        """Bulk-save every remaining somite in the *current fish* as
+        healthy (severity=0, box=single) for this annotator, then jump to
+        the next fish. Saves a 30-click well to one click for clean fish."""
+        cur = state['current']
+        if cur is None:
+            _set_status('Nothing loaded.', '#c00'); return
+        annot = annotator_input.value.strip()
+        if not annot:
+            _set_status('Set your annotator name first.', '#c00'); return
+        _, _, cur_dest = cur
+        i = state['idx']
+        n_written = 0
+        while i < len(state['queue']) and state['queue'][i][2].id == cur_dest.id:
+            _, s_i, d_i = state['queue'][i]
+            SomiteAnnotation.objects.update_or_create(
+                dest_well=d_i, somite_index=int(s_i.get('index', -1)),
+                annotator=annot,
+                defaults={'severity': 0, 'box_quality': 'single'},
+            )
+            n_written += 1
+            i += 1
+        state['idx'] = i
+        _set_status(f'Marked <b>{n_written}</b> somite(s) of '
+                    f'{cur_dest.position_row}{int(cur_dest.position_col):02d} '
+                    'as healthy.')
+        _render_current()
+    btn_mark_healthy.on_click(_mark_rest_healthy)
 
     # ---- Load queue ----
     def _do_load():
@@ -4803,14 +4916,30 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
     controls = bokeh.layouts.column(
         bokeh.layouts.row(exp_select, annotator_input, load_button),
         valid_only_cb)
-    button_row = bokeh.layouts.row(btn_h, btn_m, btn_d, btn_s, btn_u, btn_skip, btn_back)
+
+    def _label(text, color='#1a2340'):
+        return bokeh.models.Div(
+            text=f'<span style="font-size:12px; color:{color}; '
+                 f'font-weight:600">{text}</span>')
+
+    severity_row = bokeh.layouts.row(
+        _label('Severity:'), btn_h, btn_m, btn_d, btn_s, btn_u)
+    box_row = bokeh.layouts.row(
+        _label('Bad bbox:', '#8a3a00'),
+        btn_bq_multi, btn_bq_empty, btn_bq_mis)
+    nav_row = bokeh.layouts.row(
+        _label('Navigate:'),
+        btn_back, btn_skip, btn_mark_healthy, btn_next_fish)
+
     top_pane = bokeh.layouts.row(tile_fig, info_div)
     doc.add_root(bokeh.layouts.column(
         controls,
         progress_div,
         status_div,
         top_pane,
-        button_row,
+        severity_row,
+        box_row,
+        nav_row,
         ctx_fig,
     ))
 

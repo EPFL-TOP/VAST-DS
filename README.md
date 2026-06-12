@@ -376,12 +376,34 @@ classifier training will answer.
 
 **Step 3 — Annotate (Bokeh dashboard)**: `/well_explorer/annotate_somites`
 walks every saved `profile_v1` somite in an experiment and presents them
-one at a time. The tile shown is cropped on-the-fly via the shared
-`somiteCounting/tile_crops.py` helper — **byte-identical** to what
-`extract_somite_tiles` writes and what the classifier will see at
-inference, so annotator and classifier never disagree about what they're
-looking at. Pick severity 0/1/2/3 (or *Unsure*), and the label is written
-to the `SomiteAnnotation` table keyed by `(dest_well, somite_index,
+one at a time, **sorted defective-first** (by `n_bad_somites` desc) so the
+interesting cases are front-loaded. The tile shown is cropped on-the-fly
+via the shared `somiteCounting/tile_crops.py` helper using
+`DEFAULT_PADDING=30` — byte-identical to what `extract_somite_tiles`
+writes and what the classifier will see at inference, so annotator and
+classifier never disagree about what they're looking at.
+
+Per-somite actions, in priority order:
+
+- **Severity** `0` healthy / `1` mild / `2` moderate / `3` severe — the
+  primary label. Use this when the box cleanly contains one somite.
+- **Unsure** — saves with `severity=NULL, box_quality='single'`. Keeps the
+  row so we don't re-show it; training skips NULL severities.
+- **Bad bbox** group: `multi` / `empty` / `mispositioned`. Stored in the
+  `box_quality` column with `severity=NULL`. Training filters to
+  `box_quality='single'`; the other rows feed a future detector audit.
+- **Mark rest of fish healthy** — bulk-write `severity=0` for every
+  un-annotated somite in the current fish, then jump to the next fish. A
+  one-click escape hatch for the 27 healthy somites of a clean fish.
+- **Next fish →** — skip remaining un-annotated somites in this fish
+  without writing anything.
+
+The header shows two counters: `N / M somites left in this queue` (global)
+and `Fish progress: K/T annotated` (per-fish, queried live so it reflects
+prior sessions too). If you navigate back onto a somite you've already
+labelled, the prior label is displayed and a re-click overwrites it.
+
+Labels go to `SomiteAnnotation` keyed by `(dest_well, somite_index,
 annotator)`. Re-loading the same experiment under the same annotator name
 skips tiles already done, so the workflow is resumable.
 
