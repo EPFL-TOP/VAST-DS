@@ -4567,7 +4567,7 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
         title='Experiment', value=all_exp[0], options=all_exp, width=320)
     annotator_input = bokeh.models.TextInput(
         title='Annotator (your name — used as the row key)',
-        value='', placeholder='e.g. clement', width=320)
+        value='', placeholder='e.g. virginie', width=320)
     # Default ON: a per-somite label is only really useful as training data
     # if the whole fish has a ground-truth count to anchor it. Untick to
     # also annotate unvalidated wells (e.g. for unsupervised use).
@@ -4672,7 +4672,78 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
                       fill_alpha=0, line_color='#d73027', line_width=2)
     enh_ctx_fig.xaxis.visible = False; enh_ctx_fig.yaxis.visible = False
 
+    # Zoomed-in context — same straightened image, but window cropped to
+    # ~±300 px around the current somite so the red bbox and orange tile
+    # outline are actually visible (they're tiny on the full 2048-wide
+    # view). Share data sources with ctx_fig; only x/y ranges differ.
+    zoom_raw_fig = bokeh.plotting.figure(
+        title='Zoom (raw) — current somite + a few neighbours',
+        width=450, height=320,
+        x_range=(0, 1), y_range=(0, 1),
+        tools='pan,wheel_zoom,reset,save', toolbar_location='right')
+    zoom_raw_fig.image(image='image', x=0, y=0, dw='dw', dh='dh',
+                        source=ctx_src, palette='Greys256')
+    zoom_raw_fig.quad(left='left', right='right', top='top', bottom='bottom',
+                       source=ctx_tile_box,
+                       fill_alpha=0, line_color='#fdae61',
+                       line_dash='dashed', line_width=2)
+    zoom_raw_fig.quad(left='left', right='right', top='top', bottom='bottom',
+                       source=ctx_bbox,
+                       fill_alpha=0, line_color='#d73027', line_width=2.5)
+    zoom_raw_fig.xaxis.visible = False; zoom_raw_fig.yaxis.visible = False
+
+    zoom_enh_fig = bokeh.plotting.figure(
+        title='Zoom (enhanced)',
+        width=450, height=320,
+        # Linked ranges: pan one zoom view, the other follows. Independent
+        # of the full ctx_fig ranges so wide-panning doesn't unzoom you.
+        x_range=zoom_raw_fig.x_range, y_range=zoom_raw_fig.y_range,
+        tools='pan,wheel_zoom,reset,save', toolbar_location='right')
+    zoom_enh_fig.image(image='image', x=0, y=0, dw='dw', dh='dh',
+                        source=enh_ctx_src, palette='Greys256')
+    zoom_enh_fig.quad(left='left', right='right', top='top', bottom='bottom',
+                       source=ctx_tile_box,
+                       fill_alpha=0, line_color='#fdae61',
+                       line_dash='dashed', line_width=2)
+    zoom_enh_fig.quad(left='left', right='right', top='top', bottom='bottom',
+                       source=ctx_bbox,
+                       fill_alpha=0, line_color='#d73027', line_width=2.5)
+    zoom_enh_fig.xaxis.visible = False; zoom_enh_fig.yaxis.visible = False
+
     info_div = bokeh.models.Div(text='', width=420)
+
+    # Annotation guide — static, sits at the top so a new annotator can
+    # read it once and refer back. Same severity definitions the training
+    # script will assume.
+    guide_div = bokeh.models.Div(width=1280, text="""
+<div style="background:#f4f7ff; border-left:3px solid #5b8dee; padding:10px 14px;
+            border-radius:4px; font-size:13px; line-height:1.55;">
+<b>How to annotate.</b>
+The classifier trains on the <span style="color:#a16800; font-weight:600">dashed
+orange region</span> (= bbox + 30 px padding), <i>not</i> the tight red bbox.
+Use the <b>Enhanced</b> and <b>Zoom</b> panels for clearer structure.
+
+<br><br><b>Severity</b> (only when <code>box_quality = single</code>):
+<ul style="margin:4px 0 4px 18px; padding:0;">
+  <li><b>0 Healthy</b> &mdash; full chevron, sharp upper and lower boundaries, no holes.</li>
+  <li><b>1 Mild</b> &mdash; slight asymmetry or one faint edge, still clearly a somite.</li>
+  <li><b>2 Moderate</b> &mdash; clear defect: missing chunks, weak boundary, partial chevron.</li>
+  <li><b>3 Severe</b> &mdash; barely recognisable, mostly missing structure.</li>
+</ul>
+
+<b>Bad box</b> flags &mdash; severity is stored as NULL, training script drops these:
+<ul style="margin:4px 0 4px 18px; padding:0;">
+  <li><b>multiple</b> &mdash; two or more somites inside the dashed region.</li>
+  <li><b>empty</b> &mdash; no somite is there (false positive from the detector).</li>
+  <li><b>mispositioned</b> &mdash; the somite is not roughly centred in the
+      <span style="color:#a16800; font-weight:600">dashed</span> region.
+      Neighbour chevron arms unavoidably overlap &mdash; that's fine, we
+      only care whether the <i>middle</i> somite is the one being rated.</li>
+</ul>
+
+When in doubt, click <b>Unsure</b> rather than guessing &mdash; the row is
+saved so you don't see it again, but training ignores NULL severities.
+</div>""")
 
     # ---- Queue helpers ----
     def _build_queue(exp_name, annotator, valid_only):
@@ -4843,6 +4914,20 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
                 top=[sh - y0p], bottom=[sh - y1p])
         else:
             ctx_tile_box.data = dict(left=[], right=[], top=[], bottom=[])
+
+        # Zoom window: ±300 px in x around the somite centre (shows current
+        # somite + ~2 neighbours either side) and ±200 px in y around the
+        # spine (cuts out the black background above/below the fish).
+        cx = float(somite.get('centroid_x', (x0 + x1) / 2))
+        cy = float(somite.get('centroid_y', (y0 + y1) / 2))
+        zw, zh = 300, 200
+        xz_lo = max(0, cx - zw);            xz_hi = min(sw, cx + zw)
+        # y is flipped for display (we did np.flipud), so the screen-y of
+        # the somite centroid is sh - cy.
+        cyf = sh - cy
+        yz_lo = max(0, cyf - zh);           yz_hi = min(sh, cyf + zh)
+        zoom_raw_fig.x_range.start = xz_lo; zoom_raw_fig.x_range.end = xz_hi
+        zoom_raw_fig.y_range.start = yz_lo; zoom_raw_fig.y_range.end = yz_hi
 
         # Existing annotation (if any) — Back / re-loading might land on a
         # somite this annotator already labelled. Don't anchor the eye:
@@ -5071,11 +5156,14 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
         btn_back, btn_skip, btn_mark_healthy, btn_next_fish)
 
     top_pane = bokeh.layouts.row(tile_fig, enh_tile_fig, info_div)
+    zoom_pane = bokeh.layouts.row(zoom_raw_fig, zoom_enh_fig)
     doc.add_root(bokeh.layouts.column(
         controls,
+        guide_div,
         progress_div,
         status_div,
         top_pane,
+        zoom_pane,
         severity_row,
         box_row,
         nav_row,

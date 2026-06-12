@@ -407,6 +407,33 @@ Labels go to `SomiteAnnotation` keyed by `(dest_well, somite_index,
 annotator)`. Re-loading the same experiment under the same annotator name
 skips tiles already done, so the workflow is resumable.
 
+**What the classifier actually trains on.** The tight red box is the
+algorithm's bbox; the dashed orange box is `bbox + DEFAULT_PADDING=30 px`
+on each side — the *tile crop area*. Training uses the dashed region, not
+the tight bbox. The padding gives the CNN enough surrounding context
+(neighbour-somite chevron arms, muscle boundaries) to distinguish a real
+missing chunk from a normal valley between two somites. Annotator and
+classifier import the same `DEFAULT_PADDING` constant from
+`somiteCounting/tile_crops.py`, so they always see identical pixels.
+A box is `mispositioned` if the somite of interest isn't roughly centred
+in the *dashed* region.
+
+**Checking progress.** After a session, run either of these to see the
+per-annotator / per-severity / per-box-quality breakdown:
+
+```bash
+# Django ORM — portable across DB backends, prints dicts
+python manage.py shell -c "from django.db.models import Count; from well_mapping.models import SomiteAnnotation; [print(r) for r in SomiteAnnotation.objects.values('annotator', 'box_quality', 'severity').annotate(n=Count('id')).order_by('annotator', 'box_quality', 'severity')]"
+
+# Raw SQL — same numbers, faster to scan
+python manage.py dbshell <<< "SELECT annotator, box_quality, severity, COUNT(*) FROM well_mapping_somiteannotation GROUP BY annotator, box_quality, severity ORDER BY annotator, box_quality, severity;"
+```
+
+Use the `box_quality` counts to decide whether to build the BoxEditTool:
+if `mispositioned` is >10% of your annotations, fixing boxes by hand is
+worth ~150 lines of dashboard code; if it's <5%, the flag alone is enough
+and the training script will just drop those rows.
+
 Why a DB table and not a JSON file: multiple annotators can rate the same
 somite for inter-rater agreement, the training script can pull a clean SQL
 join, and there's no file-locking hazard if someone runs the extractor
