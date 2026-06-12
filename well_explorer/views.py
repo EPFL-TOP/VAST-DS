@@ -4565,14 +4565,24 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
     # ---- Controls ----
     exp_select = bokeh.models.Select(
         title='Experiment', value=all_exp[0], options=all_exp, width=320)
-    annotator_input = bokeh.models.TextInput(
-        title='Annotator (your name — used as the row key)',
-        value='', placeholder='e.g. virginie', width=320)
+    # Fixed annotator roster — add to this list when a new biologist joins.
+    # Free-text input was error-prone (a typo creates a phantom annotator
+    # and makes per-rater stats messy).
+    ANNOTATORS = ['clement', 'virginie']
+    annotator_input = bokeh.models.Select(
+        title='Annotator (your row key)',
+        value=ANNOTATORS[0], options=ANNOTATORS, width=200)
     # Default ON: a per-somite label is only really useful as training data
     # if the whole fish has a ground-truth count to anchor it. Untick to
     # also annotate unvalidated wells (e.g. for unsupervised use).
     valid_only_cb = bokeh.models.CheckboxGroup(
         labels=['Only fish with manual valid=True (have ground-truth count)'],
+        active=[0], width=480)
+    # Default ON: don't re-show somites you've already rated. Untick to
+    # revisit them (e.g. to correct a misclick) — the prior label is
+    # displayed and re-clicking the same severity overwrites the row.
+    skip_done_cb = bokeh.models.CheckboxGroup(
+        labels=['Skip somites I have already annotated (untick to revisit them)'],
         active=[0], width=480)
     load_button = bokeh.models.Button(label='Load queue', button_type='primary', width=160)
 
@@ -4731,14 +4741,21 @@ Use the <b>Enhanced</b> and <b>Zoom</b> panels for clearer structure.
   <li><b>3 Severe</b> &mdash; barely recognisable, mostly missing structure.</li>
 </ul>
 
-<b>Bad box</b> flags &mdash; severity is stored as NULL, training script drops these:
+<b>Bad box</b> flags &mdash; severity is stored as NULL, training script drops these.
+Important: chevron-shaped neighbours almost always overlap into the dashed
+region, that's normal. The flags below only apply when the rating itself
+becomes ambiguous:
 <ul style="margin:4px 0 4px 18px; padding:0;">
-  <li><b>multiple</b> &mdash; two or more somites inside the dashed region.</li>
-  <li><b>empty</b> &mdash; no somite is there (false positive from the detector).</li>
-  <li><b>mispositioned</b> &mdash; the somite is not roughly centred in the
-      <span style="color:#a16800; font-weight:600">dashed</span> region.
-      Neighbour chevron arms unavoidably overlap &mdash; that's fine, we
-      only care whether the <i>middle</i> somite is the one being rated.</li>
+  <li><b>multiple</b> &mdash; the dashed region contains two or more
+      somites and <i>none is clearly the centred one</i> &mdash; i.e. you
+      can't tell which somite you'd be rating. Neighbour arms peeking in
+      while one somite is plainly centred is <b>not</b> "multiple".</li>
+  <li><b>empty</b> &mdash; no somite at all (the detector hallucinated;
+      false positive).</li>
+  <li><b>mispositioned</b> &mdash; a somite is present but not centred in
+      the <span style="color:#a16800; font-weight:600">dashed</span>
+      region (e.g. clipped at an edge, or another somite is more centred
+      than the one being indexed).</li>
 </ul>
 
 When in doubt, click <b>Unsure</b> rather than guessing &mdash; the row is
@@ -4746,7 +4763,7 @@ saved so you don't see it again, but training ignores NULL severities.
 </div>""")
 
     # ---- Queue helpers ----
-    def _build_queue(exp_name, annotator, valid_only):
+    def _build_queue(exp_name, annotator, valid_only, skip_done):
         """Pull every profile_v1 row for the experiment, walk its somites,
         and skip the (dest_well, somite_index) pairs that *this annotator*
         has already labelled. Returns a list of (pred, somite_dict, dest)
@@ -4769,10 +4786,16 @@ saved so you don't see it again, but training ignores NULL severities.
         # Within a fish, somites stay in AP order (their stored 'index').
         preds = preds.order_by('-n_bad_somites', 'dest_well_id')
 
-        already = set(SomiteAnnotation.objects.filter(
-            annotator=annotator,
-            dest_well__well_plate__experiment__name=exp_name,
-        ).values_list('dest_well_id', 'somite_index'))
+        # When skip_done is False the queue includes already-rated somites
+        # so the annotator can come back and fix mistakes — the render pass
+        # shows the prior label and a re-click overwrites.
+        if skip_done:
+            already = set(SomiteAnnotation.objects.filter(
+                annotator=annotator,
+                dest_well__well_plate__experiment__name=exp_name,
+            ).values_list('dest_well_id', 'somite_index'))
+        else:
+            already = set()
 
         out = []
         fish_totals = {}   # dest_id -> total somites that exist in fish
@@ -5105,7 +5128,8 @@ saved so you don't see it again, but training ignores NULL severities.
             _set_status('Enter your annotator name first.', '#c00'); return
         _set_status('Building queue…')
         valid_only = (0 in valid_only_cb.active)
-        q = _build_queue(exp_select.value, annot, valid_only)
+        skip_done = (0 in skip_done_cb.active)
+        q = _build_queue(exp_select.value, annot, valid_only, skip_done)
         state['queue'] = q
         state['idx'] = 0
         state['straight_cache'].clear()
@@ -5139,6 +5163,7 @@ saved so you don't see it again, but training ignores NULL severities.
     controls = bokeh.layouts.column(
         bokeh.layouts.row(exp_select, annotator_input, load_button),
         valid_only_cb,
+        skip_done_cb,
         enhance_select)
 
     def _label(text, color='#1a2340'):
