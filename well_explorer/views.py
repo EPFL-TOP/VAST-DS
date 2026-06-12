@@ -4519,9 +4519,48 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
         'queue':           [],   # list of (pred_row, somite_dict, dest_well)
         'idx':             0,    # cursor into queue
         'straight_cache':  {},   # dest_well_id -> straightened np.ndarray
+        'enh_cache':       {},   # (dest_well_id, filter_name) -> enhanced np.ndarray
         'current':         None, # the (pred, somite, dest) being shown
         'fish_totals':     {},   # dest_well_id -> total somites in that fish
     }
+
+    def _apply_filter(img: np.ndarray, name: str) -> np.ndarray:
+        """Visualisation-only enhancement. Output is float ∈ [0,1]; result
+        never enters the training pipeline. Caller is responsible for
+        clipping / scaling for display."""
+        x = np.clip(img.astype(np.float32), 0.0, 1.0)
+        if name in ('none', '', None):
+            return x
+        if name == 'clahe':
+            from skimage.exposure import equalize_adapthist
+            return equalize_adapthist(x, clip_limit=0.03).astype(np.float32)
+        if name == 'clahe_threshold':
+            from skimage.exposure import equalize_adapthist
+            from skimage.filters import threshold_otsu
+            eq = equalize_adapthist(x, clip_limit=0.03).astype(np.float32)
+            try:
+                t = float(threshold_otsu(eq))
+            except Exception:
+                t = 0.5
+            return (eq > t).astype(np.float32)
+        if name == 'gamma_05':
+            return np.power(x, 0.5).astype(np.float32)
+        if name == 'gamma_2':
+            return np.power(x, 2.0).astype(np.float32)
+        return x
+
+    def _get_enhanced_straight(dest_id, straight):
+        """Cached per-(well, filter) — CLAHE on a 2048² image is ~0.5–1 s,
+        cheap once per fish but not per somite."""
+        key = (dest_id, enhance_select.value)
+        cached = state['enh_cache'].get(key)
+        if cached is not None:
+            return cached
+        enh = _apply_filter(straight, enhance_select.value)
+        if len(state['enh_cache']) > 20:
+            state['enh_cache'].pop(next(iter(state['enh_cache'])))
+        state['enh_cache'][key] = enh
+        return enh
 
     # ---- Controls ----
     exp_select = bokeh.models.Select(
@@ -4537,6 +4576,21 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
         active=[0], width=480)
     load_button = bokeh.models.Button(label='Load queue', button_type='primary', width=160)
 
+    # Enhancement selector — these views are for the annotator's eyes only,
+    # the classifier still trains on the RAW tile so we never bake the
+    # filter into the training pipeline.
+    enhance_select = bokeh.models.Select(
+        title='Enhancement view (right-hand panels — annotator aid, NOT training input)',
+        value='clahe',
+        options=[
+            ('none',           'none (same as raw)'),
+            ('clahe',          'CLAHE (adaptive equalisation)'),
+            ('clahe_threshold', 'CLAHE + Otsu threshold (binary)'),
+            ('gamma_05',       'gamma 0.5 (brighten faint tissue)'),
+            ('gamma_2',        'gamma 2.0 (darken background)'),
+        ],
+        width=480)
+
     progress_div = bokeh.models.Div(
         text='<i>Pick an experiment and enter your name, then press Load queue.</i>',
         width=900)
@@ -4550,7 +4604,7 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
     tile_src = bokeh.models.ColumnDataSource(
         dict(image=[], dw=[], dh=[]))
     tile_fig = bokeh.plotting.figure(
-        title='Current somite tile (classifier input)',
+        title='Raw tile (= classifier input)',
         width=420, height=360,
         x_range=(0, 1), y_range=(0, 1),
         tools='reset,save', toolbar_location='right')
@@ -4558,21 +4612,65 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
                    source=tile_src, palette='Greys256')
     tile_fig.xaxis.visible = False; tile_fig.yaxis.visible = False
 
-    # Context: full straightened well, with current somite's bbox highlighted.
+    # Enhanced tile — same pixels, transformed for visual inspection.
+    enh_tile_src = bokeh.models.ColumnDataSource(
+        dict(image=[], dw=[], dh=[]))
+    enh_tile_fig = bokeh.plotting.figure(
+        title='Enhanced tile (annotator aid)',
+        width=420, height=360,
+        x_range=(0, 1), y_range=(0, 1),
+        tools='reset,save', toolbar_location='right')
+    enh_tile_fig.image(image='image', x=0, y=0, dw='dw', dh='dh',
+                        source=enh_tile_src, palette='Greys256')
+    enh_tile_fig.xaxis.visible = False; enh_tile_fig.yaxis.visible = False
+
+    # Context: full straightened well. Solid red = the algorithm's somite
+    # bbox; dashed orange = the actual tile region (bbox + DEFAULT_PADDING),
+    # so the annotator can see why the tile shows more context than the
+    # red box implies.
     ctx_src = bokeh.models.ColumnDataSource(dict(image=[], dw=[], dh=[]))
     ctx_bbox = bokeh.models.ColumnDataSource(
         dict(left=[], right=[], top=[], bottom=[]))
+    ctx_tile_box = bokeh.models.ColumnDataSource(
+        dict(left=[], right=[], top=[], bottom=[]))
     ctx_fig = bokeh.plotting.figure(
-        title='Well context — current somite in red',
-        width=900, height=240,
+        title='Well context (raw) — red = somite bbox, dashed orange = tile crop area',
+        width=900, height=220,
         x_range=(0, 1), y_range=(0, 1),
         tools='pan,wheel_zoom,reset,save', toolbar_location='right')
     ctx_fig.image(image='image', x=0, y=0, dw='dw', dh='dh',
                   source=ctx_src, palette='Greys256')
+    # Dashed orange box = actual tile region (bbox + padding) — shows the
+    # annotator where the classifier will look. Drawn first so the red
+    # somite box sits on top.
+    ctx_fig.quad(left='left', right='right', top='top', bottom='bottom',
+                 source=ctx_tile_box,
+                 fill_alpha=0, line_color='#fdae61',
+                 line_dash='dashed', line_width=1.5)
     ctx_fig.quad(left='left', right='right', top='top', bottom='bottom',
                  source=ctx_bbox,
                  fill_alpha=0, line_color='#d73027', line_width=2)
     ctx_fig.xaxis.visible = False; ctx_fig.yaxis.visible = False
+
+    # Enhanced context — same straightened well after filter, with the
+    # same two box overlays. Linked x/y ranges so panning one pans the
+    # other.
+    enh_ctx_src = bokeh.models.ColumnDataSource(dict(image=[], dw=[], dh=[]))
+    enh_ctx_fig = bokeh.plotting.figure(
+        title='Well context (enhanced)',
+        width=900, height=220,
+        x_range=ctx_fig.x_range, y_range=ctx_fig.y_range,
+        tools='pan,wheel_zoom,reset,save', toolbar_location='right')
+    enh_ctx_fig.image(image='image', x=0, y=0, dw='dw', dh='dh',
+                       source=enh_ctx_src, palette='Greys256')
+    enh_ctx_fig.quad(left='left', right='right', top='top', bottom='bottom',
+                      source=ctx_tile_box,
+                      fill_alpha=0, line_color='#fdae61',
+                      line_dash='dashed', line_width=1.5)
+    enh_ctx_fig.quad(left='left', right='right', top='top', bottom='bottom',
+                      source=ctx_bbox,
+                      fill_alpha=0, line_color='#d73027', line_width=2)
+    enh_ctx_fig.xaxis.visible = False; enh_ctx_fig.yaxis.visible = False
 
     info_div = bokeh.models.Div(text='', width=420)
 
@@ -4656,8 +4754,11 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
                 'Switch experiment or come back later for new wells.',
                 '#1a9850')
             tile_src.data = dict(image=[], dw=[], dh=[])
+            enh_tile_src.data = dict(image=[], dw=[], dh=[])
             ctx_src.data = dict(image=[], dw=[], dh=[])
+            enh_ctx_src.data = dict(image=[], dw=[], dh=[])
             ctx_bbox.data = dict(left=[], right=[], top=[], bottom=[])
+            ctx_tile_box.data = dict(left=[], right=[], top=[], bottom=[])
             info_div.text = ''
             return
 
@@ -4692,7 +4793,7 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
         # extract_somite_tiles writes and the classifier will train on.
         # Padding comes from tile_crops.DEFAULT_PADDING (single source of
         # truth) so annotator and trainer never diverge.
-        img, _ = crop_tile(straight, somite, centre_marker=False)
+        img, meta = crop_tile(straight, somite, centre_marker=False)
         if img is None:
             _set_status('Bad bbox on this somite — skipping.', '#c00')
             state['idx'] += 1
@@ -4705,10 +4806,25 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
         tile_fig.x_range.start = 0; tile_fig.x_range.end = tw
         tile_fig.y_range.start = 0; tile_fig.y_range.end = th
 
+        # Enhanced tile: crop from the enhanced straightened image so the
+        # filter benefits from a wider neighbourhood (CLAHE on an 80×170
+        # tile is meaningless; on 2048² it actually equalises).
+        enh_straight = _get_enhanced_straight(dest.id, straight)
+        enh_img, _ = crop_tile(enh_straight, somite, centre_marker=False)
+        if enh_img is not None:
+            enh_np = np.array(enh_img).astype(np.float32)
+            eh, ew = enh_np.shape
+            enh_tile_src.data = dict(image=[np.flipud(enh_np)], dw=[ew], dh=[eh])
+            enh_tile_fig.x_range.start = 0; enh_tile_fig.x_range.end = ew
+            enh_tile_fig.y_range.start = 0; enh_tile_fig.y_range.end = eh
+        else:
+            enh_tile_src.data = dict(image=[], dw=[], dh=[])
+
         sh, sw = straight.shape
         ctx_src.data = dict(image=[np.flipud(straight)], dw=[sw], dh=[sh])
         ctx_fig.x_range.start = 0; ctx_fig.x_range.end = sw
         ctx_fig.y_range.start = 0; ctx_fig.y_range.end = sh
+        enh_ctx_src.data = dict(image=[np.flipud(enh_straight)], dw=[sw], dh=[sh])
 
         bbox = somite.get('bbox') or [0, 0, 0, 0]
         x0, y0, x1, y1 = (int(v) for v in bbox)
@@ -4716,6 +4832,17 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
             left=[x0], right=[x1],
             top=[sh - y0],          # flipud → y' = sh - y
             bottom=[sh - y1])
+        # Dashed tile boundary on context = bbox + padding (the actual
+        # crop area), so the annotator can see why the zoomed tile shows
+        # more pixels than the red box implies.
+        bp = meta.get('bbox_padded')
+        if bp is not None:
+            x0p, y0p, x1p, y1p = bp
+            ctx_tile_box.data = dict(
+                left=[x0p], right=[x1p],
+                top=[sh - y0p], bottom=[sh - y1p])
+        else:
+            ctx_tile_box.data = dict(left=[], right=[], top=[], bottom=[])
 
         # Existing annotation (if any) — Back / re-loading might land on a
         # somite this annotator already labelled. Don't anchor the eye:
@@ -4897,13 +5024,17 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
         state['queue'] = q
         state['idx'] = 0
         state['straight_cache'].clear()
+        state['enh_cache'].clear()
         if not q:
             progress_div.text = (
                 f'<b>All caught up</b> for <code>{annot}</code> on '
                 f'<code>{exp_select.value}</code>.')
             tile_src.data = dict(image=[], dw=[], dh=[])
+            enh_tile_src.data = dict(image=[], dw=[], dh=[])
             ctx_src.data = dict(image=[], dw=[], dh=[])
+            enh_ctx_src.data = dict(image=[], dw=[], dh=[])
             ctx_bbox.data = dict(left=[], right=[], top=[], bottom=[])
+            ctx_tile_box.data = dict(left=[], right=[], top=[], bottom=[])
             info_div.text = ''
             _set_status('Nothing to do here — switch experiment.', '#1a9850')
             return
@@ -4912,10 +5043,18 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
 
     load_button.on_click(_do_load)
 
+    def _enhance_changed(attr, old, new):
+        # Don't blow the cache — keys are (well, filter), so the old
+        # filter's results stay valid if the user switches back.
+        if state['current'] is not None:
+            _render_current()
+    enhance_select.on_change('value', _enhance_changed)
+
     # ---- Layout ----
     controls = bokeh.layouts.column(
         bokeh.layouts.row(exp_select, annotator_input, load_button),
-        valid_only_cb)
+        valid_only_cb,
+        enhance_select)
 
     def _label(text, color='#1a2340'):
         return bokeh.models.Div(
@@ -4931,7 +5070,7 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
         _label('Navigate:'),
         btn_back, btn_skip, btn_mark_healthy, btn_next_fish)
 
-    top_pane = bokeh.layouts.row(tile_fig, info_div)
+    top_pane = bokeh.layouts.row(tile_fig, enh_tile_fig, info_div)
     doc.add_root(bokeh.layouts.column(
         controls,
         progress_div,
@@ -4941,6 +5080,7 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
         box_row,
         nav_row,
         ctx_fig,
+        enh_ctx_fig,
     ))
 
 
