@@ -2,7 +2,7 @@ from django.contrib import admin
 from django import forms
 
 # Register your models here.
-from .models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug, DestWellProperties,DestWellPropertiesPredicted
+from .models import Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition, DestWellPosition, Drug, DestWellProperties,DestWellPropertiesPredicted, SomiteAnnotation
 
 class ExperimentAdmin(admin.ModelAdmin):
     search_fields = ["name"]
@@ -35,3 +35,4 @@ admin.site.register(DestWellPosition, DestWellPositionAdmin)
 admin.site.register(Drug)
 admin.site.register(DestWellProperties)
 admin.site.register(DestWellPropertiesPredicted)
+admin.site.register(SomiteAnnotation)
