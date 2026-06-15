@@ -5025,6 +5025,28 @@ pre-filled from your prior value when you navigate back.
         if not drug_html:
             drug_html = '<i style="color:#888">no drug / control</i>'
 
+        # Whole-fish counts (total / bad) from manual annotation and from
+        # the ResNet model — useful sanity check when rating a specific
+        # somite ("the model thinks this fish has 3 bad somites; I've
+        # already rated 2 bad — does the third match?").
+        def _count_pair(t, b):
+            sentinel = lambda v: '—' if v is None or v == -9999 else str(v)
+            return f'{sentinel(t)} / {sentinel(b)}'
+
+        manual = DestWellProperties.objects.filter(dest_well=dest).first()
+        if manual is not None:
+            manual_str = _count_pair(manual.n_total_somites,
+                                     manual.n_bad_somites)
+        else:
+            manual_str = '<i style="color:#888">not annotated</i>'
+
+        resnet_row = latest_prediction(dest, model_name=RESNET_MODEL_NAME)
+        if resnet_row is not None:
+            resnet_str = _count_pair(resnet_row.n_total_somites,
+                                     resnet_row.n_bad_somites)
+        else:
+            resnet_str = '<i style="color:#888">no prediction</i>'
+
         heur = int(somite.get('severity', 0))
         heur_label = SEV_LABELS.get(heur, str(heur))
         plate_n = dest.well_plate.plate_number
@@ -5034,6 +5056,9 @@ pre-filled from your prior value when you navigate back.
             f'Plate {plate_n} &middot; '
             f'Well {dest.position_row}{int(dest.position_col):02d}<br>'
             f'Drug: {drug_html}<br>'
+            f'Counts (total / bad) &mdash; '
+            f'manual: <b>{manual_str}</b> &middot; '
+            f'resnet: <b>{resnet_str}</b><br>'
             f'Somite index <b>{si}</b> '
             f'(AP {float(somite.get("ap_position", -1)):.2f}, '
             f'conf {float(somite.get("confidence", 0)):.2f})<br>'
