@@ -4760,6 +4760,11 @@ becomes ambiguous:
 
 When in doubt, click <b>Unsure</b> rather than guessing &mdash; the row is
 saved so you don't see it again, but training ignores NULL severities.
+
+<br><br><b>L/R offset</b> (independent flag, can co-exist with any severity
+or bad-box value): tick when the fish is visibly crooked so the left and
+right chevron halves don't overlap. Reset automatically on every somite,
+pre-filled from your prior value when you navigate back.
 </div>""")
 
     # ---- Queue helpers ----
@@ -4782,9 +4787,22 @@ saved so you don't see it again, but training ignores NULL severities.
                  .select_related('dest_well__well_plate__experiment'))
         if valid_only:
             preds = preds.filter(dest_well__dest_well_properties__valid=True)
-        # Most-defective fish first → class balance from the start.
-        # Within a fish, somites stay in AP order (their stored 'index').
-        preds = preds.order_by('-n_bad_somites', 'dest_well_id')
+        # Alternate clean/defective fish so the annotator sees variety
+        # from the first session (purely-defective-first led to label
+        # fatigue and class skew). Sort ascending by n_bad_somites, then
+        # interleave from front (cleanest) and back (most defective):
+        # [0_bad, 25_bad, 0_bad, 20_bad, 1_bad, 10_bad, ...]
+        sorted_preds = list(preds.order_by('n_bad_somites', 'dest_well_id'))
+        interleaved = []
+        lo, hi = 0, len(sorted_preds) - 1
+        take_front = True
+        while lo <= hi:
+            if take_front:
+                interleaved.append(sorted_preds[lo]); lo += 1
+            else:
+                interleaved.append(sorted_preds[hi]); hi -= 1
+            take_front = not take_front
+        preds = interleaved
 
         # When skip_done is False the queue includes already-rated somites
         # so the annotator can come back and fix mistakes — the render pass
@@ -4837,12 +4855,17 @@ saved so you don't see it again, but training ignores NULL severities.
         return None
 
     # ---- Render current item ----
-    def _render_current():
+    def _render_current(direction=1):
+        """Render the somite at state['idx']. `direction` is +1 (forward,
+        the default — Skip / severity / Next fish) or -1 (backward — Back
+        button). When auto-skipping a broken somite (no image, bad bbox,
+        etc.), we step in the SAME direction so Back doesn't get hijacked
+        forward when it lands on a broken entry."""
         if not state['queue']:
             _set_status('Queue is empty — nothing left to annotate '
                         '(or nothing matches).', '#1a9850')
             return
-        if state['idx'] >= len(state['queue']):
+        if state['idx'] >= len(state['queue']) or state['idx'] < 0:
             _set_status(
                 '<b>All done!</b> No more somites in this queue. '
                 'Switch experiment or come back later for new wells.',
@@ -4854,6 +4877,8 @@ saved so you don't see it again, but training ignores NULL severities.
             ctx_bbox.data = dict(left=[], right=[], top=[], bottom=[])
             ctx_tile_box.data = dict(left=[], right=[], top=[], bottom=[])
             info_div.text = ''
+            # Clamp so a subsequent Back from the end lands on the last item.
+            state['idx'] = max(0, min(state['idx'], len(state['queue'])))
             return
 
         pred, somite, dest = state['queue'][state['idx']]
@@ -4867,15 +4892,15 @@ saved so you don't see it again, but training ignores NULL severities.
             if yfp_path is None:
                 _set_status(f'No YFP image for {dest.position_row}'
                             f'{dest.position_col} — skipping.', '#c00')
-                state['idx'] += 1
-                _render_current()
+                state['idx'] += direction
+                _render_current(direction)
                 return
             try:
                 straight, _ = straighten_yfp(yfp_path)
             except Exception as e:
                 _set_status(f'Straighten failed: {e} — skipping.', '#c00')
-                state['idx'] += 1
-                _render_current()
+                state['idx'] += direction
+                _render_current(direction)
                 return
             # Keep cache bounded so we don't OOM on a long session.
             if len(state['straight_cache']) > 20:
@@ -4890,8 +4915,8 @@ saved so you don't see it again, but training ignores NULL severities.
         img, meta = crop_tile(straight, somite, centre_marker=False)
         if img is None:
             _set_status('Bad bbox on this somite — skipping.', '#c00')
-            state['idx'] += 1
-            _render_current()
+            state['idx'] += direction
+            _render_current(direction)
             return
 
         tile_np = np.array(img).astype(np.float32)  # mode L → (h,w) float
@@ -4954,7 +4979,9 @@ saved so you don't see it again, but training ignores NULL severities.
 
         # Existing annotation (if any) — Back / re-loading might land on a
         # somite this annotator already labelled. Don't anchor the eye:
-        # show the prior label below the algorithm hint, plainly.
+        # show the prior label below the algorithm hint, plainly. Also
+        # pre-fill the L/R offset checkbox to its prior value (and clear
+        # it for fresh rows) so re-clicking severity preserves the flag.
         annot = annotator_input.value.strip()
         si = int(somite.get('index', -1))
         prior = SomiteAnnotation.objects.filter(
@@ -4969,17 +4996,34 @@ saved so you don't see it again, but training ignores NULL severities.
             else:
                 prior_txt = SEV_LABELS[prior.severity]
                 prior_color = SEV_COLORS[prior.severity]
+            extra = ' + L/R offset' if prior.lr_offset else ''
             prior_html = (f'<br><b>Already annotated</b> by you as '
-                          f'<span style="color:{prior_color}">{prior_txt}</span> '
-                          f'(re-clicking will overwrite).')
+                          f'<span style="color:{prior_color}">{prior_txt}'
+                          f'{extra}</span> (re-clicking will overwrite).')
+            lr_offset_cb.active = [0] if prior.lr_offset else []
         else:
             prior_html = ''
+            lr_offset_cb.active = []
 
         # Per-fish progress: how many somites in THIS fish does this
         # annotator already have a label for (any box_quality / severity)?
         fish_total = state['fish_totals'].get(dest.id, 0)
         fish_done = SomiteAnnotation.objects.filter(
             dest_well=dest, annotator=annot).count()
+
+        # Drug name + concentration (via dest.source_well.drugs M2M).
+        # Most wells have exactly one drug; show all if multiple. Falls
+        # back to a quiet '—' if the well is a control / unlinked.
+        drug_html = ''
+        sw = getattr(dest, 'source_well', None)
+        if sw is not None:
+            drugs = list(sw.drugs.all())
+            if drugs:
+                drug_html = ', '.join(
+                    f'<b>{d.derivation_name or d.slims_id}</b> @ '
+                    f'{d.concentration} µM' for d in drugs)
+        if not drug_html:
+            drug_html = '<i style="color:#888">no drug / control</i>'
 
         heur = int(somite.get('severity', 0))
         heur_label = SEV_LABELS.get(heur, str(heur))
@@ -4989,6 +5033,7 @@ saved so you don't see it again, but training ignores NULL severities.
             f'<b>{dest.well_plate.experiment.name}</b> &middot; '
             f'Plate {plate_n} &middot; '
             f'Well {dest.position_row}{int(dest.position_col):02d}<br>'
+            f'Drug: {drug_html}<br>'
             f'Somite index <b>{si}</b> '
             f'(AP {float(somite.get("ap_position", -1)):.2f}, '
             f'conf {float(somite.get("confidence", 0)):.2f})<br>'
@@ -5021,9 +5066,11 @@ saved so you don't see it again, but training ignores NULL severities.
         si = int(somite.get('index', -1))
         if box_quality != 'single':
             severity = None
+        lr_offset = (0 in lr_offset_cb.active)
         SomiteAnnotation.objects.update_or_create(
             dest_well=dest, somite_index=si, annotator=annot,
-            defaults={'severity': severity, 'box_quality': box_quality},
+            defaults={'severity': severity, 'box_quality': box_quality,
+                      'lr_offset': lr_offset},
         )
         if box_quality != 'single':
             label = f'box:{box_quality}'
@@ -5031,10 +5078,20 @@ saved so you don't see it again, but training ignores NULL severities.
             label = 'unsure'
         else:
             label = SEV_LABELS[severity]
+        if lr_offset:
+            label += ' + L/R offset'
         _set_status(f'Saved {dest.position_row}{int(dest.position_col):02d} '
                     f'#{si} = <b>{label}</b>')
         state['idx'] += 1
-        _render_current()
+        _render_current(direction=1)
+
+    # L/R offset flag — toggled before clicking severity. True if the fish
+    # is visibly crooked so the left and right chevron halves don't
+    # overlap. Independent of severity / box_quality, persisted on every
+    # save and reset to OFF on every render.
+    lr_offset_cb = bokeh.models.CheckboxGroup(
+        labels=['L/R offset (fish is crooked, halves don\'t overlap)'],
+        active=[], width=380)
 
     # Severity row (only meaningful when box_quality='single')
     btn_h = bokeh.models.Button(label='0 · Healthy',  button_type='success', width=120)
@@ -5070,13 +5127,13 @@ saved so you don't see it again, but training ignores NULL severities.
 
     def _skip():
         state['idx'] += 1
-        _render_current()
+        _render_current(direction=1)
     btn_skip.on_click(_skip)
 
     def _back():
         if state['idx'] > 0:
             state['idx'] -= 1
-            _render_current()
+            _render_current(direction=-1)
     btn_back.on_click(_back)
 
     def _jump_next_fish():
@@ -5110,7 +5167,8 @@ saved so you don't see it again, but training ignores NULL severities.
             SomiteAnnotation.objects.update_or_create(
                 dest_well=d_i, somite_index=int(s_i.get('index', -1)),
                 annotator=annot,
-                defaults={'severity': 0, 'box_quality': 'single'},
+                defaults={'severity': 0, 'box_quality': 'single',
+                          'lr_offset': False},
             )
             n_written += 1
             i += 1
@@ -5172,7 +5230,8 @@ saved so you don't see it again, but training ignores NULL severities.
                  f'font-weight:600">{text}</span>')
 
     severity_row = bokeh.layouts.row(
-        _label('Severity:'), btn_h, btn_m, btn_d, btn_s, btn_u)
+        _label('Severity:'), btn_h, btn_m, btn_d, btn_s, btn_u,
+        _label('|'), lr_offset_cb)
     box_row = bokeh.layouts.row(
         _label('Bad bbox:', '#8a3a00'),
         btn_bq_multi, btn_bq_empty, btn_bq_mis)

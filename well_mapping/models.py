@@ -301,6 +301,14 @@ class SomiteAnnotation(models.Model):
     annotator     = models.CharField(max_length=120, default='unknown', db_index=True)
     annotated_at  = models.DateTimeField(auto_now=True)
     notes         = models.TextField(blank=True, default='')
+    # Independent of severity/box_quality: True iff the fish is visibly
+    # crooked enough that the left and right halves of the chevron don't
+    # overlap in the tile. The training script can use it as a multi-task
+    # head, drop those samples, or ignore it — for now we just record.
+    lr_offset     = models.BooleanField(
+        default=False,
+        help_text="Left/right chevron halves don't overlap "
+                  "(fish not perfectly straight in the imaging).")
 
     class Meta:
         unique_together = (('dest_well', 'somite_index', 'annotator'),)
