@@ -440,13 +440,60 @@ join, and there's no file-locking hazard if someone runs the extractor
 mid-annotation. Migration is `well_mapping/0037_somiteannotation_*.py` —
 run `python manage.py migrate well_mapping` after pulling.
 
+**Step 4 — Check quality** with `annotation_stats`:
+
+```bash
+python manage.py annotation_stats
+python manage.py annotation_stats --annotator clement --experiment VAST_2026-05
+```
+
+Prints per-annotator counts (severity / box_quality / lr_offset), the
+class-balance readout for training viability (`OK ≥500`, `ok ≥100`,
+`!! <100` per class), inter-rater agreement on overlapping somites, and
+per-experiment progress (annotated / available). Run after every
+session to know when each class has enough samples and whether two
+annotators agree on the same fish.
+
+**Step 5 — Export** the labelled tiles when you're ready to train:
+
+```bash
+# Default: class-folder layout (torchvision.datasets.ImageFolder-ready)
+python manage.py export_somite_training_set --output_dir data/training_v1
+
+# Restrict to one annotator (clement) for a single-rater baseline
+python manage.py export_somite_training_set --annotator clement
+
+# Flat layout — single tiles/ folder, splits via the manifest
+python manage.py export_somite_training_set --flat
+```
+
+Output layout (default):
+
+```text
+data/training_v1/
+├── tiles/
+│   ├── 0_healthy/   *.png
+│   ├── 1_mild/      *.png
+│   ├── 2_moderate/  *.png
+│   └── 3_severe/    *.png
+└── manifest.csv      # tile_path, severity, lr_offset, annotator,
+                     # experiment, plate, well, dest_well_id, somite_index
+```
+
+Re-crops each somite via `somiteCounting/tile_crops.py` so the exported
+PNG is byte-identical to what the annotator labelled in the dashboard.
+By default drops `box_quality != 'single'`, `severity IS NULL`, and
+`lr_offset=True` — pass `--include_lr_offset` / `--include_unsure` if
+you need those for a different training setup.
+
 Still to build:
 
 - **Classifier training** — a `somiteCounting/training_severity.py` that
-  reads the `SomiteAnnotation` table (filtered to a chosen annotator or
-  to inter-rater consensus), re-crops via `tile_crops.crop_tile`, and
-  trains a small CNN. Writes `checkpoints/severity_best.pth` + test
-  metrics.
+  reads `manifest.csv` (or `ImageFolder` straight off the class-folder
+  layout) and trains a small CNN. Writes `checkpoints/severity_best.pth`
+  + test metrics. The export already pre-loads the data; the training
+  script just needs the standard ResNet18-transfer pattern from the
+  other classifiers.
 - **Plumb it into `profile_v1`** — replace the neighbour-comparison
   `_classify_severity` heuristic with a forward pass over each somite's
   tile through the trained checkpoint.
