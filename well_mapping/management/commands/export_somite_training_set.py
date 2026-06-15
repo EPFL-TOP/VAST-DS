@@ -91,9 +91,11 @@ class Command(BaseCommand):
         parser.add_argument("--flat", action="store_true", default=False,
                             help="Skip class folders; put every PNG in "
                                  "<output_dir>/tiles/ and rely on the manifest.")
-        parser.add_argument("--include_lr_offset", action="store_true", default=False,
-                            help="Keep rows with lr_offset=True (default: drop them — "
-                                 "the asymmetry is an imaging artefact, not a defect).")
+        parser.add_argument("--exclude_lr_offset", action="store_true", default=False,
+                            help="Drop rows with lr_offset=True (default: keep — "
+                                 "the model needs to learn that L/R-misaligned fish "
+                                 "still have real, ratable somites; the asymmetry "
+                                 "is imaging noise, not defect signal).")
         parser.add_argument("--include_unsure", action="store_true", default=False,
                             help="Keep severity=NULL rows under box_quality=single "
                                  "(default: drop). Only useful if you want them as a "
@@ -113,7 +115,7 @@ class Command(BaseCommand):
         qs = SomiteAnnotation.objects.filter(box_quality='single')
         if not opts["include_unsure"]:
             qs = qs.filter(severity__isnull=False)
-        if not opts["include_lr_offset"]:
+        if opts["exclude_lr_offset"]:
             qs = qs.filter(lr_offset=False)
         if opts["annotator"]:
             qs = qs.filter(annotator=opts["annotator"])
@@ -195,6 +197,13 @@ class Command(BaseCommand):
                     stats['no_matching_somite'] += 1
                     continue
 
+                # Human-corrected bbox wins over the algorithm's — the
+                # annotator dragged it because it was wrong. The bbox is
+                # the ONLY field of the somite dict crop_tile uses, so
+                # synthesise a new dict to feed it.
+                if ann.corrected_bbox:
+                    somite = dict(somite, bbox=list(ann.corrected_bbox))
+                    stats['corrected_bbox_used'] += 1
                 img, _ = crop_tile(straight, somite, centre_marker=False)
                 if img is None:
                     stats['bad_bbox'] += 1
@@ -222,6 +231,7 @@ class Command(BaseCommand):
                     'tile_path':    os.path.relpath(tile_path, out_dir),
                     'severity':     ann.severity,
                     'lr_offset':    ann.lr_offset,
+                    'bbox_corrected': ann.corrected_bbox is not None,
                     'annotator':    ann.annotator,
                     'experiment':   exp_name,
                     'plate':        plate_n,

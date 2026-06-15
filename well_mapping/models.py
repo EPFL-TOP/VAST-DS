@@ -309,6 +309,16 @@ class SomiteAnnotation(models.Model):
         default=False,
         help_text="Left/right chevron halves don't overlap "
                   "(fish not perfectly straight in the imaging).")
+    # If the annotator dragged/resized the bbox in the dashboard, the
+    # corrected coords land here as [x0, y0, x1, y1] in straightened-image
+    # space. NULL = the algorithm's bbox from per_somite_data is fine.
+    # Training and tile-extraction read this column and prefer it over
+    # the algorithm's bbox when present.
+    corrected_bbox = models.JSONField(
+        blank=True, null=True, default=None,
+        help_text="Optional human-edited bbox [x0,y0,x1,y1] in "
+                  "straightened-image coords. NULL = use the algorithm's "
+                  "bbox from per_somite_data.")
 
     class Meta:
         unique_together = (('dest_well', 'somite_index', 'annotator'),)

@@ -4496,7 +4496,9 @@ def profile_dashboard(request: HttpRequest) -> HttpResponse:
 # the annotator sees the exact same pixels the future classifier will see.
 
 SEV_LABELS = {0: 'healthy', 1: 'mild', 2: 'moderate', 3: 'severe'}
-SEV_COLORS = {0: '#1a9850', 1: '#fdae61', 2: '#f46d43', 3: '#a50026'}
+# 0 green, 1 yellow, 2 orange, 3 red — biologist requested yellow for mild
+# so it stands out from moderate's orange more cleanly.
+SEV_COLORS = {0: '#1a9850', 1: '#f1c40f', 2: '#f46d43', 3: '#a50026'}
 
 
 def annotate_handler(doc: bokeh.document.Document) -> None:
@@ -4547,6 +4549,25 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
             return np.power(x, 0.5).astype(np.float32)
         if name == 'gamma_2':
             return np.power(x, 2.0).astype(np.float32)
+        if name == 'gamma_3':
+            return np.power(x, 3.0).astype(np.float32)
+        if name == 'log_compress':
+            # log(1+x)/log(2) — same family as gamma but with a smoother
+            # roll-off at the high end. Highlights compressed, mid-tones
+            # less so than gamma 2.
+            return (np.log1p(x) / np.log(2.0)).astype(np.float32)
+        if name == 'gamma_2_clahe':
+            from skimage.exposure import equalize_adapthist
+            g = np.power(x, 2.0)
+            return equalize_adapthist(g, clip_limit=0.03).astype(np.float32)
+        if name == 'gamma_2_unsharp':
+            # gamma + unsharp mask = edge-amplified darkened view. Helpful
+            # for spotting subtle somite boundary breaks.
+            from scipy.ndimage import gaussian_filter
+            g = np.power(x, 2.0)
+            blur = gaussian_filter(g, sigma=3.0)
+            sharpened = np.clip(g + 0.8 * (g - blur), 0.0, 1.0)
+            return sharpened.astype(np.float32)
         return x
 
     def _get_enhanced_straight(dest_id, straight):
@@ -4591,13 +4612,17 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
     # filter into the training pipeline.
     enhance_select = bokeh.models.Select(
         title='Enhancement view (right-hand panels — annotator aid, NOT training input)',
-        value='clahe',
+        value='gamma_2',
         options=[
-            ('none',           'none (same as raw)'),
-            ('clahe',          'CLAHE (adaptive equalisation)'),
+            ('none',            'none (same as raw)'),
+            ('clahe',           'CLAHE (adaptive equalisation)'),
             ('clahe_threshold', 'CLAHE + Otsu threshold (binary)'),
-            ('gamma_05',       'gamma 0.5 (brighten faint tissue)'),
-            ('gamma_2',        'gamma 2.0 (darken background)'),
+            ('gamma_05',        'gamma 0.5 (brighten faint tissue)'),
+            ('gamma_2',         'gamma 2.0 (darken background)'),
+            ('gamma_3',         'gamma 3.0 (darken background harder)'),
+            ('gamma_2_clahe',   'gamma 2.0 then CLAHE (sharp contours)'),
+            ('log_compress',    'log compression (compress highlights)'),
+            ('gamma_2_unsharp', 'gamma 2.0 + unsharp mask (edge boost)'),
         ],
         width=480)
 
@@ -4720,6 +4745,38 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
                        fill_alpha=0, line_color='#d73027', line_width=2.5)
     zoom_enh_fig.xaxis.visible = False; zoom_enh_fig.yaxis.visible = False
 
+    # Vertical line per OTHER somite in this fish, coloured by severity
+    # (human annotation if this annotator has rated it, else algorithm
+    # heuristic). Visible on both zoom views.
+    other_lines_src = bokeh.models.ColumnDataSource(
+        dict(xs=[], ys=[], color=[]))
+    for fig in (zoom_raw_fig, zoom_enh_fig):
+        fig.multi_line(xs='xs', ys='ys', line_color='color',
+                       line_width=1.5, alpha=0.55,
+                       source=other_lines_src)
+
+    # Editable bbox rectangle, attached to BoxEditTool on the raw zoom.
+    # Shift+drag a corner to resize; drag the body to move. The enhanced
+    # zoom shows the SAME rect (read-only mirror) via shared source so
+    # edits propagate. A separate ctx_bbox quad still marks the original
+    # somite bbox for reference — the editable rect starts there and
+    # moves under user control.
+    edit_box_src = bokeh.models.ColumnDataSource(
+        dict(x=[], y=[], width=[], height=[]))
+    edit_renderer = zoom_raw_fig.rect(
+        x='x', y='y', width='width', height='height',
+        source=edit_box_src,
+        fill_alpha=0.0, line_color='#33aaff', line_width=2.5,
+        line_dash='solid')
+    zoom_enh_fig.rect(
+        x='x', y='y', width='width', height='height',
+        source=edit_box_src,
+        fill_alpha=0.0, line_color='#33aaff', line_width=2.5)
+    box_edit_tool = bokeh.models.BoxEditTool(
+        renderers=[edit_renderer], num_objects=1)
+    zoom_raw_fig.add_tools(box_edit_tool)
+    zoom_raw_fig.toolbar.active_drag = box_edit_tool
+
     info_div = bokeh.models.Div(text='', width=420)
 
     # Annotation guide — static, sits at the top so a new annotator can
@@ -4765,6 +4822,17 @@ saved so you don't see it again, but training ignores NULL severities.
 or bad-box value): tick when the fish is visibly crooked so the left and
 right chevron halves don't overlap. Reset automatically on every somite,
 pre-filled from your prior value when you navigate back.
+
+<br><br><b>Bbox editing.</b> The blue rectangle on <i>Zoom (raw)</i> is
+draggable: shift+click to grab, drag the body to move, drag a corner to
+resize. Click <b>Re-crop tile</b> to refresh both tile previews from the
+new box; click <b>Reset box to algorithm</b> to snap back. The edit is
+persisted as <code>corrected_bbox</code> only when you click a severity.
+
+<br><br><b>Vertical lines on the zoom views</b>: one per OTHER somite in
+the fish, coloured by your annotation (or the algorithm's heuristic if
+you haven't rated it yet). Quick visual sanity check on the pattern of
+defects along the AP axis without leaving the current somite.
 </div>""")
 
     # ---- Queue helpers ----
@@ -4876,6 +4944,8 @@ pre-filled from your prior value when you navigate back.
             enh_ctx_src.data = dict(image=[], dw=[], dh=[])
             ctx_bbox.data = dict(left=[], right=[], top=[], bottom=[])
             ctx_tile_box.data = dict(left=[], right=[], top=[], bottom=[])
+            edit_box_src.data = dict(x=[], y=[], width=[], height=[])
+            other_lines_src.data = dict(xs=[], ys=[], color=[])
             info_div.text = ''
             # Clamp so a subsequent Back from the end lands on the last item.
             state['idx'] = max(0, min(state['idx'], len(state['queue'])))
@@ -4908,11 +4978,30 @@ pre-filled from your prior value when you navigate back.
                     next(iter(state['straight_cache'])))
             state['straight_cache'][dest.id] = straight
 
-        # Crop the tile via the shared helper — byte-identical to what
-        # extract_somite_tiles writes and the classifier will train on.
+        # Effective bbox: a previous human correction (corrected_bbox in
+        # SomiteAnnotation) wins over the algorithm's bbox from
+        # per_somite_data. Editing the rect in the zoom view updates
+        # state['current_bbox']; _record persists it iff it differs from
+        # the algorithm's bbox. (We fetch the SomiteAnnotation row once,
+        # below, and reuse it.)
+        sh, sw = straight.shape
+        algo_bbox = somite.get('bbox') or [0, 0, 0, 0]
+        si_curr = int(somite.get('index', -1))
+        annot_curr = annotator_input.value.strip()
+        prior_row = SomiteAnnotation.objects.filter(
+            dest_well=dest, somite_index=si_curr, annotator=annot_curr).first()
+        if prior_row and prior_row.corrected_bbox:
+            current_bbox = list(prior_row.corrected_bbox)
+        else:
+            current_bbox = list(algo_bbox)
+        state['current_bbox'] = current_bbox
+        state['algo_bbox'] = list(algo_bbox)
+
+        # Crop the tile via the shared helper using the effective bbox.
         # Padding comes from tile_crops.DEFAULT_PADDING (single source of
         # truth) so annotator and trainer never diverge.
-        img, meta = crop_tile(straight, somite, centre_marker=False)
+        synth_somite = dict(somite, bbox=current_bbox)
+        img, meta = crop_tile(straight, synth_somite, centre_marker=False)
         if img is None:
             _set_status('Bad bbox on this somite — skipping.', '#c00')
             state['idx'] += direction
@@ -4929,7 +5018,7 @@ pre-filled from your prior value when you navigate back.
         # filter benefits from a wider neighbourhood (CLAHE on an 80×170
         # tile is meaningless; on 2048² it actually equalises).
         enh_straight = _get_enhanced_straight(dest.id, straight)
-        enh_img, _ = crop_tile(enh_straight, somite, centre_marker=False)
+        enh_img, _ = crop_tile(enh_straight, synth_somite, centre_marker=False)
         if enh_img is not None:
             enh_np = np.array(enh_img).astype(np.float32)
             eh, ew = enh_np.shape
@@ -4939,18 +5028,22 @@ pre-filled from your prior value when you navigate back.
         else:
             enh_tile_src.data = dict(image=[], dw=[], dh=[])
 
-        sh, sw = straight.shape
         ctx_src.data = dict(image=[np.flipud(straight)], dw=[sw], dh=[sh])
         ctx_fig.x_range.start = 0; ctx_fig.x_range.end = sw
         ctx_fig.y_range.start = 0; ctx_fig.y_range.end = sh
         enh_ctx_src.data = dict(image=[np.flipud(enh_straight)], dw=[sw], dh=[sh])
 
-        bbox = somite.get('bbox') or [0, 0, 0, 0]
-        x0, y0, x1, y1 = (int(v) for v in bbox)
+        x0, y0, x1, y1 = (int(v) for v in current_bbox)
         ctx_bbox.data = dict(
             left=[x0], right=[x1],
             top=[sh - y0],          # flipud → y' = sh - y
             bottom=[sh - y1])
+        # Populate the editable rect (in display coords — y is flipped).
+        edit_box_src.data = dict(
+            x=[(x0 + x1) / 2.0],
+            y=[sh - (y0 + y1) / 2.0],
+            width=[x1 - x0],
+            height=[y1 - y0])
         # Dashed tile boundary on context = bbox + padding (the actual
         # crop area), so the annotator can see why the zoomed tile shows
         # more pixels than the red box implies.
@@ -4962,6 +5055,37 @@ pre-filled from your prior value when you navigate back.
                 top=[sh - y0p], bottom=[sh - y1p])
         else:
             ctx_tile_box.data = dict(left=[], right=[], top=[], bottom=[])
+
+        # Vertical line per OTHER somite in this fish (not the current
+        # one), coloured green/yellow/orange/red by human annotation if
+        # this annotator has rated it, else by the algorithm heuristic.
+        # Batch-fetch the annotator's prior labels for this fish so we
+        # don't issue N queries per render.
+        fish_priors = {
+            a.somite_index: a
+            for a in SomiteAnnotation.objects.filter(
+                dest_well=dest, annotator=annot_curr)
+        }
+        xs_list, ys_list, color_list = [], [], []
+        for s_o in (pred.per_somite_data or {}).get('somites', []) or []:
+            if int(s_o.get('index', -1)) == si_curr:
+                continue
+            cx_o = float(s_o.get('centroid_x', -1))
+            if cx_o < 0:
+                continue
+            o_idx = int(s_o.get('index', -1))
+            other_prior = fish_priors.get(o_idx)
+            if (other_prior is not None
+                and other_prior.box_quality == 'single'
+                and other_prior.severity is not None):
+                col = SEV_COLORS[other_prior.severity]
+            else:
+                heur_o = int(s_o.get('severity', 0))
+                col = SEV_COLORS.get(heur_o, '#888888')
+            xs_list.append([cx_o, cx_o])
+            ys_list.append([0, sh])
+            color_list.append(col)
+        other_lines_src.data = dict(xs=xs_list, ys=ys_list, color=color_list)
 
         # Zoom window: ±300 px in x around the somite centre (shows current
         # somite + ~2 neighbours either side) and ±200 px in y around the
@@ -4982,10 +5106,9 @@ pre-filled from your prior value when you navigate back.
         # show the prior label below the algorithm hint, plainly. Also
         # pre-fill the L/R offset checkbox to its prior value (and clear
         # it for fresh rows) so re-clicking severity preserves the flag.
-        annot = annotator_input.value.strip()
-        si = int(somite.get('index', -1))
-        prior = SomiteAnnotation.objects.filter(
-            dest_well=dest, somite_index=si, annotator=annot).first()
+        annot = annot_curr
+        si = si_curr
+        prior = prior_row
         if prior is not None:
             if prior.box_quality != 'single':
                 prior_txt = f'box:{prior.box_quality}'
@@ -5092,10 +5215,18 @@ pre-filled from your prior value when you navigate back.
         if box_quality != 'single':
             severity = None
         lr_offset = (0 in lr_offset_cb.active)
+        # Persist a corrected_bbox iff the box currently on screen differs
+        # from the algorithm's. Storing NULL when unchanged keeps the table
+        # clean and signals "no human override" to the trainer.
+        cur_bbox = state.get('current_bbox') or []
+        algo_bbox = state.get('algo_bbox') or []
+        corrected = (list(cur_bbox) if cur_bbox and cur_bbox != algo_bbox
+                     else None)
         SomiteAnnotation.objects.update_or_create(
             dest_well=dest, somite_index=si, annotator=annot,
             defaults={'severity': severity, 'box_quality': box_quality,
-                      'lr_offset': lr_offset},
+                      'lr_offset': lr_offset,
+                      'corrected_bbox': corrected},
         )
         if box_quality != 'single':
             label = f'box:{box_quality}'
@@ -5105,6 +5236,8 @@ pre-filled from your prior value when you navigate back.
             label = SEV_LABELS[severity]
         if lr_offset:
             label += ' + L/R offset'
+        if corrected is not None:
+            label += ' + bbox edited'
         _set_status(f'Saved {dest.position_row}{int(dest.position_col):02d} '
                     f'#{si} = <b>{label}</b>')
         state['idx'] += 1
@@ -5142,13 +5275,109 @@ pre-filled from your prior value when you navigate back.
     btn_bq_empty.on_click(lambda: _record(None, box_quality='empty'))
     btn_bq_mis.on_click(  lambda: _record(None, box_quality='mispositioned'))
 
+    # Bbox-edit row
+    btn_recrop = bokeh.models.Button(
+        label='Re-crop tile from edited box', button_type='primary', width=220)
+    btn_reset_box = bokeh.models.Button(
+        label='Reset box to algorithm', button_type='default', width=200)
+
+    def _recrop_from_edit():
+        """Read the (possibly dragged) blue rect on the zoom view, write
+        it into state['current_bbox'], and refresh the tile previews +
+        dashed orange tile boundary to match. Severity click then
+        persists the new box via corrected_bbox."""
+        if state['current'] is None:
+            _set_status('Nothing loaded.', '#c00'); return
+        if not edit_box_src.data['x']:
+            _set_status('No box to read.', '#c00'); return
+        _, somite, dest = state['current']
+        straight = state['straight_cache'].get(dest.id)
+        if straight is None:
+            _set_status('No cached image — re-render first.', '#c00'); return
+        sh_local, sw_local = straight.shape
+        cx_e = float(edit_box_src.data['x'][0])
+        cy_e = float(edit_box_src.data['y'][0])
+        w_e  = float(edit_box_src.data['width'][0])
+        h_e  = float(edit_box_src.data['height'][0])
+        # Convert display coords (image was flipped via np.flipud) back to
+        # algorithm-space [x0,y0,x1,y1] with y0 < y1 (top < bottom).
+        x0 = max(0, min(sw_local, int(round(cx_e - w_e / 2))))
+        x1 = max(0, min(sw_local, int(round(cx_e + w_e / 2))))
+        y0 = max(0, min(sh_local, int(round(sh_local - (cy_e + h_e / 2)))))
+        y1 = max(0, min(sh_local, int(round(sh_local - (cy_e - h_e / 2)))))
+        if x1 <= x0 or y1 <= y0:
+            _set_status('Edited box collapsed — adjust and retry.', '#c00')
+            return
+        state['current_bbox'] = [x0, y0, x1, y1]
+        # Refresh: re-crop, update red bbox quad + dashed tile quad +
+        # editable rect canonical form (so dragging again starts clean).
+        synth = dict(somite, bbox=[x0, y0, x1, y1])
+        img, meta = crop_tile(straight, synth, centre_marker=False)
+        if img is None:
+            _set_status('Edited box gives an empty crop.', '#c00')
+            return
+        tile_np = np.array(img).astype(np.float32)
+        th_, tw_ = tile_np.shape
+        tile_src.data = dict(image=[np.flipud(tile_np)], dw=[tw_], dh=[th_])
+        tile_fig.x_range.start = 0; tile_fig.x_range.end = tw_
+        tile_fig.y_range.start = 0; tile_fig.y_range.end = th_
+        enh_straight = state['enh_cache'].get((dest.id, enhance_select.value))
+        if enh_straight is not None:
+            enh_img, _ = crop_tile(enh_straight, synth, centre_marker=False)
+            if enh_img is not None:
+                enh_np = np.array(enh_img).astype(np.float32)
+                eh_, ew_ = enh_np.shape
+                enh_tile_src.data = dict(image=[np.flipud(enh_np)],
+                                          dw=[ew_], dh=[eh_])
+                enh_tile_fig.x_range.start = 0; enh_tile_fig.x_range.end = ew_
+                enh_tile_fig.y_range.start = 0; enh_tile_fig.y_range.end = eh_
+        ctx_bbox.data = dict(
+            left=[x0], right=[x1],
+            top=[sh_local - y0], bottom=[sh_local - y1])
+        bp = meta.get('bbox_padded')
+        if bp is not None:
+            x0p, y0p, x1p, y1p = bp
+            ctx_tile_box.data = dict(
+                left=[x0p], right=[x1p],
+                top=[sh_local - y0p], bottom=[sh_local - y1p])
+        # Snap the editable rect to the clean integer-rounded coords too.
+        edit_box_src.data = dict(
+            x=[(x0 + x1) / 2.0],
+            y=[sh_local - (y0 + y1) / 2.0],
+            width=[x1 - x0],
+            height=[y1 - y0])
+        _set_status(f'Re-cropped from [{x0},{y0}–{x1},{y1}]. '
+                    'Click severity to save (or Reset to revert).')
+    btn_recrop.on_click(_recrop_from_edit)
+
+    def _reset_box_to_algo():
+        """Snap the editable rect back to the algorithm's bbox, re-crop,
+        and refresh. Doesn't touch the DB by itself — the saved
+        corrected_bbox (if any) is overwritten back to NULL only when you
+        click a severity. That way 'reset' is reversible (click Back
+        without saving) and intentional (click severity to commit)."""
+        if state['current'] is None: return
+        algo_bbox = state.get('algo_bbox') or []
+        if len(algo_bbox) != 4:
+            return
+        straight = state['straight_cache'].get(state['current'][2].id)
+        if straight is None:
+            return
+        sh_local = straight.shape[0]
+        x0, y0, x1, y1 = (int(v) for v in algo_bbox)
+        edit_box_src.data = dict(
+            x=[(x0 + x1) / 2.0],
+            y=[sh_local - (y0 + y1) / 2.0],
+            width=[x1 - x0],
+            height=[y1 - y0])
+        _recrop_from_edit()
+    btn_reset_box.on_click(_reset_box_to_algo)
+
     # Navigation row
     btn_skip = bokeh.models.Button(label='Skip (don\'t save)', button_type='default', width=150)
     btn_back = bokeh.models.Button(label='← Back',             button_type='default', width=80)
     btn_next_fish = bokeh.models.Button(
         label='Next fish →', button_type='primary', width=110)
-    btn_mark_healthy = bokeh.models.Button(
-        label='Mark rest of fish healthy', button_type='success', width=210)
 
     def _skip():
         state['idx'] += 1
@@ -5174,36 +5403,6 @@ pre-filled from your prior value when you navigate back.
         _render_current()
     btn_next_fish.on_click(_jump_next_fish)
 
-    def _mark_rest_healthy():
-        """Bulk-save every remaining somite in the *current fish* as
-        healthy (severity=0, box=single) for this annotator, then jump to
-        the next fish. Saves a 30-click well to one click for clean fish."""
-        cur = state['current']
-        if cur is None:
-            _set_status('Nothing loaded.', '#c00'); return
-        annot = annotator_input.value.strip()
-        if not annot:
-            _set_status('Set your annotator name first.', '#c00'); return
-        _, _, cur_dest = cur
-        i = state['idx']
-        n_written = 0
-        while i < len(state['queue']) and state['queue'][i][2].id == cur_dest.id:
-            _, s_i, d_i = state['queue'][i]
-            SomiteAnnotation.objects.update_or_create(
-                dest_well=d_i, somite_index=int(s_i.get('index', -1)),
-                annotator=annot,
-                defaults={'severity': 0, 'box_quality': 'single',
-                          'lr_offset': False},
-            )
-            n_written += 1
-            i += 1
-        state['idx'] = i
-        _set_status(f'Marked <b>{n_written}</b> somite(s) of '
-                    f'{cur_dest.position_row}{int(cur_dest.position_col):02d} '
-                    'as healthy.')
-        _render_current()
-    btn_mark_healthy.on_click(_mark_rest_healthy)
-
     # ---- Load queue ----
     def _do_load():
         annot = annotator_input.value.strip()
@@ -5227,6 +5426,8 @@ pre-filled from your prior value when you navigate back.
             enh_ctx_src.data = dict(image=[], dw=[], dh=[])
             ctx_bbox.data = dict(left=[], right=[], top=[], bottom=[])
             ctx_tile_box.data = dict(left=[], right=[], top=[], bottom=[])
+            edit_box_src.data = dict(x=[], y=[], width=[], height=[])
+            other_lines_src.data = dict(xs=[], ys=[], color=[])
             info_div.text = ''
             _set_status('Nothing to do here — switch experiment.', '#1a9850')
             return
@@ -5260,9 +5461,12 @@ pre-filled from your prior value when you navigate back.
     box_row = bokeh.layouts.row(
         _label('Bad bbox:', '#8a3a00'),
         btn_bq_multi, btn_bq_empty, btn_bq_mis)
+    edit_row = bokeh.layouts.row(
+        _label('Bbox edit (drag the blue rect on Zoom (raw)):', '#1a5db5'),
+        btn_recrop, btn_reset_box)
     nav_row = bokeh.layouts.row(
         _label('Navigate:'),
-        btn_back, btn_skip, btn_mark_healthy, btn_next_fish)
+        btn_back, btn_skip, btn_next_fish)
 
     top_pane = bokeh.layouts.row(tile_fig, enh_tile_fig, info_div)
     zoom_pane = bokeh.layouts.row(zoom_raw_fig, zoom_enh_fig)
@@ -5275,6 +5479,7 @@ pre-filled from your prior value when you navigate back.
         zoom_pane,
         severity_row,
         box_row,
+        edit_row,
         nav_row,
         ctx_fig,
         enh_ctx_fig,
