@@ -4755,27 +4755,11 @@ def annotate_handler(doc: bokeh.document.Document) -> None:
                        line_width=1.5, alpha=0.55,
                        source=other_lines_src)
 
-    # Editable bbox rectangle, attached to BoxEditTool on the raw zoom.
-    # Shift+drag a corner to resize; drag the body to move. The enhanced
-    # zoom shows the SAME rect (read-only mirror) via shared source so
-    # edits propagate. A separate ctx_bbox quad still marks the original
-    # somite bbox for reference — the editable rect starts there and
-    # moves under user control.
-    edit_box_src = bokeh.models.ColumnDataSource(
-        dict(x=[], y=[], width=[], height=[]))
-    edit_renderer = zoom_raw_fig.rect(
-        x='x', y='y', width='width', height='height',
-        source=edit_box_src,
-        fill_alpha=0.0, line_color='#33aaff', line_width=2.5,
-        line_dash='solid')
-    zoom_enh_fig.rect(
-        x='x', y='y', width='width', height='height',
-        source=edit_box_src,
-        fill_alpha=0.0, line_color='#33aaff', line_width=2.5)
-    box_edit_tool = bokeh.models.BoxEditTool(
-        renderers=[edit_renderer], num_objects=1)
-    zoom_raw_fig.add_tools(box_edit_tool)
-    zoom_raw_fig.toolbar.active_drag = box_edit_tool
+    # Bbox is edited via nudge buttons, not drag (Bokeh's BoxEditTool
+    # required tap-to-select-then-drag and confused annotators by
+    # creating a new box on a plain click-drag). The red ctx_bbox quad
+    # is the live edit target — each nudge updates state['current_bbox']
+    # and refreshes the tile, then a severity click persists it.
 
     info_div = bokeh.models.Div(text='', width=420)
 
@@ -4823,11 +4807,12 @@ or bad-box value): tick when the fish is visibly crooked so the left and
 right chevron halves don't overlap. Reset automatically on every somite,
 pre-filled from your prior value when you navigate back.
 
-<br><br><b>Bbox editing.</b> The blue rectangle on <i>Zoom (raw)</i> is
-draggable: shift+click to grab, drag the body to move, drag a corner to
-resize. Click <b>Re-crop tile</b> to refresh both tile previews from the
-new box; click <b>Reset box to algorithm</b> to snap back. The edit is
-persisted as <code>corrected_bbox</code> only when you click a severity.
+<br><br><b>Bbox editing.</b> Use the move (←→↑↓) and resize (Wider /
+Narrower / Taller / Shorter) buttons to nudge the red bbox by 5 px each
+click. The tile + dashed-orange tile area refresh automatically after
+every nudge. <b>Reset box to algorithm</b> snaps back. The edit is
+persisted as <code>corrected_bbox</code> only when you click a severity;
+until then everything is reversible.
 
 <br><br><b>Vertical lines on the zoom views</b>: one per OTHER somite in
 the fish, coloured by your annotation (or the algorithm's heuristic if
@@ -4944,7 +4929,6 @@ defects along the AP axis without leaving the current somite.
             enh_ctx_src.data = dict(image=[], dw=[], dh=[])
             ctx_bbox.data = dict(left=[], right=[], top=[], bottom=[])
             ctx_tile_box.data = dict(left=[], right=[], top=[], bottom=[])
-            edit_box_src.data = dict(x=[], y=[], width=[], height=[])
             other_lines_src.data = dict(xs=[], ys=[], color=[])
             info_div.text = ''
             # Clamp so a subsequent Back from the end lands on the last item.
@@ -5038,12 +5022,6 @@ defects along the AP axis without leaving the current somite.
             left=[x0], right=[x1],
             top=[sh - y0],          # flipud → y' = sh - y
             bottom=[sh - y1])
-        # Populate the editable rect (in display coords — y is flipped).
-        edit_box_src.data = dict(
-            x=[(x0 + x1) / 2.0],
-            y=[sh - (y0 + y1) / 2.0],
-            width=[x1 - x0],
-            height=[y1 - y0])
         # Dashed tile boundary on context = bbox + padding (the actual
         # crop area), so the annotator can see why the zoomed tile shows
         # more pixels than the red box implies.
@@ -5252,9 +5230,29 @@ defects along the AP axis without leaving the current somite.
         active=[], width=380)
 
     # Severity row (only meaningful when box_quality='single')
+    # Bokeh's button_type='warning' renders the same yellow-orange for
+    # both Mild and Moderate, which makes them indistinguishable. Use
+    # InlineStyleSheet overrides so Mild = yellow, Moderate = orange.
+    from bokeh.models import InlineStyleSheet
+    mild_css = InlineStyleSheet(css="""
+        :host .bk-btn, :host > div > button {
+            background-color: #f1c40f !important;
+            border-color: #c5a40c !important;
+            color: #000 !important;
+        }
+    """)
+    moderate_css = InlineStyleSheet(css="""
+        :host .bk-btn, :host > div > button {
+            background-color: #f46d43 !important;
+            border-color: #c25434 !important;
+            color: #000 !important;
+        }
+    """)
     btn_h = bokeh.models.Button(label='0 · Healthy',  button_type='success', width=120)
-    btn_m = bokeh.models.Button(label='1 · Mild',     button_type='warning', width=110)
-    btn_d = bokeh.models.Button(label='2 · Moderate', button_type='warning', width=130)
+    btn_m = bokeh.models.Button(label='1 · Mild',     button_type='warning',
+                                 stylesheets=[mild_css], width=110)
+    btn_d = bokeh.models.Button(label='2 · Moderate', button_type='warning',
+                                 stylesheets=[moderate_css], width=130)
     btn_s = bokeh.models.Button(label='3 · Severe',   button_type='danger',  width=110)
     btn_u = bokeh.models.Button(label='Unsure',       button_type='default', width=100)
     btn_h.on_click(lambda: _record(0))
@@ -5275,42 +5273,32 @@ defects along the AP axis without leaving the current somite.
     btn_bq_empty.on_click(lambda: _record(None, box_quality='empty'))
     btn_bq_mis.on_click(  lambda: _record(None, box_quality='mispositioned'))
 
-    # Bbox-edit row
-    btn_recrop = bokeh.models.Button(
-        label='Re-crop tile from edited box', button_type='primary', width=220)
-    btn_reset_box = bokeh.models.Button(
-        label='Reset box to algorithm', button_type='default', width=200)
+    # Bbox-edit row: nudge buttons. Each click moves or resizes the
+    # current bbox by NUDGE_STEP pixels, re-crops immediately, and
+    # updates the red box + dashed orange tile area on the contexts.
+    # Severity click is what persists to corrected_bbox; until then,
+    # nudging is reversible via Reset.
+    NUDGE_STEP = 5
 
-    def _recrop_from_edit():
-        """Read the (possibly dragged) blue rect on the zoom view, write
-        it into state['current_bbox'], and refresh the tile previews +
-        dashed orange tile boundary to match. Severity click then
-        persists the new box via corrected_bbox."""
+    def _apply_bbox(new_bbox):
+        """Set state['current_bbox'] to new_bbox (clamped) and refresh
+        all visual elements (tile previews, red bbox quad, dashed orange
+        tile-area quad). Doesn't touch the DB."""
         if state['current'] is None:
             _set_status('Nothing loaded.', '#c00'); return
-        if not edit_box_src.data['x']:
-            _set_status('No box to read.', '#c00'); return
         _, somite, dest = state['current']
         straight = state['straight_cache'].get(dest.id)
         if straight is None:
-            _set_status('No cached image — re-render first.', '#c00'); return
+            _set_status('No cached image.', '#c00'); return
         sh_local, sw_local = straight.shape
-        cx_e = float(edit_box_src.data['x'][0])
-        cy_e = float(edit_box_src.data['y'][0])
-        w_e  = float(edit_box_src.data['width'][0])
-        h_e  = float(edit_box_src.data['height'][0])
-        # Convert display coords (image was flipped via np.flipud) back to
-        # algorithm-space [x0,y0,x1,y1] with y0 < y1 (top < bottom).
-        x0 = max(0, min(sw_local, int(round(cx_e - w_e / 2))))
-        x1 = max(0, min(sw_local, int(round(cx_e + w_e / 2))))
-        y0 = max(0, min(sh_local, int(round(sh_local - (cy_e + h_e / 2)))))
-        y1 = max(0, min(sh_local, int(round(sh_local - (cy_e - h_e / 2)))))
-        if x1 <= x0 or y1 <= y0:
-            _set_status('Edited box collapsed — adjust and retry.', '#c00')
+        x0 = max(0, min(sw_local, int(new_bbox[0])))
+        x1 = max(0, min(sw_local, int(new_bbox[2])))
+        y0 = max(0, min(sh_local, int(new_bbox[1])))
+        y1 = max(0, min(sh_local, int(new_bbox[3])))
+        if x1 <= x0 + 2 or y1 <= y0 + 2:
+            _set_status('Box would collapse — ignored.', '#c00')
             return
         state['current_bbox'] = [x0, y0, x1, y1]
-        # Refresh: re-crop, update red bbox quad + dashed tile quad +
-        # editable rect canonical form (so dragging again starts clean).
         synth = dict(somite, bbox=[x0, y0, x1, y1])
         img, meta = crop_tile(straight, synth, centre_marker=False)
         if img is None:
@@ -5340,37 +5328,53 @@ defects along the AP axis without leaving the current somite.
             ctx_tile_box.data = dict(
                 left=[x0p], right=[x1p],
                 top=[sh_local - y0p], bottom=[sh_local - y1p])
-        # Snap the editable rect to the clean integer-rounded coords too.
-        edit_box_src.data = dict(
-            x=[(x0 + x1) / 2.0],
-            y=[sh_local - (y0 + y1) / 2.0],
-            width=[x1 - x0],
-            height=[y1 - y0])
-        _set_status(f'Re-cropped from [{x0},{y0}–{x1},{y1}]. '
-                    'Click severity to save (or Reset to revert).')
-    btn_recrop.on_click(_recrop_from_edit)
+
+    def _nudge(dx0, dy0, dx1, dy1):
+        cur = state.get('current_bbox') or []
+        if len(cur) != 4:
+            return
+        new = [cur[0] + dx0, cur[1] + dy0, cur[2] + dx1, cur[3] + dy1]
+        _apply_bbox(new)
+        algo = state.get('algo_bbox') or []
+        delta = ''
+        if new[:4] != algo[:4]:
+            delta = (f' (Δ vs algo: '
+                     f'{new[0]-algo[0]:+d},{new[1]-algo[1]:+d},'
+                     f'{new[2]-algo[2]:+d},{new[3]-algo[3]:+d})')
+        _set_status(f'Box → [{new[0]},{new[1]}–{new[2]},{new[3]}]{delta}. '
+                    'Click severity to save.')
+
+    # Move
+    btn_box_left  = bokeh.models.Button(label='←',  width=40)
+    btn_box_right = bokeh.models.Button(label='→',  width=40)
+    btn_box_up    = bokeh.models.Button(label='↑',  width=40)
+    btn_box_down  = bokeh.models.Button(label='↓',  width=40)
+    btn_box_left.on_click( lambda: _nudge(-NUDGE_STEP, 0, -NUDGE_STEP, 0))
+    btn_box_right.on_click(lambda: _nudge(+NUDGE_STEP, 0, +NUDGE_STEP, 0))
+    btn_box_up.on_click(   lambda: _nudge(0, -NUDGE_STEP, 0, -NUDGE_STEP))
+    btn_box_down.on_click( lambda: _nudge(0, +NUDGE_STEP, 0, +NUDGE_STEP))
+    # Resize (symmetric around centre)
+    btn_box_wider    = bokeh.models.Button(label='Wider',    width=80)
+    btn_box_narrower = bokeh.models.Button(label='Narrower', width=80)
+    btn_box_taller   = bokeh.models.Button(label='Taller',   width=80)
+    btn_box_shorter  = bokeh.models.Button(label='Shorter',  width=80)
+    btn_box_wider.on_click(   lambda: _nudge(-NUDGE_STEP, 0, +NUDGE_STEP, 0))
+    btn_box_narrower.on_click(lambda: _nudge(+NUDGE_STEP, 0, -NUDGE_STEP, 0))
+    btn_box_taller.on_click(  lambda: _nudge(0, -NUDGE_STEP, 0, +NUDGE_STEP))
+    btn_box_shorter.on_click( lambda: _nudge(0, +NUDGE_STEP, 0, -NUDGE_STEP))
+
+    btn_reset_box = bokeh.models.Button(
+        label='Reset box to algorithm', button_type='default', width=200)
 
     def _reset_box_to_algo():
-        """Snap the editable rect back to the algorithm's bbox, re-crop,
-        and refresh. Doesn't touch the DB by itself — the saved
-        corrected_bbox (if any) is overwritten back to NULL only when you
-        click a severity. That way 'reset' is reversible (click Back
-        without saving) and intentional (click severity to commit)."""
-        if state['current'] is None: return
+        """Snap back to the algorithm's bbox. Doesn't touch the DB —
+        the saved corrected_bbox (if any) is overwritten back to NULL
+        only when you click a severity."""
         algo_bbox = state.get('algo_bbox') or []
-        if len(algo_bbox) != 4:
-            return
-        straight = state['straight_cache'].get(state['current'][2].id)
-        if straight is None:
-            return
-        sh_local = straight.shape[0]
-        x0, y0, x1, y1 = (int(v) for v in algo_bbox)
-        edit_box_src.data = dict(
-            x=[(x0 + x1) / 2.0],
-            y=[sh_local - (y0 + y1) / 2.0],
-            width=[x1 - x0],
-            height=[y1 - y0])
-        _recrop_from_edit()
+        if len(algo_bbox) == 4:
+            _apply_bbox(algo_bbox)
+            _set_status('Box reset to algorithm. Click severity to save '
+                        '(this clears any previously-saved correction).')
     btn_reset_box.on_click(_reset_box_to_algo)
 
     # Navigation row
@@ -5426,7 +5430,6 @@ defects along the AP axis without leaving the current somite.
             enh_ctx_src.data = dict(image=[], dw=[], dh=[])
             ctx_bbox.data = dict(left=[], right=[], top=[], bottom=[])
             ctx_tile_box.data = dict(left=[], right=[], top=[], bottom=[])
-            edit_box_src.data = dict(x=[], y=[], width=[], height=[])
             other_lines_src.data = dict(xs=[], ys=[], color=[])
             info_div.text = ''
             _set_status('Nothing to do here — switch experiment.', '#1a9850')
@@ -5461,9 +5464,15 @@ defects along the AP axis without leaving the current somite.
     box_row = bokeh.layouts.row(
         _label('Bad bbox:', '#8a3a00'),
         btn_bq_multi, btn_bq_empty, btn_bq_mis)
-    edit_row = bokeh.layouts.row(
-        _label('Bbox edit (drag the blue rect on Zoom (raw)):', '#1a5db5'),
-        btn_recrop, btn_reset_box)
+    edit_row = bokeh.layouts.column(
+        bokeh.layouts.row(
+            _label('Bbox move:', '#1a5db5'),
+            btn_box_left, btn_box_right, btn_box_up, btn_box_down,
+            _label('|', '#1a5db5'),
+            _label('Bbox resize:', '#1a5db5'),
+            btn_box_wider, btn_box_narrower, btn_box_taller, btn_box_shorter,
+            _label('|', '#1a5db5'),
+            btn_reset_box))
     nav_row = bokeh.layouts.row(
         _label('Navigate:'),
         btn_back, btn_skip, btn_next_fish)
