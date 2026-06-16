@@ -256,8 +256,20 @@ class Command(BaseCommand):
                 non_reject = probs[:NUM_CLASSES - 1]
                 conf = float(non_reject.max() / max(non_reject.sum(), 1e-9))
 
-                # ap_position: prefer the refined centre over the algo's.
-                ap_pos = float(rcx / sw) if sw > 0 else float(orig.get('ap_position', -1))
+                # ap_position: fraction along the SPINE (0=head, 1=tail).
+                # Use body_length (from profile_v1) as the denominator,
+                # NOT image width — fish don't always span the full
+                # 2048 px, so dividing by image width distorts the
+                # head/tail position and makes cross-fish comparison
+                # meaningless. Fall back to image width only if
+                # profile_v1's body_length is missing or zero.
+                body_len = (psd_v1.get('body_length') if psd_v1 else None)
+                if body_len and body_len > 0:
+                    ap_pos = float(rcx / body_len)
+                elif sw > 0:
+                    ap_pos = float(rcx / sw)
+                else:
+                    ap_pos = float(orig.get('ap_position', -1))
 
                 kept.append({
                     'index':           int(orig.get('index', v1_i)),

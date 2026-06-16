@@ -4495,6 +4495,26 @@ def profile_dashboard(request: HttpRequest) -> HttpResponse:
 # table. The tile is cropped on-the-fly via somiteCounting.tile_crops so
 # the annotator sees the exact same pixels the future classifier will see.
 
+def _set_fig_range_with_reset(fig, x0, x1, y0, y1):
+    """Set figure x/y ranges AND the reset-tool snap targets together.
+
+    Bokeh's reset tool snaps back to whatever range the figure was
+    *constructed* with — typically a placeholder ``(0, 1)``. Updating
+    ``start``/``end`` later doesn't update the reset target, so hitting
+    reset drops you on the bottom-left pixel of the image. Set
+    ``reset_start``/``reset_end`` here so reset always matches the
+    current view. ``reset_start``/``reset_end`` exist on Bokeh
+    ``Range1d`` >= 3.0 — the AttributeError shield is just defensive.
+    """
+    fig.x_range.start = x0; fig.x_range.end = x1
+    fig.y_range.start = y0; fig.y_range.end = y1
+    try:
+        fig.x_range.reset_start = x0; fig.x_range.reset_end = x1
+        fig.y_range.reset_start = y0; fig.y_range.reset_end = y1
+    except AttributeError:
+        pass
+
+
 SEV_LABELS = {0: 'healthy', 1: 'mild', 2: 'moderate', 3: 'severe'}
 # 0 green, 1 yellow, 2 orange, 3 red — biologist requested yellow for mild
 # so it stands out from moderate's orange more cleanly.
@@ -5035,8 +5055,7 @@ the previous fish in that case.
         tile_np = np.array(img).astype(np.float32)  # mode L → (h,w) float
         th, tw = tile_np.shape
         tile_src.data = dict(image=[np.flipud(tile_np)], dw=[tw], dh=[th])
-        tile_fig.x_range.start = 0; tile_fig.x_range.end = tw
-        tile_fig.y_range.start = 0; tile_fig.y_range.end = th
+        _set_fig_range_with_reset(tile_fig, 0, tw, 0, th)
 
         # Enhanced tile: crop from the enhanced straightened image so the
         # filter benefits from a wider neighbourhood (CLAHE on an 80×170
@@ -5047,14 +5066,12 @@ the previous fish in that case.
             enh_np = np.array(enh_img).astype(np.float32)
             eh, ew = enh_np.shape
             enh_tile_src.data = dict(image=[np.flipud(enh_np)], dw=[ew], dh=[eh])
-            enh_tile_fig.x_range.start = 0; enh_tile_fig.x_range.end = ew
-            enh_tile_fig.y_range.start = 0; enh_tile_fig.y_range.end = eh
+            _set_fig_range_with_reset(enh_tile_fig, 0, ew, 0, eh)
         else:
             enh_tile_src.data = dict(image=[], dw=[], dh=[])
 
         ctx_src.data = dict(image=[np.flipud(straight)], dw=[sw], dh=[sh])
-        ctx_fig.x_range.start = 0; ctx_fig.x_range.end = sw
-        ctx_fig.y_range.start = 0; ctx_fig.y_range.end = sh
+        _set_fig_range_with_reset(ctx_fig, 0, sw, 0, sh)
         enh_ctx_src.data = dict(image=[np.flipud(enh_straight)], dw=[sw], dh=[sh])
 
         x0, y0, x1, y1 = (int(v) for v in current_bbox)
@@ -5116,8 +5133,7 @@ the previous fish in that case.
         # the somite centroid is sh - cy.
         cyf = sh - cy
         yz_lo = max(0, cyf - zh);           yz_hi = min(sh, cyf + zh)
-        zoom_raw_fig.x_range.start = xz_lo; zoom_raw_fig.x_range.end = xz_hi
-        zoom_raw_fig.y_range.start = yz_lo; zoom_raw_fig.y_range.end = yz_hi
+        _set_fig_range_with_reset(zoom_raw_fig, xz_lo, xz_hi, yz_lo, yz_hi)
 
         # Existing annotation (if any) — Back / re-loading might land on a
         # somite this annotator already labelled. Don't anchor the eye:
@@ -5365,8 +5381,7 @@ the previous fish in that case.
         tile_np = np.array(img).astype(np.float32)
         th_, tw_ = tile_np.shape
         tile_src.data = dict(image=[np.flipud(tile_np)], dw=[tw_], dh=[th_])
-        tile_fig.x_range.start = 0; tile_fig.x_range.end = tw_
-        tile_fig.y_range.start = 0; tile_fig.y_range.end = th_
+        _set_fig_range_with_reset(tile_fig, 0, tw_, 0, th_)
         enh_straight = state['enh_cache'].get((dest.id, enhance_select.value))
         if enh_straight is not None:
             enh_img, _ = crop_tile(enh_straight, synth, centre_marker=False)
@@ -5375,8 +5390,7 @@ the previous fish in that case.
                 eh_, ew_ = enh_np.shape
                 enh_tile_src.data = dict(image=[np.flipud(enh_np)],
                                           dw=[ew_], dh=[eh_])
-                enh_tile_fig.x_range.start = 0; enh_tile_fig.x_range.end = ew_
-                enh_tile_fig.y_range.start = 0; enh_tile_fig.y_range.end = eh_
+                _set_fig_range_with_reset(enh_tile_fig, 0, ew_, 0, eh_)
         ctx_bbox.data = dict(
             left=[x0], right=[x1],
             top=[sh_local - y0], bottom=[sh_local - y1])
@@ -5731,7 +5745,7 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
         dict(xs=[], ys=[], color=[]))
     img_fig = bokeh.plotting.figure(
         title='Straightened well — severity overlays at each detected somite',
-        width=1100, height=240,
+        width=1300, height=360,
         x_range=(0, 1), y_range=(0, 1),
         tools='pan,wheel_zoom,reset,save', toolbar_location='right')
     img_fig.image(image='image', x=0, y=0, dw='dw', dh='dh',
@@ -5742,6 +5756,63 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
     img_fig.multi_line(xs='xs', ys='ys', line_color='color',
                        line_width=2, alpha=0.75, source=img_line_src)
     img_fig.xaxis.visible = False; img_fig.yaxis.visible = False
+
+    # Image-enhancement select for the detail pane. Same options + same
+    # filter logic as the annotate_somites dashboard, so the visual
+    # vocabulary stays consistent. None of the filters touch what gets
+    # written to the DB — they're annotator/biologist eye aids only.
+    img_enhance_select = bokeh.models.Select(
+        title='Detail image enhancement',
+        value='gamma_2',
+        options=[
+            ('none',            'none (raw)'),
+            ('clahe',           'CLAHE (adaptive equalisation)'),
+            ('clahe_threshold', 'CLAHE + Otsu threshold (binary)'),
+            ('gamma_05',        'gamma 0.5 (brighten faint tissue)'),
+            ('gamma_2',         'gamma 2.0 (darken background)'),
+            ('gamma_3',         'gamma 3.0 (darken harder)'),
+            ('gamma_2_clahe',   'gamma 2.0 then CLAHE'),
+            ('gamma_2_unsharp', 'gamma 2.0 + unsharp (edge boost)'),
+        ],
+        width=380)
+
+    def _apply_image_filter(img: np.ndarray, name: str) -> np.ndarray:
+        """Visualisation-only enhancement. Output ∈ [0,1]; never written
+        to disk. Cloned from annotate_somites for visual consistency."""
+        x = np.clip(img.astype(np.float32), 0.0, 1.0)
+        if name in ('none', '', None):
+            return x
+        if name == 'clahe':
+            from skimage.exposure import equalize_adapthist
+            return equalize_adapthist(x, clip_limit=0.03).astype(np.float32)
+        if name == 'clahe_threshold':
+            from skimage.exposure import equalize_adapthist
+            from skimage.filters import threshold_otsu
+            eq = equalize_adapthist(x, clip_limit=0.03).astype(np.float32)
+            try:
+                t = float(threshold_otsu(eq))
+            except Exception:
+                t = 0.5
+            return (eq > t).astype(np.float32)
+        if name == 'gamma_05':
+            return np.power(x, 0.5).astype(np.float32)
+        if name == 'gamma_2':
+            return np.power(x, 2.0).astype(np.float32)
+        if name == 'gamma_3':
+            return np.power(x, 3.0).astype(np.float32)
+        if name == 'gamma_2_clahe':
+            from skimage.exposure import equalize_adapthist
+            g = np.power(x, 2.0)
+            return equalize_adapthist(g, clip_limit=0.03).astype(np.float32)
+        if name == 'gamma_2_unsharp':
+            from scipy.ndimage import gaussian_filter
+            g = np.power(x, 2.0)
+            blur = gaussian_filter(g, sigma=3.0)
+            return np.clip(g + 0.8 * (g - blur), 0.0, 1.0).astype(np.float32)
+        return x
+
+    # `_set_fig_range_with_reset` is defined at module level so both
+    # this handler and annotate_handler can use it.
 
     # AP severity curve: x = ap_position, y = severity score, coloured.
     ap_src = bokeh.models.ColumnDataSource(
@@ -6260,10 +6331,16 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
             state['straight_cache'][dest_id] = straight
 
         sh_local, sw_local = straight.shape
-        img_fig_src.data = dict(image=[np.flipud(straight)],
+
+        # Apply the chosen enhancement filter before display. The
+        # underlying `straight` cache stays in raw form; we filter just
+        # the displayed copy. None / gamma / CLAHE etc. are eye aids
+        # only — they don't touch what's stored in DB or sent to the
+        # model.
+        straight_display = _apply_image_filter(straight,
+                                                img_enhance_select.value)
+        img_fig_src.data = dict(image=[np.flipud(straight_display)],
                                  dw=[sw_local], dh=[sh_local])
-        img_fig.x_range.start = 0; img_fig.x_range.end = sw_local
-        img_fig.y_range.start = 0; img_fig.y_range.end = sh_local
 
         # Per-somite overlays — same severity-source logic as the strip
         # plot, so the two views are visually consistent.
@@ -6276,24 +6353,35 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
 
         source = src_select.value
         somites = (pred.per_somite_data or {}).get('somites') or []
+        body_len = (pred.per_somite_data or {}).get('body_length')
+        # Fallback denominator for ap_position computation when
+        # body_length is missing.
+        ap_denom = float(body_len) if body_len and body_len > 0 else float(sw_local)
+
         v2_lookup = state.get('v2_by_dest', {}).get(dest.id)
         # When source='model_only' and we have a profile_v2 prediction,
-        # the overlay should reflect the MODEL's refined bboxes (and
-        # rejected candidates dropped from the AP curve). This is the
-        # only place where the position story differs across sources —
-        # the strip-plot overview keeps positions anchored to profile_v1
-        # so visual scanning across many fish stays stable.
+        # the overlay reflects the MODEL's refined bboxes and model-
+        # rejected candidates are DROPPED from the image overlay (they
+        # only appear in the strip plot as audit info). The strip-plot
+        # overview keeps positions anchored to profile_v1 so visual
+        # scanning across many fish stays stable.
         use_v2_positions = (source == 'model_only' and v2_lookup is not None)
         if use_v2_positions:
-            kept_v2_by_idx = v2_lookup[0]
+            kept_v2_by_idx, rejected_set = v2_lookup
         else:
-            kept_v2_by_idx = {}
+            kept_v2_by_idx, rejected_set = {}, set()
 
         lefts, rights, tops, bottoms, colors = [], [], [], [], []
         line_xs, line_ys, line_colors = [], [], []
         ap_x, ap_y, ap_col, ap_idx = [], [], [], []
+        centroid_ys = []   # for y-zoom calculation
         for s in somites:
             si = int(s.get('index', -1))
+            # In model_only mode, model-rejected somites disappear from
+            # the image overlay entirely. Strip plot still shows them
+            # in dark grey for audit purposes.
+            if use_v2_positions and si in rejected_set:
+                continue
             # Pick bbox + centroid source. If we're in model_only and the
             # model kept this somite, use its refined values. Otherwise
             # fall back to profile_v1's.
@@ -6301,17 +6389,21 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
                 v2_s = kept_v2_by_idx[si]
                 bb = v2_s.get('bbox') or []
                 cx_use = float(v2_s.get('centroid_x', -1))
-                ap_use = float(v2_s.get('ap_position',
-                                         s.get('ap_position', -1)))
             else:
                 bb = s.get('bbox') or []
                 cx_use = float(s.get('centroid_x', -1))
-                ap_use = float(s.get('ap_position', -1))
             if len(bb) != 4:
                 continue
             x0, y0, x1, y1 = (int(v) for v in bb)
             if cx_use < 0:
                 cx_use = (x0 + x1) / 2.0
+            # Re-compute ap_position from centroid + body_length so it
+            # has a consistent meaning ('fraction along the spine') across
+            # fish of different sizes. Stored v2/v1 ap_position fields
+            # used the image width as the denominator, which is wrong
+            # when the fish doesn't span the full frame.
+            ap_use = cx_use / ap_denom if ap_denom > 0 else -1.0
+
             sev_int, col, has_label = _severity_for_somite(
                 s, manual_lookup.get(si), source, v2_lookup)
             lefts.append(x0); rights.append(x1)
@@ -6320,11 +6412,30 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
             line_xs.append([cx_use, cx_use])
             line_ys.append([0, sh_local])
             line_colors.append(col)
-            if has_label and sev_int >= 0 and ap_use >= 0:
+            cy_for_zoom = float(s.get('centroid_y',
+                                       (y0 + y1) / 2.0))
+            if cy_for_zoom > 0:
+                centroid_ys.append(cy_for_zoom)
+            if has_label and sev_int >= 0 and 0.0 <= ap_use <= 1.05:
                 ap_x.append(ap_use)
                 ap_y.append(int(sev_int))
                 ap_col.append(col)
                 ap_idx.append(si)
+
+        # Y-zoom: crop the displayed band to ~±200 px around the spine
+        # so the somite chevrons fill the figure instead of getting lost
+        # in the black bands above and below the fish.
+        if centroid_ys:
+            cy_mid = float(np.median(centroid_ys))
+            margin = 220
+            y_lo_data = max(0, cy_mid - margin)
+            y_hi_data = min(sh_local, cy_mid + margin)
+            # Flipud: image y is sh - data y, so top of display = sh - y_lo.
+            _set_fig_range_with_reset(img_fig, 0, sw_local,
+                                       sh_local - y_hi_data,
+                                       sh_local - y_lo_data)
+        else:
+            _set_fig_range_with_reset(img_fig, 0, sw_local, 0, sh_local)
 
         img_bbox_src.data = dict(left=lefts, right=rights,
                                   top=tops, bottom=bottoms,
@@ -6408,12 +6519,13 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
             _render_detail(dest_id)
     src_select.on_change('value', _on_source_change)
     annotator_select.on_change('value', _on_source_change)
+    img_enhance_select.on_change('value', _on_source_change)
 
     # ---- Layout ----
     controls = bokeh.layouts.column(
         bokeh.layouts.row(exp_select, src_select,
                            annotator_select, drug_input, sort_select),
-        bokeh.layouts.row(valid_only_cb, load_button))
+        bokeh.layouts.row(valid_only_cb, img_enhance_select, load_button))
     aggregate_header = bokeh.models.Div(
         text='<div style="font-size:14px; font-weight:600; color:#1a2340; '
              'border-top:2px solid #5b8dee; margin-top:20px; padding-top:10px;">'
