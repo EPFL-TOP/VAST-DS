@@ -6396,25 +6396,17 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
         else:
             kept_v2_by_idx, rejected_set = {}, set()
 
-        # Anterior offset: x=0 will be the leftmost detected somite of
-        # this fish (the first one along AP). Same logic as the strip
-        # plot — keeps the two views consistent and exposes body length
-        # visually (longer fish reach a larger max x).
-        cx_candidates = []
-        for s in somites:
-            if use_v2_positions:
-                si_tmp = int(s.get('index', -1))
-                if si_tmp in rejected_set:
-                    continue
-                if si_tmp in kept_v2_by_idx:
-                    cc = float(kept_v2_by_idx[si_tmp].get('centroid_x', -1))
-                else:
-                    cc = float(s.get('centroid_x', -1))
-            else:
-                cc = float(s.get('centroid_x', -1))
-            if cc >= 0:
-                cx_candidates.append(cc)
-        anterior_offset = min(cx_candidates) if cx_candidates else 0.0
+        # Anterior offset: anchor x=0 to profile_v1's first detected
+        # somite — same logic as the strip plot, regardless of source.
+        # If we used v2's first KEPT somite when source='model_only',
+        # a fish where v2 rejected its head somite would shift x=0 over
+        # to a different anatomical position and the AP curve would
+        # disagree with the strip plot (red dot at x=0 in the detail
+        # but green dots only in the strip view). Anchor to v1 so the
+        # two views line up.
+        v1_cx_all = [float(s.get('centroid_x', -1)) for s in somites
+                      if float(s.get('centroid_x', -1)) >= 0]
+        anterior_offset = min(v1_cx_all) if v1_cx_all else 0.0
 
         lefts, rights, tops, bottoms, colors = [], [], [], [], []
         line_xs, line_ys, line_colors = [], [], []
@@ -6427,32 +6419,38 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
             # in dark grey for audit purposes.
             if use_v2_positions and si in rejected_set:
                 continue
-            # Pick bbox + centroid source. If we're in model_only and the
-            # model kept this somite, use its refined values. Otherwise
-            # fall back to profile_v1's.
+            # Image overlay bbox + centerline: prefer v2's refined values
+            # when source='model_only' and the model kept this somite —
+            # that's what the user wants to *see* in the close-up image.
             if use_v2_positions and si in kept_v2_by_idx:
                 v2_s = kept_v2_by_idx[si]
                 bb = v2_s.get('bbox') or []
-                cx_use = float(v2_s.get('centroid_x', -1))
+                cx_for_image = float(v2_s.get('centroid_x', -1))
             else:
                 bb = s.get('bbox') or []
-                cx_use = float(s.get('centroid_x', -1))
+                cx_for_image = float(s.get('centroid_x', -1))
             if len(bb) != 4:
                 continue
             x0, y0, x1, y1 = (int(v) for v in bb)
-            if cx_use < 0:
-                cx_use = (x0 + x1) / 2.0
-            # Pixels-from-anterior — x=0 is the first somite of this
-            # fish, max x is roughly body_length. Lets the user see when
-            # fish are shorter than typical at a glance.
-            ap_use = max(0.0, cx_use - anterior_offset)
+            if cx_for_image < 0:
+                cx_for_image = (x0 + x1) / 2.0
+            # AP curve x: always v1's centroid, so positions match the
+            # strip plot exactly. If we used v2's centroid here, a fish
+            # where v2 rejected the head somite would have x=0 shift to
+            # a different anatomical position than the strip plot — that
+            # was the source of the "red dot at x=0 but green strip"
+            # inconsistency.
+            v1_cx = float(s.get('centroid_x', -1))
+            if v1_cx < 0:
+                v1_cx = (x0 + x1) / 2.0
+            ap_use = max(0.0, v1_cx - anterior_offset)
 
             sev_int, col, has_label = _severity_for_somite(
                 s, manual_lookup.get(si), source, v2_lookup)
             lefts.append(x0); rights.append(x1)
             tops.append(sh_local - y0); bottoms.append(sh_local - y1)
             colors.append(col)
-            line_xs.append([cx_use, cx_use])
+            line_xs.append([cx_for_image, cx_for_image])
             line_ys.append([0, sh_local])
             line_colors.append(col)
             cy_for_zoom = float(s.get('centroid_y',
