@@ -29,7 +29,7 @@ import bokeh.layouts
 from well_mapping.models import (
     Experiment, SourceWellPlate, DestWellPlate, SourceWellPosition,
     DestWellPosition, Drug, DestWellProperties, DestWellPropertiesPredicted,
-    SomiteAnnotation, latest_prediction,
+    SomiteAnnotation, FishAnnotationFlag, latest_prediction,
 )
 
 # Default model_name used when reading/writing predictions from the original
@@ -4818,6 +4818,14 @@ when you click a severity; until then everything is reversible.
 the fish, coloured by your annotation (or the algorithm's heuristic if
 you haven't rated it yet). Quick visual sanity check on the pattern of
 defects along the AP axis without leaving the current somite.
+
+<br><br><b>Fish-level completeness flag</b> (bottom of the page): set this
+once per fish — <i>complete</i> if every somite was detected, or
+<i>has missing somites</i> if the detector skipped some (typically dim
+ones at the tail). Optionally add a note for where they are. Saved
+immediately. The status bar will warn you in red if you advance to the
+next fish without setting it; come back via the Back button to flag
+the previous fish in that case.
 </div>""")
 
     # ---- Queue helpers ----
@@ -4936,7 +4944,40 @@ defects along the AP axis without leaving the current somite.
             return
 
         pred, somite, dest = state['queue'][state['idx']]
+        prev = state.get('current')
+        prev_dest = prev[2] if prev else None
         state['current'] = (pred, somite, dest)
+
+        # Fish-flag widget: only refresh when the fish changes. This is
+        # also where we emit the "previous fish was unrated" reminder.
+        if prev_dest is None or prev_dest.id != dest.id:
+            annot_for_flag = annotator_input.value.strip()
+            # Reminder for the fish we just left (if any)
+            if (prev_dest is not None
+                and state.get('_prev_flag_status', 'unrated') == 'unrated'):
+                p = prev_dest
+                _set_status(
+                    f'<b style="color:#c00">⚠ Reminder:</b> '
+                    f'fish <code>{p.position_row}{int(p.position_col):02d}</code> '
+                    'was left as <b>unrated</b> in the completeness flag. '
+                    'Use Back to revisit if it had missing somites.',
+                    '#c00')
+            # Load this fish's saved flag (if any)
+            flag_row = FishAnnotationFlag.objects.filter(
+                dest_well=dest, annotator=annot_for_flag).first()
+            if flag_row is not None:
+                fish_flag_select.value = flag_row.status
+                fish_flag_notes.value = flag_row.notes or ''
+                fish_flag_status.text = (
+                    f'<i>Loaded saved flag: <b>{flag_row.status}</b> '
+                    f'(last edited {flag_row.annotated_at:%Y-%m-%d %H:%M})</i>')
+            else:
+                fish_flag_select.value = 'unrated'
+                fish_flag_notes.value = ''
+                fish_flag_status.text = (
+                    '<i>No fish flag yet — pick one once you reach the '
+                    'last somite, even if just "complete".</i>')
+            state['_prev_flag_status'] = fish_flag_select.value
 
         # Cache straightened images per well — switching somites within the
         # same fish doesn't redo the polyfit.
@@ -5228,6 +5269,24 @@ defects along the AP axis without leaving the current somite.
         labels=['L/R offset (fish is crooked, halves don\'t overlap)'],
         active=[], width=380)
 
+    # Per-fish completeness flag (FishAnnotationFlag table). Persisted as
+    # soon as the annotator picks one; reload-aware. The next-fish
+    # transition logic checks this value and shows a banner reminder if
+    # the user advances without setting it.
+    fish_flag_select = bokeh.models.Select(
+        title='This fish\'s completeness (saves immediately):',
+        value='unrated',
+        options=[('unrated',     'unrated — still working / haven\'t decided'),
+                 ('complete',    'complete — no missing somites'),
+                 ('has_missing', 'has missing somites (note where below)')],
+        width=480)
+    fish_flag_notes = bokeh.models.TextInput(
+        title='Optional note (e.g. "tail missing", "2 missing near anal vent"):',
+        value='', placeholder='', width=480)
+    fish_flag_status = bokeh.models.Div(
+        text='', width=480,
+        styles={'color': '#666', 'font-size': '12px'})
+
     # Severity row (only meaningful when box_quality='single')
     # Bokeh's button_type='warning' renders the same yellow-orange for
     # both Mild and Moderate, which makes them indistinguishable. Use
@@ -5445,6 +5504,31 @@ defects along the AP axis without leaving the current somite.
             _render_current()
     enhance_select.on_change('value', _enhance_changed)
 
+    def _save_fish_flag(*_):
+        """Persist the current fish's completeness flag immediately on
+        change. Keyed by (dest_well, annotator) so each rater has their
+        own flag for the same fish — useful for inter-rater audits."""
+        if state['current'] is None:
+            return
+        annot_f = annotator_input.value.strip()
+        if not annot_f:
+            _set_status('Set your annotator name before flagging fish.', '#c00')
+            return
+        _, _, dest = state['current']
+        FishAnnotationFlag.objects.update_or_create(
+            dest_well=dest, annotator=annot_f,
+            defaults={
+                'status': fish_flag_select.value,
+                'notes':  fish_flag_notes.value.strip(),
+            },
+        )
+        state['_prev_flag_status'] = fish_flag_select.value
+        fish_flag_status.text = (
+            f'<i style="color:#1a9850">Saved fish flag: '
+            f'<b>{fish_flag_select.value}</b></i>')
+    fish_flag_select.on_change('value', _save_fish_flag)
+    fish_flag_notes.on_change('value', _save_fish_flag)
+
     # ---- Layout ----
     controls = bokeh.layouts.column(
         bokeh.layouts.row(exp_select, annotator_input, load_button),
@@ -5476,6 +5560,13 @@ defects along the AP axis without leaving the current somite.
         _label('Navigate:'),
         btn_back, btn_skip, btn_next_fish)
 
+    fish_flag_row = bokeh.layouts.column(
+        _label('Fish-level flag (per-fish, applies once you\'ve seen all somites):',
+               '#1a5db5'),
+        fish_flag_select,
+        fish_flag_notes,
+        fish_flag_status)
+
     top_pane = bokeh.layouts.row(tile_fig, enh_tile_fig, info_div)
     zoom_pane = bokeh.layouts.row(zoom_raw_fig, zoom_enh_fig)
     doc.add_root(bokeh.layouts.column(
@@ -5489,6 +5580,7 @@ defects along the AP axis without leaving the current somite.
         box_row,
         edit_row,
         nav_row,
+        fish_flag_row,
         ctx_fig,
         enh_ctx_fig,
     ))

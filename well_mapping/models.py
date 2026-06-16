@@ -339,6 +339,44 @@ class SomiteAnnotation(models.Model):
                 f"= {sev} (by {self.annotator})")
 
 
+class FishAnnotationFlag(models.Model):
+    """Per-fish, per-annotator completeness flag.
+
+    Companion to ``SomiteAnnotation``: while ``SomiteAnnotation`` rates
+    individual somites, this row records whether the *whole fish* was
+    fully annotated (i.e. did the detector miss any somites that you
+    couldn't add). Used to identify wells that need a second pass with
+    a more sensitive detector (looser ``peak_prominence``) or future
+    manual-add UI.
+    """
+    STATUS_CHOICES = (
+        ('unrated',      'not yet rated'),
+        ('complete',     'no missing somites'),
+        ('has_missing',  'some somites are missing'),
+    )
+
+    dest_well    = models.ForeignKey(DestWellPosition, on_delete=models.CASCADE,
+                                     related_name='fish_flags')
+    annotator    = models.CharField(max_length=120, db_index=True)
+    status       = models.CharField(max_length=20, choices=STATUS_CHOICES,
+                                    default='unrated')
+    notes        = models.TextField(
+        blank=True, default='',
+        help_text="Optional free text — where the missing somites are "
+                  "(e.g. 'tail', '2 missing near anal vent') or other "
+                  "fish-level remarks.")
+    annotated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (('dest_well', 'annotator'),)
+        indexes = [
+            models.Index(fields=['annotator', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.dest_well} flag={self.status} by={self.annotator}"
+
+
 def latest_prediction(dest_well, model_name='resnet_v1', model_version=None):
     """Return the most recent DestWellPropertiesPredicted row for a given
     well/model, or None. Optional model_version constrains further.
