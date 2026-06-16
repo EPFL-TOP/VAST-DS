@@ -1,0 +1,49 @@
+{% extends "well_explorer/_base.html" %}
+
+{% block title %}<title>VAST-DS · Morphology evaluation</title>{% endblock %}
+{% block header_title %}Morphology evaluation{% endblock %}
+{% block header_subtitle %}Multi-fish overview of somite detection + severity classification &mdash; AP-axis pattern, drug effects, sanity checks against manual annotations and the trained model.{% endblock %}
+
+{% block breadcrumb %}
+  <span class="sep">›</span> Well Explorer
+  <span class="sep">›</span> Morphology evaluation
+{% endblock %}
+
+{% block extra_css %}
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-3.7.3.min.css" rel="stylesheet" type="text/css">
+<link href="http://cdn.pydata.org/bokeh/release/bokeh-widgets-3.7.3.min.css" rel="stylesheet" type="text/css">
+<style>
+    .me-intro {
+        color: #55637a; font-size: 13px; max-width: 1100px;
+        background: #fff; border-left: 3px solid #5b8dee;
+        padding: 10px 14px; border-radius: 4px; margin-bottom: 20px;
+    }
+    .me-intro code { background: #eef2ff; padding: 1px 4px; border-radius: 3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<p class="me-intro">
+    Pick an experiment, optionally filter by drug name, then press <b>Load
+    overview</b>. The strip plot shows one row per fish in the experiment,
+    with one circle per somite at its real AP position (0&nbsp;=&nbsp;head,
+    1&nbsp;=&nbsp;tail). Cells are coloured by severity &mdash; pick the
+    source from the dropdown: human annotation, algorithm heuristic, or
+    (once trained) the <code>profile_v2</code> model. Gaps near the right
+    edge indicate missing-tail somites that the detector skipped. Tap any
+    row to drill into that fish.
+</p>
+
+{% if script %}
+    {{ script | safe }}
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-widgets-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-tables-3.7.3.min.js"></script>
+<script src="https://cdn.bokeh.org/bokeh/release/bokeh-api-3.7.3.min.js"></script>
+{% endblock %}

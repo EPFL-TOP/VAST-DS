@@ -16,4 +16,5 @@ urlpatterns = [
     path(r"model_eval", views.model_eval_page, name="model_eval"),
     path(r"profile_dashboard", views.profile_dashboard, name="profile_dashboard"),
     path(r"annotate_somites", views.annotate_somites, name="annotate_somites"),
+    path(r"morphology_eval",  views.morphology_eval,  name="morphology_eval"),
 ]

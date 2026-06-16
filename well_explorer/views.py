@@ -5591,3 +5591,809 @@ def annotate_somites(request: HttpRequest) -> HttpResponse:
     script = bokeh.embed.server_document(request.build_absolute_uri())
     return render(request, 'well_explorer/annotate_somites.html',
                   {'script': script})
+
+
+#___________________________________________________________________________________________
+# Morphology evaluation dashboard
+#
+# Multi-fish overview of the somite detection + classification pipeline.
+# Reads profile_v1 predictions, SomiteAnnotation rows, and (when present)
+# profile_v2 model predictions, then renders:
+#   - an AP-position strip plot, one row per fish, colour-coded by
+#     severity. Pattern of defects along the body axis becomes visible
+#     at a glance; gaps near x=1.0 flag missing-tail somites.
+#   - a detail pane (next iteration) showing the straightened image
+#     with bbox + severity overlays for whichever fish you click.
+#   - an aggregate band (later) with confusion matrices and drug-effect
+#     scatter.
+
+MORPHOLOGY_MODEL_NAME = 'profile_v2'   # trained multi-head (when available)
+
+
+def morphology_eval_handler(doc: bokeh.document.Document) -> None:
+    """Bokeh app for cross-fish morphology evaluation."""
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+
+    # Lazy imports — heavy modules only when the page is actually opened.
+    from somiteCounting.tile_crops import straighten_yfp
+
+    all_exp = sorted([e.name for e in Experiment.objects.all()])
+    if not all_exp:
+        doc.add_root(bokeh.models.Div(
+            text='<b>No experiments in the database.</b>'))
+        return
+
+    # ---- Controls ----
+    exp_select = bokeh.models.Select(
+        title='Experiment',
+        value=all_exp[0], options=all_exp, width=320)
+
+    # Which severity to use for cell colour. `manual_then_heuristic` is
+    # the recommended default — shows human labels where they exist and
+    # falls back to the algorithm for unrated somites. `heuristic_only`
+    # gives the raw algorithm output; `model_only` lights up once
+    # profile_v2 is trained and run.
+    SRC_OPTIONS = [
+        ('manual_then_heuristic',
+         'Manual annotation (fall back to heuristic)'),
+        ('heuristic_only',
+         'Heuristic only (profile_v1)'),
+        ('manual_only',
+         'Manual annotation only (greyed if unrated)'),
+        ('model_only',
+         f'Trained model only ({MORPHOLOGY_MODEL_NAME})'),
+    ]
+    src_select = bokeh.models.Select(
+        title='Severity source (cell colour)',
+        value='manual_then_heuristic',
+        options=SRC_OPTIONS, width=380)
+
+    # Annotator filter — only meaningful for the manual_* sources. With
+    # multiple raters we want to be explicit about *whose* labels.
+    annotator_options = ['(any annotator)'] + sorted(set(
+        SomiteAnnotation.objects.values_list('annotator', flat=True).distinct()
+    ))
+    annotator_select = bokeh.models.Select(
+        title='Annotator (for manual sources)',
+        value=annotator_options[0],
+        options=annotator_options, width=200)
+
+    drug_input = bokeh.models.TextInput(
+        title='Drug filter (substring, empty = all)',
+        value='', width=260)
+
+    sort_select = bokeh.models.Select(
+        title='Sort fish by',
+        value='drug',
+        options=[
+            ('drug',       'drug name then concentration'),
+            ('well',       'well position'),
+            ('n_bad_desc', 'most-defective first'),
+            ('n_bad_asc',  'least-defective first'),
+        ],
+        width=240)
+
+    load_button = bokeh.models.Button(
+        label='Load overview',
+        button_type='primary', width=140)
+
+    summary_div = bokeh.models.Div(
+        text='<i>Pick an experiment, then press Load overview.</i>',
+        width=1280, styles={'font-size': '13px'})
+
+    # ---- Strip plot ----
+    # One circle per detected somite, at (ap_position, fish_row_index),
+    # colour = severity. Tap selects a fish → drill-in.
+    strip_src = bokeh.models.ColumnDataSource(dict(
+        x=[], y=[], color=[],
+        well=[], drug=[], total=[], bad=[], dest_id=[]))
+    strip_fig = bokeh.plotting.figure(
+        title='Per-fish AP severity pattern — tap a row to drill in',
+        width=1100, height=600,
+        x_range=(-0.02, 1.02), y_range=(0, 1),
+        tools='tap,reset,save,pan,wheel_zoom',
+        toolbar_location='right',
+        x_axis_label='AP position (0 = head, 1 = tail)',
+        y_axis_label='fish (row index)')
+    strip_fig.circle(
+        x='x', y='y', color='color', size=9, alpha=0.85,
+        source=strip_src,
+        selection_color='#33aaff', nonselection_alpha=0.6)
+    strip_fig.add_tools(bokeh.models.HoverTool(
+        tooltips=[
+            ('well',  '@well'),
+            ('drug',  '@drug'),
+            ('counts (total / bad)', '@total / @bad'),
+            ('ap',    '@x{0.00}'),
+        ]))
+
+    # Row-axis ticks: each row's label = "well · drug @ conc". We
+    # populate this at load time by setting strip_fig.yaxis.major_label_overrides.
+
+    # ---- Detail pane ----
+    detail_header = bokeh.models.Div(
+        text='<i>Tap any circle in the overview to drill into that fish.</i>',
+        width=1100, styles={'font-size': '14px', 'margin-top': '10px'})
+
+    # Straightened image with per-somite bbox + centerline overlays.
+    img_fig_src = bokeh.models.ColumnDataSource(dict(image=[], dw=[], dh=[]))
+    img_bbox_src = bokeh.models.ColumnDataSource(
+        dict(left=[], right=[], top=[], bottom=[], color=[]))
+    img_line_src = bokeh.models.ColumnDataSource(
+        dict(xs=[], ys=[], color=[]))
+    img_fig = bokeh.plotting.figure(
+        title='Straightened well — severity overlays at each detected somite',
+        width=1100, height=240,
+        x_range=(0, 1), y_range=(0, 1),
+        tools='pan,wheel_zoom,reset,save', toolbar_location='right')
+    img_fig.image(image='image', x=0, y=0, dw='dw', dh='dh',
+                  source=img_fig_src, palette='Greys256')
+    img_fig.quad(left='left', right='right', top='top', bottom='bottom',
+                 source=img_bbox_src,
+                 fill_alpha=0, line_color='color', line_width=2)
+    img_fig.multi_line(xs='xs', ys='ys', line_color='color',
+                       line_width=2, alpha=0.75, source=img_line_src)
+    img_fig.xaxis.visible = False; img_fig.yaxis.visible = False
+
+    # AP severity curve: x = ap_position, y = severity score, coloured.
+    ap_src = bokeh.models.ColumnDataSource(
+        dict(x=[], y=[], color=[], idx=[]))
+    ap_fig = bokeh.plotting.figure(
+        title='AP severity profile — y = severity (0=healthy, 3=severe)',
+        width=700, height=240,
+        x_range=(-0.02, 1.02), y_range=(-0.5, 3.5),
+        tools='reset,save', toolbar_location='right',
+        x_axis_label='AP position', y_axis_label='severity')
+    ap_fig.line(x='x', y='y', source=ap_src,
+                 line_color='#888', line_dash='dashed', alpha=0.5)
+    ap_fig.scatter(x='x', y='y', color='color', size=11, alpha=0.9,
+                    source=ap_src)
+    ap_fig.add_tools(bokeh.models.HoverTool(tooltips=[
+        ('somite idx', '@idx'),
+        ('ap',         '@x{0.00}'),
+        ('severity',   '@y'),
+    ]))
+
+    detail_info_div = bokeh.models.Div(text='', width=380)
+
+    # ---- Aggregate band (round 3) ----
+    # Confusion matrix between manual annotation and profile_v1 heuristic.
+    # Rendered as a coloured HTML table inside a Div so we get colour
+    # intensity proportional to cell count without a second Bokeh figure.
+    confusion_div = bokeh.models.Div(
+        text='<i>Aggregate stats appear after Load.</i>',
+        width=520, styles={'font-size': '12px'})
+
+    # Per-drug defective-fraction strip plot — one dot per fish.
+    drug_strip_src = bokeh.models.ColumnDataSource(
+        dict(drug=[], frac=[], well=[], n_total=[], n_bad=[]))
+    drug_strip_fig = bokeh.plotting.figure(
+        title='Defective fraction per fish, grouped by drug (lower = healthier)',
+        width=1100, height=340,
+        x_range=bokeh.models.FactorRange(factors=['(no data)']),
+        y_range=(-0.02, 1.05),
+        tools='reset,save', toolbar_location='right',
+        y_axis_label='n_bad / n_total (from profile_v1 heuristic)')
+    drug_strip_fig.scatter(
+        x='drug', y='frac', source=drug_strip_src,
+        size=9, alpha=0.7, color='#5b8dee',
+        marker='circle')
+    drug_strip_fig.add_tools(bokeh.models.HoverTool(tooltips=[
+        ('well',  '@well'),
+        ('drug',  '@drug'),
+        ('counts (total/bad)', '@n_total / @n_bad'),
+        ('frac defective', '@frac{0.00}'),
+    ]))
+    drug_strip_fig.xaxis.major_label_orientation = 0.7  # ~45° in radians
+
+    # Severity composition per drug — stacked bar of (healthy / mild /
+    # moderate / severe) fractions across all somites of all fish on
+    # that drug+concentration. The direct "is this drug curing?" view:
+    # compare a treatment's bar to control's, see if green has grown.
+    severity_comp_src = bokeh.models.ColumnDataSource(dict(
+        drug=[], healthy=[], mild=[], moderate=[], severe=[],
+        n_fish=[], n_somites=[]))
+    severity_comp_fig = bokeh.plotting.figure(
+        title='Severity composition per drug — fractions across all somites '
+              '(green more = treatment effect)',
+        width=1100, height=340,
+        x_range=bokeh.models.FactorRange(factors=['(no data)']),
+        y_range=(0, 1.0),
+        tools='reset,save', toolbar_location='right',
+        y_axis_label='fraction of somites')
+    sev_stack = severity_comp_fig.vbar_stack(
+        ['healthy', 'mild', 'moderate', 'severe'],
+        x='drug', width=0.72,
+        color=[SEV_COLORS[0], SEV_COLORS[1], SEV_COLORS[2], SEV_COLORS[3]],
+        source=severity_comp_src,
+        legend_label=['healthy', 'mild', 'moderate', 'severe'],
+        line_color=None)
+    severity_comp_fig.add_tools(bokeh.models.HoverTool(
+        tooltips=[
+            ('drug', '@drug'),
+            ('n fish', '@n_fish'),
+            ('n somites', '@n_somites'),
+            ('healthy', '@healthy{0.00}'),
+            ('mild',    '@mild{0.00}'),
+            ('moderate','@moderate{0.00}'),
+            ('severe',  '@severe{0.00}'),
+        ],
+        renderers=sev_stack))
+    severity_comp_fig.xaxis.major_label_orientation = 0.7
+    severity_comp_fig.legend.location = 'top_right'
+    severity_comp_fig.legend.click_policy = 'hide'
+
+    # ---- State + helpers ----
+    state = {
+        'rows': [],             # list of dicts, one per fish, in display order
+        'straight_cache': {},   # dest_well_id -> straightened np.ndarray
+    }
+
+    def _drug_str_for_dest(dest):
+        sw = getattr(dest, 'source_well', None)
+        if sw is None:
+            return '(no drug / control)'
+        drugs = list(sw.drugs.all())
+        if not drugs:
+            return '(no drug / control)'
+        return ', '.join(
+            f'{d.derivation_name or d.slims_id} @ {d.concentration}µM'
+            for d in drugs)
+
+    def _drug_sort_key(dest):
+        sw = getattr(dest, 'source_well', None)
+        if sw is None:
+            return ('', 0.0)
+        drugs = list(sw.drugs.all())
+        if not drugs:
+            return ('', 0.0)
+        d = drugs[0]
+        return (d.derivation_name or d.slims_id or '',
+                float(d.concentration or 0.0))
+
+    # Distinct grey for somites the trained model REJECTED — different
+    # from the unrated grey, so model-only viewers can tell "I was
+    # filtered out by reject head" from "no prediction available".
+    MODEL_REJECT_COLOR = '#444444'
+
+    def _severity_for_somite(somite, prior_row, source, v2_lookup=None):
+        """Return (severity_int, color, has_label_bool) for the cell.
+
+        `prior_row` is the SomiteAnnotation for this (dest, idx, annotator)
+        or None. `v2_lookup` is `(kept_dict_by_idx, rejected_idx_set)` for
+        the current fish's profile_v2 prediction, or None if no v2
+        prediction exists for this fish."""
+        heur = int(somite.get('severity', 0))
+        manual = None
+        if (prior_row is not None
+                and prior_row.box_quality == 'single'
+                and prior_row.severity is not None):
+            manual = int(prior_row.severity)
+
+        if source == 'heuristic_only':
+            return heur, SEV_COLORS.get(heur, '#888888'), True
+        if source == 'manual_only':
+            if manual is None:
+                return -1, '#cccccc', False
+            return manual, SEV_COLORS[manual], True
+        if source == 'manual_then_heuristic':
+            if manual is not None:
+                return manual, SEV_COLORS[manual], True
+            return heur, SEV_COLORS.get(heur, '#888888'), True
+        if source == 'model_only':
+            # Look up profile_v2's verdict for this (dest, somite_idx).
+            if v2_lookup is None:
+                # No v2 prediction at all for this fish → blank.
+                return -1, '#cccccc', False
+            kept_by_idx, rejected_set = v2_lookup
+            si = int(somite.get('index', -1))
+            kept = kept_by_idx.get(si)
+            if kept is not None:
+                sev = int(kept.get('severity', 0))
+                return sev, SEV_COLORS.get(sev, '#888888'), True
+            if si in rejected_set:
+                # Model rejected this candidate — show as distinct dark
+                # grey so it's visually different from "no model" grey.
+                return -1, MODEL_REJECT_COLOR, True
+            # Index not in v2 at all (e.g. patch was out of bounds): blank.
+            return -1, '#cccccc', False
+        return heur, SEV_COLORS.get(heur, '#888888'), True
+
+    def _do_load():
+        exp = exp_select.value
+        source = src_select.value
+        drug_filter = drug_input.value.strip().lower()
+        sort_mode = sort_select.value
+        annotator_sel = annotator_select.value
+        annotator_filter = (None if annotator_sel == '(any annotator)'
+                            else annotator_sel)
+
+        # Pull profile_v1 predictions for the experiment.
+        preds = (DestWellPropertiesPredicted.objects
+                 .filter(model_name='profile_v1',
+                         per_somite_data__isnull=False,
+                         dest_well__well_plate__experiment__name=exp)
+                 .select_related('dest_well__well_plate__experiment'))
+        preds = list(preds)
+        if not preds:
+            summary_div.text = (
+                f'<b>No <code>profile_v1</code> predictions for {exp}.</b> '
+                f'Run <code>python manage.py batch_profile_predict '
+                f'--experiment {exp}</code> first.')
+            strip_src.data = dict(x=[], y=[], color=[], well=[], drug=[],
+                                   total=[], bad=[], dest_id=[])
+            return
+
+        # Filter by drug substring (looks at source_well.drugs).
+        if drug_filter:
+            kept = []
+            for p in preds:
+                sw = getattr(p.dest_well, 'source_well', None)
+                if sw is None:
+                    continue
+                names = ' '.join(
+                    f'{d.derivation_name or ""} {d.slims_id or ""}'
+                    for d in sw.drugs.all()).lower()
+                if drug_filter in names:
+                    kept.append(p)
+            preds = kept
+
+        # Sort
+        if sort_mode == 'drug':
+            preds.sort(key=lambda p: (_drug_sort_key(p.dest_well),
+                                      str(p.dest_well)))
+        elif sort_mode == 'well':
+            preds.sort(key=lambda p: (p.dest_well.well_plate.plate_number,
+                                      p.dest_well.position_row,
+                                      int(p.dest_well.position_col or 0)))
+        elif sort_mode == 'n_bad_desc':
+            preds.sort(key=lambda p: -(p.n_bad_somites or 0))
+        elif sort_mode == 'n_bad_asc':
+            preds.sort(key=lambda p: (p.n_bad_somites or 0))
+
+        # Pre-fetch all SomiteAnnotation rows for these wells in one query.
+        dest_ids = [p.dest_well_id for p in preds]
+        annot_qs = SomiteAnnotation.objects.filter(dest_well_id__in=dest_ids)
+        if annotator_filter is not None:
+            annot_qs = annot_qs.filter(annotator=annotator_filter)
+        manual_lookup = {}      # (dest_id, somite_idx) -> SomiteAnnotation
+        for a in annot_qs:
+            manual_lookup[(a.dest_well_id, a.somite_index)] = a
+
+        # Pre-fetch profile_v2 predictions (one row per dest, when present).
+        # Build per-fish v2 lookup: dest_id -> (kept_by_idx, rejected_idx_set).
+        v2_by_dest = {}
+        for v2 in DestWellPropertiesPredicted.objects.filter(
+            model_name=MORPHOLOGY_MODEL_NAME,
+            per_somite_data__isnull=False,
+            dest_well_id__in=dest_ids,
+        ):
+            psd = v2.per_somite_data or {}
+            kept_by_idx = {
+                int(s.get('index', -1)): s
+                for s in (psd.get('somites') or [])
+            }
+            rejected_set = {
+                int(s.get('index', -1))
+                for s in (psd.get('rejected_candidates') or [])
+            }
+            v2_by_dest[v2.dest_well_id] = (kept_by_idx, rejected_set)
+        state['v2_by_dest'] = v2_by_dest
+
+        xs, ys, colors = [], [], []
+        wells, drug_labels, totals, bads, dest_ids_out = [], [], [], [], []
+        y_label_overrides = {}
+        rows = []
+
+        for row_i, p in enumerate(preds):
+            dest = p.dest_well
+            psd = p.per_somite_data or {}
+            somites = psd.get('somites') or []
+            well_label = (f'P{dest.well_plate.plate_number} '
+                          f'{dest.position_row}{int(dest.position_col):02d}')
+            drug_label = _drug_str_for_dest(dest)
+            y_label_overrides[row_i] = f'{well_label} · {drug_label[:40]}'
+            rows.append({
+                'dest_id': dest.id,
+                'well_label': well_label,
+                'drug_label': drug_label,
+                'plate_n':  dest.well_plate.plate_number,
+                'row':      dest.position_row,
+                'col':      int(dest.position_col),
+                'n_total':  p.n_total_somites,
+                'n_bad':    p.n_bad_somites,
+            })
+            for s in somites:
+                ap = float(s.get('ap_position', -1))
+                if ap < 0 or ap > 1.05:
+                    continue
+                si = int(s.get('index', -1))
+                prior = manual_lookup.get((dest.id, si))
+                _, col, _has = _severity_for_somite(
+                    s, prior, source, v2_by_dest.get(dest.id))
+                xs.append(ap)
+                ys.append(row_i)
+                colors.append(col)
+                wells.append(well_label)
+                drug_labels.append(drug_label)
+                totals.append(p.n_total_somites)
+                bads.append(p.n_bad_somites)
+                dest_ids_out.append(dest.id)
+
+        state['rows'] = rows
+        strip_src.data = dict(x=xs, y=ys, color=colors,
+                               well=wells, drug=drug_labels,
+                               total=totals, bad=bads, dest_id=dest_ids_out)
+        strip_fig.y_range.start = -0.5
+        strip_fig.y_range.end = max(len(rows) - 0.5, 0.5)
+        strip_fig.yaxis.major_label_overrides = {
+            float(k): v for k, v in y_label_overrides.items()}
+        strip_fig.yaxis.ticker = list(y_label_overrides.keys())
+        strip_fig.height = max(300, min(2400, 30 + 18 * len(rows)))
+
+        summary_div.text = (
+            f'<b>{exp}</b>: {len(rows)} fish, {len(xs)} somites plotted '
+            f'(source = <code>{source}</code>). Click any row to drill in.')
+
+        # ---- Aggregate band ----
+        # 1) Per-fish defective-fraction strip plot, grouped by drug.
+        ds_drug, ds_frac, ds_well, ds_total, ds_bad = [], [], [], [], []
+        # Stable drug ordering: alphabetic by drug name, then concentration.
+        rows_by_drug = sorted(
+            rows, key=lambda r: r['drug_label'])
+        drug_factors = []
+        seen = set()
+        for r in rows_by_drug:
+            t = r['n_total'] or 0
+            b = r['n_bad'] or 0
+            frac = (b / t) if t > 0 else 0.0
+            ds_drug.append(r['drug_label'])
+            ds_frac.append(frac)
+            ds_well.append(r['well_label'])
+            ds_total.append(t)
+            ds_bad.append(b)
+            if r['drug_label'] not in seen:
+                drug_factors.append(r['drug_label'])
+                seen.add(r['drug_label'])
+        drug_strip_src.data = dict(
+            drug=ds_drug, frac=ds_frac, well=ds_well,
+            n_total=ds_total, n_bad=ds_bad)
+        drug_strip_fig.x_range.factors = drug_factors or ['(no data)']
+
+        # 1b) Severity composition per drug — fractions of all somites
+        # in each class, using the chosen severity source so the view
+        # stays consistent with the strip plot above.
+        # First, group dest_wells by drug.
+        wells_by_drug = defaultdict(list)
+        for r in rows_by_drug:
+            wells_by_drug[r['drug_label']].append(r['dest_id'])
+        # For each drug, walk every somite of every fish and tally by
+        # severity. Skip somites with no label under the current source
+        # (greyed in the strip view) — they shouldn't dilute the bar.
+        # Also skip the model-rejected ones (sev_int=-1 with the dark
+        # grey colour); they're audit info, not a real severity vote.
+        sc_drug, sc_h, sc_m, sc_mod, sc_sev = [], [], [], [], []
+        sc_n_fish, sc_n_somites = [], []
+        per_pred_by_dest = {p.dest_well_id: p for p in preds}
+        for drug_label in drug_factors:
+            cnt = [0, 0, 0, 0]  # healthy, mild, moderate, severe
+            total = 0
+            for dest_id in wells_by_drug[drug_label]:
+                p_here = per_pred_by_dest.get(dest_id)
+                if p_here is None:
+                    continue
+                for s_ in ((p_here.per_somite_data or {})
+                           .get('somites') or []):
+                    si_here = int(s_.get('index', -1))
+                    prior_here = manual_lookup.get((dest_id, si_here))
+                    sev_int_here, _col_here, has_label_here = (
+                        _severity_for_somite(
+                            s_, prior_here, source,
+                            v2_by_dest.get(dest_id)))
+                    if (not has_label_here
+                        or sev_int_here is None
+                        or sev_int_here < 0
+                        or sev_int_here > 3):
+                        continue
+                    cnt[sev_int_here] += 1
+                    total += 1
+            if total == 0:
+                continue
+            sc_drug.append(drug_label)
+            sc_h.append(cnt[0] / total)
+            sc_m.append(cnt[1] / total)
+            sc_mod.append(cnt[2] / total)
+            sc_sev.append(cnt[3] / total)
+            sc_n_fish.append(len(wells_by_drug[drug_label]))
+            sc_n_somites.append(total)
+        severity_comp_src.data = dict(
+            drug=sc_drug,
+            healthy=sc_h, mild=sc_m, moderate=sc_mod, severe=sc_sev,
+            n_fish=sc_n_fish, n_somites=sc_n_somites)
+        severity_comp_fig.x_range.factors = sc_drug or ['(no data)']
+
+        # 2) Confusion matrix — manual annotation vs profile_v1 heuristic,
+        # at the somite level. Filters: same annotator/experiment as the
+        # strip plot. Only rows with box_quality='single' and a real
+        # severity contribute.
+        ann_qs = SomiteAnnotation.objects.filter(
+            dest_well__well_plate__experiment__name=exp,
+            box_quality='single',
+            severity__isnull=False,
+        )
+        if annotator_filter is not None:
+            ann_qs = ann_qs.filter(annotator=annotator_filter)
+        # Build (dest_id, somite_idx) -> heuristic severity lookup from
+        # the predictions we've already pulled. Cheaper than re-querying.
+        heur_lookup = {}
+        for p in preds:
+            for s in (p.per_somite_data or {}).get('somites', []) or []:
+                si = int(s.get('index', -1))
+                if si >= 0:
+                    heur_lookup[(p.dest_well_id, si)] = int(s.get('severity', 0))
+        cm = np.zeros((4, 4), dtype=int)
+        unmatched = 0
+        for a in ann_qs:
+            h = heur_lookup.get((a.dest_well_id, a.somite_index))
+            if h is None:
+                unmatched += 1
+                continue
+            cm[a.severity, h] += 1
+        # Render as an HTML colour table.
+        max_v = int(cm.max()) if cm.max() > 0 else 1
+        diag = int(cm.trace()); total_cm = int(cm.sum())
+        agree = (100.0 * diag / total_cm) if total_cm else 0.0
+        cells_html = []
+        for i in range(4):
+            row_cells = []
+            for j in range(4):
+                v = int(cm[i, j])
+                alpha = min(0.85, (v / max_v) if max_v else 0.0)
+                if i == j:
+                    bg = f'rgba(26,152,80,{alpha:.2f})'
+                else:
+                    bg = f'rgba(215,48,39,{alpha:.2f})'
+                row_cells.append(
+                    f'<td style="background:{bg}; text-align:center; '
+                    f'padding:4px 10px; min-width:40px;">{v}</td>')
+            cells_html.append(
+                f'<tr><th style="text-align:right; padding:4px 10px; '
+                f'color:#555">true {SEV_LABELS[i]}</th>'
+                f'{"".join(row_cells)}</tr>')
+        header_row = ('<tr><th></th>' +
+                      ''.join(f'<th style="text-align:center; padding:4px 10px; '
+                              f'color:#555">heur {SEV_LABELS[j]}</th>'
+                              for j in range(4)) + '</tr>')
+        if total_cm == 0:
+            confusion_div.text = (
+                '<i>No manual annotations in this experiment yet — '
+                'confusion matrix is empty.</i>')
+        else:
+            confusion_div.text = (
+                f'<b>Confusion matrix</b> — manual annotation (rows) vs '
+                f'profile_v1 heuristic (cols), n={total_cm}'
+                f'{f", {unmatched} unmatched" if unmatched else ""}<br>'
+                f'<table style="border-collapse:collapse; font-size:12px; '
+                f'margin-top:6px;">'
+                f'{header_row}{"".join(cells_html)}</table>'
+                f'<div style="margin-top:6px; color:#555">'
+                f'Diagonal agreement: <b>{agree:.1f}%</b> '
+                f'({diag} of {total_cm}). '
+                f'Green = agreement, red = disagreement, intensity = count.'
+                f'</div>')
+
+    load_button.on_click(_do_load)
+
+    # ---- Detail pane: image with overlays + AP curve + counts ----
+    def _yfp_path_for_dest(dest):
+        """Same path-probing pattern as the other dashboards. Returns
+        the canonicalised YFP image path or None."""
+        try:
+            col = int(dest.position_col)
+        except (TypeError, ValueError):
+            return None
+        plate = dest.well_plate
+        exp_name = plate.experiment.name
+        for cand in (LOCALPATH_RAID5, LOCALPATH_HIVE, LOCALPATH_CH):
+            well_dir = os.path.join(
+                cand, exp_name, 'Leica images',
+                f'Plate {plate.plate_number}',
+                f'Well_{dest.position_row}{col:02d}',
+                'corrected_orientation')
+            if os.path.isdir(well_dir):
+                files = glob.glob(os.path.join(well_dir, '*YFP*.tiff'))
+                files = [f for f in files
+                         if 'norm' not in os.path.basename(f).lower()]
+                if files:
+                    return files[0]
+        return None
+
+    def _render_detail(dest_id):
+        """Populate the detail pane for one fish."""
+        dest = DestWellPosition.objects.filter(id=dest_id).first()
+        if dest is None:
+            detail_header.text = ('<b style="color:#c00">'
+                                  'Dest well not found.</b>')
+            return
+        pred = (DestWellPropertiesPredicted.objects
+                .filter(dest_well=dest, model_name='profile_v1')
+                .first())
+        if pred is None or not pred.per_somite_data:
+            detail_header.text = ('<b style="color:#c00">'
+                                  f'No profile_v1 data for this fish.</b>')
+            return
+
+        # Straightened image — cached per well (the polyfit costs ~500ms).
+        straight = state['straight_cache'].get(dest_id)
+        if straight is None:
+            yfp = _yfp_path_for_dest(dest)
+            if yfp is None:
+                detail_header.text = ('<b style="color:#c00">'
+                                      'No YFP image found on any LOCALPATH.</b>')
+                return
+            try:
+                straight, _ = straighten_yfp(yfp)
+            except Exception as e:
+                detail_header.text = (f'<b style="color:#c00">'
+                                      f'Straighten failed: {e}</b>')
+                return
+            # Bound the cache so we don't OOM on a long session.
+            if len(state['straight_cache']) > 10:
+                state['straight_cache'].pop(
+                    next(iter(state['straight_cache'])))
+            state['straight_cache'][dest_id] = straight
+
+        sh_local, sw_local = straight.shape
+        img_fig_src.data = dict(image=[np.flipud(straight)],
+                                 dw=[sw_local], dh=[sh_local])
+        img_fig.x_range.start = 0; img_fig.x_range.end = sw_local
+        img_fig.y_range.start = 0; img_fig.y_range.end = sh_local
+
+        # Per-somite overlays — same severity-source logic as the strip
+        # plot, so the two views are visually consistent.
+        annot_sel = annotator_select.value
+        annot_filter = (None if annot_sel == '(any annotator)' else annot_sel)
+        manual_qs = SomiteAnnotation.objects.filter(dest_well=dest)
+        if annot_filter is not None:
+            manual_qs = manual_qs.filter(annotator=annot_filter)
+        manual_lookup = {a.somite_index: a for a in manual_qs}
+
+        source = src_select.value
+        somites = (pred.per_somite_data or {}).get('somites') or []
+        lefts, rights, tops, bottoms, colors = [], [], [], [], []
+        line_xs, line_ys, line_colors = [], [], []
+        ap_x, ap_y, ap_col, ap_idx = [], [], [], []
+        for s in somites:
+            bb = s.get('bbox') or []
+            if len(bb) != 4:
+                continue
+            x0, y0, x1, y1 = (int(v) for v in bb)
+            si = int(s.get('index', -1))
+            sev_int, col, has_label = _severity_for_somite(
+                s, manual_lookup.get(si), source,
+                state.get('v2_by_dest', {}).get(dest.id))
+            lefts.append(x0); rights.append(x1)
+            tops.append(sh_local - y0); bottoms.append(sh_local - y1)
+            colors.append(col)
+            cx = float(s.get('centroid_x', (x0 + x1) / 2))
+            line_xs.append([cx, cx])
+            line_ys.append([0, sh_local])
+            line_colors.append(col)
+            if has_label and sev_int >= 0:
+                ap_x.append(float(s.get('ap_position', -1)))
+                ap_y.append(int(sev_int))
+                ap_col.append(col)
+                ap_idx.append(si)
+
+        img_bbox_src.data = dict(left=lefts, right=rights,
+                                  top=tops, bottom=bottoms,
+                                  color=colors)
+        img_line_src.data = dict(xs=line_xs, ys=line_ys, color=line_colors)
+
+        order = sorted(range(len(ap_x)), key=lambda i: ap_x[i])
+        ap_src.data = dict(
+            x=[ap_x[i] for i in order],
+            y=[ap_y[i] for i in order],
+            color=[ap_col[i] for i in order],
+            idx=[ap_idx[i] for i in order],
+        )
+
+        # Header
+        drug_html = _drug_str_for_dest(dest)
+        n_rated = sum(1 for a in manual_lookup.values()
+                      if a.box_quality == 'single' and a.severity is not None)
+        detail_header.text = (
+            f'<div style="font-size:14px; line-height:1.5;">'
+            f'<b>Plate {dest.well_plate.plate_number} &middot; '
+            f'Well {dest.position_row}{int(dest.position_col):02d}</b> '
+            f'&nbsp; <i>{drug_html}</i><br>'
+            f'<b>{len(somites)}</b> somites detected &middot; '
+            f'<b>{n_rated}</b> rated by annotator &middot; '
+            f'<b>colour source:</b> <code>{source}</code>'
+            f'</div>')
+
+        # Side card: counts + body length + spacing
+        manual_dwp = DestWellProperties.objects.filter(dest_well=dest).first()
+        rn = latest_prediction(dest, model_name=RESNET_MODEL_NAME)
+        v2_pred = latest_prediction(dest, model_name=MORPHOLOGY_MODEL_NAME)
+        body_len = (pred.per_somite_data or {}).get('body_length')
+        body_len_html = (f'{body_len:.0f} px' if body_len else '—')
+        if len(somites) >= 2:
+            xs_sorted = sorted(float(s.get('centroid_x', 0)) for s in somites)
+            diffs = [b - a for a, b in zip(xs_sorted, xs_sorted[1:])]
+            spacing_html = (
+                f'median {float(np.median(diffs)):.0f} px &middot; '
+                f'min {float(min(diffs)):.0f} &middot; '
+                f'max {float(max(diffs)):.0f}')
+        else:
+            spacing_html = '—'
+
+        def _ct(t, b):
+            def s_(v):
+                return '—' if v is None or v == -9999 else str(v)
+            return f'{s_(t)} / {s_(b)}'
+
+        detail_info_div.text = (
+            f'<div style="font-size:13px; line-height:1.7;">'
+            f'<b>Counts (total / bad)</b><br>'
+            f'&nbsp;manual: <b>{_ct(manual_dwp.n_total_somites if manual_dwp else None, manual_dwp.n_bad_somites if manual_dwp else None)}</b><br>'
+            f'&nbsp;resnet: <b>{_ct(rn.n_total_somites if rn else None, rn.n_bad_somites if rn else None)}</b><br>'
+            f'&nbsp;profile_v1: <b>{_ct(pred.n_total_somites, pred.n_bad_somites)}</b><br>'
+            f'&nbsp;profile_v2: <b>{_ct(v2_pred.n_total_somites if v2_pred else None, v2_pred.n_bad_somites if v2_pred else None)}</b><br>'
+            f'<br>'
+            f'<b>Body length</b>: {body_len_html}<br>'
+            f'<b>Somite spacing</b>: {spacing_html}'
+            f'</div>')
+
+        state['current_detail_dest_id'] = dest_id
+
+    def _on_tap(attr, old, new):
+        if not new:
+            return
+        idx = new[0]
+        dest_id = strip_src.data['dest_id'][idx]
+        _render_detail(dest_id)
+        # Clear the selection so tapping the same row again re-triggers.
+        strip_src.selected.indices = []
+
+    strip_src.selected.on_change('indices', _on_tap)
+
+    def _on_source_change(attr, old, new):
+        """When the user changes the severity source, refresh the
+        currently-displayed detail (cheap). Strip plot reloads on Load
+        button — keeps it explicit."""
+        dest_id = state.get('current_detail_dest_id')
+        if dest_id is not None:
+            _render_detail(dest_id)
+    src_select.on_change('value', _on_source_change)
+    annotator_select.on_change('value', _on_source_change)
+
+    # ---- Layout ----
+    controls = bokeh.layouts.column(
+        bokeh.layouts.row(exp_select, src_select,
+                           annotator_select, drug_input, sort_select),
+        bokeh.layouts.row(load_button))
+    aggregate_header = bokeh.models.Div(
+        text='<div style="font-size:14px; font-weight:600; color:#1a2340; '
+             'border-top:2px solid #5b8dee; margin-top:20px; padding-top:10px;">'
+             'Experiment-wide aggregates</div>',
+        width=1100)
+
+    doc.add_root(bokeh.layouts.column(
+        controls,
+        summary_div,
+        strip_fig,
+        detail_header,
+        img_fig,
+        bokeh.layouts.row(ap_fig, detail_info_div),
+        aggregate_header,
+        bokeh.layouts.row(confusion_div, drug_strip_fig),
+        severity_comp_fig,
+    ))
+
+
+def morphology_eval(request: HttpRequest) -> HttpResponse:
+    """Serve the morphology evaluation dashboard (Bokeh embed)."""
+    script = bokeh.embed.server_document(request.build_absolute_uri())
+    return render(request, 'well_explorer/morphology_eval.html',
+                  {'script': script})

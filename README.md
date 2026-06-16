@@ -486,17 +486,157 @@ By default drops `box_quality != 'single'`, `severity IS NULL`, and
 `lr_offset=True` — pass `--include_lr_offset` / `--include_unsure` if
 you need those for a different training setup.
 
-Still to build:
+Single-head severity classifier — `somiteCounting/training_severity.py`
+reads `manifest.csv`, trains a ResNet18 transfer head on the 4 severity
+classes, writes `checkpoints/severity_best.pth` + per-class metrics.
+Tile-only model (no bbox refinement) — useful as a baseline; `profile_v2`
+(below) supersedes it for production.
 
-- **Classifier training** — a `somiteCounting/training_severity.py` that
-  reads `manifest.csv` (or `ImageFolder` straight off the class-folder
-  layout) and trains a small CNN. Writes `checkpoints/severity_best.pth`
-  + test metrics. The export already pre-loads the data; the training
-  script just needs the standard ResNet18-transfer pattern from the
-  other classifiers.
-- **Plumb it into `profile_v1`** — replace the neighbour-comparison
-  `_classify_severity` heuristic with a forward pass over each somite's
-  tile through the trained checkpoint.
+```bash
+python -m somiteCounting.training_severity \
+    --manifest data/somite_training_set/manifest.csv \
+    --output_dir checkpoints --epochs 50
+```
+
+## Per-somite multi-head detector + classifier (`profile_v2`)
+
+The single-head severity classifier above takes tight tiles and predicts
+severity only — it relies on `profile_v1` for detection and accepts
+whatever bbox the algorithm gave it. `profile_v2` is the upgrade: a
+**multi-head ResNet18** that takes wide 224×224 patches and outputs
+both a refined bbox **and** a 5-class severity (including a `reject`
+class for false-positive detections). Same backbone, two heads:
+
+- **Severity head** — `healthy / mild / moderate / severe / reject`.
+  The `reject` class lets us run `profile_v1` with looser
+  `peak_prominence` to catch missed tail somites: the reject head filters
+  out the chaff.
+- **Bbox-regression head** — predicts `(cx, cy, w, h)` of the refined
+  bbox in patch coordinates (0–1 sigmoid). Smooth-L1 loss against the
+  annotator's labelled `bbox` from `SomiteAnnotation`.
+
+All `SomiteAnnotation` rows with `box_quality='single'` (severity classes
+0–3) and `box_quality='empty'` (reject class) contribute. Other rows
+(`multiple`, `mispositioned`, unsure singles) are excluded as ambiguous.
+Bbox supervision uses **every** `bbox`-populated row regardless of
+`bbox_edited` — the head learns the somite-from-pixels mapping from all
+of them, with hand-corrected boxes providing the harder examples.
+
+### Full pipeline runbook
+
+The end-to-end flow has four phases. Each is independent — run as your
+annotations accumulate.
+
+**Phase A — Apply pending migrations** (one-time per machine):
+
+```bash
+python manage.py migrate well_mapping
+# Lands 0040 (corrected_bbox cleanup), 0041 (bbox/bbox_edited
+# self-contained), 0042 (FishAnnotationFlag).
+```
+
+**Phase B — Annotate** (ongoing):
+
+Use `/well_explorer/annotate_somites`. Aim for ≥100 per severity class
+before training is meaningful. Mild + moderate will be hardest to fill —
+bias toward fish where `profile_v1`'s `n_bad_somites` is roughly half
+of `n_total`. Check progress at any time:
+
+```bash
+python manage.py annotation_stats
+python manage.py annotation_stats --annotator clement --experiment VAST_2026-05
+```
+
+**Phase C — Train `profile_v2`**:
+
+```bash
+# 1. Export wide patches + multi-task labels
+python manage.py export_training_set_v2 \
+    --output_dir data/profile_v2_training_set \
+    --patch_size 224
+
+# 2. Train the multi-head model (writes checkpoints/profile_v2_best.pth
+#    + checkpoints/profile_v2_test_metrics.json)
+python -m somiteCounting.training_profile_v2 \
+    --manifest data/profile_v2_training_set/manifest_v2.csv \
+    --output_dir checkpoints \
+    --epochs 50 --lambda_bbox 1.0
+```
+
+Hyperparameter knobs: `--lambda_bbox` weights the bbox-regression loss
+against the severity-CE loss (default 1.0; raise if you want sharper
+boxes, lower if class balance is the bottleneck). `--patch_size` defaults
+to 224 to match ResNet input; only change if you also change the export.
+The script warns if any class has <5 train samples and writes nothing
+to disk for the test set when there are no test fish (rare — needs
+≥7 wells).
+
+**Phase D — Run `profile_v2` inference**:
+
+```bash
+# Smoke test first — dry run on 5 wells
+python manage.py predict_profile_v2 --limit 5 --dry_run
+
+# Real run — every well that has a profile_v1 prediction
+python manage.py predict_profile_v2
+
+# Variants
+python manage.py predict_profile_v2 --experiment VAST_2026-05 --plate 2
+python manage.py predict_profile_v2 --overwrite      # re-run for all wells
+python manage.py predict_profile_v2 --checkpoint checkpoints/profile_v2_v3.pth
+```
+
+After this, `DestWellPropertiesPredicted` carries `profile_v2` rows
+alongside `profile_v1`. Each `profile_v2` row's `per_somite_data`
+contains:
+
+- `somites` — accepted candidates (severity 0–3) with refined bbox,
+  centroid, AP position, and the 5-element softmax in `severity_probs`
+- `rejected_candidates` — audit list of dropped candidates with the
+  reject-class probability
+- `body_length`, `algorithm_params` (checkpoint path, patch size)
+
+**Closing the missing-tail gap**: re-run `batch_profile_predict` with a
+looser `peak_prominence` so more candidates are proposed, then
+`predict_profile_v2` will use the reject head to filter:
+
+```bash
+python manage.py batch_profile_predict --peak_prominence 0.01 --overwrite
+python manage.py predict_profile_v2 --overwrite
+```
+
+**Phase E — Visualise + sanity-check**:
+
+Open `/well_explorer/morphology_eval` and **Load** an experiment.
+Switch the severity-source dropdown to `Trained model only
+(profile_v2)`. You should now see coloured dots from the trained
+model, with dark-grey dots for somites the reject head filtered out.
+Click any row to drill into a fish: straightened image with refined
+bbox overlays, AP severity curve, side card showing
+manual / resnet / `profile_v1` / `profile_v2` counts side-by-side.
+The aggregate band at the bottom carries the confusion matrix
+(manual vs `profile_v1` heuristic) and the per-drug defective-fraction
+strip plot.
+
+### Iterating
+
+Each time you add more annotations:
+
+```bash
+# 1. Re-export (picks up new annotations + edited bboxes)
+python manage.py export_training_set_v2 --overwrite
+
+# 2. Re-train
+python -m somiteCounting.training_profile_v2 \
+    --manifest data/profile_v2_training_set/manifest_v2.csv
+
+# 3. Re-run inference
+python manage.py predict_profile_v2 --overwrite
+```
+
+The annotation dashboard, the morphology_eval dashboard, the export, and
+the training pipeline all read from the same `SomiteAnnotation` table —
+no manifest copies to keep in sync.
 
 ## Roadmap
 
