@@ -4811,8 +4811,8 @@ pre-filled from your prior value when you navigate back.
 Narrower / Taller / Shorter) buttons to nudge the red bbox by 5 px each
 click. The tile + dashed-orange tile area refresh automatically after
 every nudge. <b>Reset box to algorithm</b> snaps back. The edit is
-persisted as <code>corrected_bbox</code> only when you click a severity;
-until then everything is reversible.
+persisted as <code>bbox</code> (with <code>bbox_edited=True</code>) only
+when you click a severity; until then everything is reversible.
 
 <br><br><b>Vertical lines on the zoom views</b>: one per OTHER somite in
 the fish, coloured by your annotation (or the algorithm's heuristic if
@@ -4962,20 +4962,19 @@ defects along the AP axis without leaving the current somite.
                     next(iter(state['straight_cache'])))
             state['straight_cache'][dest.id] = straight
 
-        # Effective bbox: a previous human correction (corrected_bbox in
-        # SomiteAnnotation) wins over the algorithm's bbox from
-        # per_somite_data. Editing the rect in the zoom view updates
-        # state['current_bbox']; _record persists it iff it differs from
-        # the algorithm's bbox. (We fetch the SomiteAnnotation row once,
-        # below, and reuse it.)
+        # Effective bbox: a prior SomiteAnnotation row's `bbox` wins over
+        # the algorithm's (the prior row is self-contained — see
+        # migration 0041). Nudge buttons mutate state['current_bbox'];
+        # _record persists it. Algorithm's bbox is kept in
+        # state['algo_bbox'] so Reset / nudge-vs-algo deltas still work.
         sh, sw = straight.shape
         algo_bbox = somite.get('bbox') or [0, 0, 0, 0]
         si_curr = int(somite.get('index', -1))
         annot_curr = annotator_input.value.strip()
         prior_row = SomiteAnnotation.objects.filter(
             dest_well=dest, somite_index=si_curr, annotator=annot_curr).first()
-        if prior_row and prior_row.corrected_bbox:
-            current_bbox = list(prior_row.corrected_bbox)
+        if prior_row and prior_row.bbox:
+            current_bbox = list(prior_row.bbox)
         else:
             current_bbox = list(algo_bbox)
         state['current_bbox'] = current_bbox
@@ -5193,18 +5192,18 @@ defects along the AP axis without leaving the current somite.
         if box_quality != 'single':
             severity = None
         lr_offset = (0 in lr_offset_cb.active)
-        # Persist a corrected_bbox iff the box currently on screen differs
-        # from the algorithm's. Storing NULL when unchanged keeps the table
-        # clean and signals "no human override" to the trainer.
-        cur_bbox = state.get('current_bbox') or []
-        algo_bbox = state.get('algo_bbox') or []
-        corrected = (list(cur_bbox) if cur_bbox and cur_bbox != algo_bbox
-                     else None)
+        # Always persist the bbox currently on screen — that's the
+        # ground-truth pixels the annotator was rating. bbox_edited
+        # flags whether the user nudged it from the algorithm's box.
+        cur_bbox = list(state.get('current_bbox') or [])
+        algo_bbox = list(state.get('algo_bbox') or [])
+        bbox_edited = bool(cur_bbox and cur_bbox != algo_bbox)
         SomiteAnnotation.objects.update_or_create(
             dest_well=dest, somite_index=si, annotator=annot,
             defaults={'severity': severity, 'box_quality': box_quality,
                       'lr_offset': lr_offset,
-                      'corrected_bbox': corrected},
+                      'bbox': cur_bbox,
+                      'bbox_edited': bbox_edited},
         )
         if box_quality != 'single':
             label = f'box:{box_quality}'
@@ -5214,7 +5213,7 @@ defects along the AP axis without leaving the current somite.
             label = SEV_LABELS[severity]
         if lr_offset:
             label += ' + L/R offset'
-        if corrected is not None:
+        if bbox_edited:
             label += ' + bbox edited'
         _set_status(f'Saved {dest.position_row}{int(dest.position_col):02d} '
                     f'#{si} = <b>{label}</b>')
@@ -5276,7 +5275,7 @@ defects along the AP axis without leaving the current somite.
     # Bbox-edit row: nudge buttons. Each click moves or resizes the
     # current bbox by NUDGE_STEP pixels, re-crops immediately, and
     # updates the red box + dashed orange tile area on the contexts.
-    # Severity click is what persists to corrected_bbox; until then,
+    # Severity click is what persists bbox + bbox_edited; until then,
     # nudging is reversible via Reset.
     NUDGE_STEP = 5
 
@@ -5368,8 +5367,8 @@ defects along the AP axis without leaving the current somite.
 
     def _reset_box_to_algo():
         """Snap back to the algorithm's bbox. Doesn't touch the DB —
-        the saved corrected_bbox (if any) is overwritten back to NULL
-        only when you click a severity."""
+        the saved bbox / bbox_edited gets overwritten back to algo only
+        when you click a severity."""
         algo_bbox = state.get('algo_bbox') or []
         if len(algo_bbox) == 4:
             _apply_bbox(algo_bbox)

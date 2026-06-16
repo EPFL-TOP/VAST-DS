@@ -309,16 +309,22 @@ class SomiteAnnotation(models.Model):
         default=False,
         help_text="Left/right chevron halves don't overlap "
                   "(fish not perfectly straight in the imaging).")
-    # If the annotator dragged/resized the bbox in the dashboard, the
-    # corrected coords land here as [x0, y0, x1, y1] in straightened-image
-    # space. NULL = the algorithm's bbox from per_somite_data is fine.
-    # Training and tile-extraction read this column and prefer it over
-    # the algorithm's bbox when present.
-    corrected_bbox = models.JSONField(
-        blank=True, null=True, default=None,
-        help_text="Optional human-edited bbox [x0,y0,x1,y1] in "
-                  "straightened-image coords. NULL = use the algorithm's "
-                  "bbox from per_somite_data.")
+    # The exact bbox the annotator was looking at when they saved this
+    # row. Always populated — copied from per_somite_data at save time
+    # (or set by the dashboard's nudge buttons if the annotator edited
+    # it). Storing it here makes SomiteAnnotation self-contained: no
+    # join + JSON walk needed at training time, and the labelled-pixel
+    # identity is preserved even if profile_v1 is later re-tuned and
+    # somite indices shift.
+    bbox = models.JSONField(
+        blank=True, default=list,
+        help_text="[x0,y0,x1,y1] in straightened-image coords — the "
+                  "exact bbox the annotator was looking at when this "
+                  "row was saved. Always populated.")
+    bbox_edited = models.BooleanField(
+        default=False,
+        help_text="True iff the annotator nudged the box (bbox differs "
+                  "from the algorithm's bbox at save time).")
 
     class Meta:
         unique_together = (('dest_well', 'somite_index', 'annotator'),)

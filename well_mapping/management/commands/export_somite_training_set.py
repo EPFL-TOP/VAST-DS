@@ -161,18 +161,6 @@ class Command(BaseCommand):
                 stats['bad_col'] += 1
                 continue
 
-            # Look up the profile_v1 row once per well to find bboxes.
-            pred = (DestWellPropertiesPredicted.objects
-                    .filter(dest_well=dest, model_name='profile_v1')
-                    .first())
-            if pred is None or not pred.per_somite_data:
-                stats['no_profile_pred'] += len(anns)
-                continue
-            somite_by_idx = {
-                int(s.get('index', -1)): s
-                for s in (pred.per_somite_data.get('somites') or [])
-            }
-
             # Straighten YFP once per well.
             localpath = _localpath_for(exp_name)
             if localpath is None:
@@ -191,20 +179,39 @@ class Command(BaseCommand):
                     f"  [err] {exp_name} {dest.position_row}{col_n:02d}: {e}"))
                 continue
 
-            for ann in anns:
-                somite = somite_by_idx.get(ann.somite_index)
-                if somite is None:
-                    stats['no_matching_somite'] += 1
-                    continue
+            # Lazy fallback: only walk per_somite_data if at least one
+            # annotation has an empty bbox (pre-backfill stragglers).
+            somite_by_idx = None
 
-                # Human-corrected bbox wins over the algorithm's — the
-                # annotator dragged it because it was wrong. The bbox is
-                # the ONLY field of the somite dict crop_tile uses, so
-                # synthesise a new dict to feed it.
-                if ann.corrected_bbox:
-                    somite = dict(somite, bbox=list(ann.corrected_bbox))
-                    stats['corrected_bbox_used'] += 1
-                img, _ = crop_tile(straight, somite, centre_marker=False)
+            for ann in anns:
+                # bbox lives on the annotation row (post-migration 0041)
+                # — self-contained, no per_somite_data walk needed.
+                if ann.bbox:
+                    bbox_used = list(ann.bbox)
+                else:
+                    if somite_by_idx is None:
+                        pred = (DestWellPropertiesPredicted.objects
+                                .filter(dest_well=dest,
+                                        model_name='profile_v1')
+                                .first())
+                        somite_by_idx = {}
+                        if pred and pred.per_somite_data:
+                            for s in (pred.per_somite_data.get('somites')
+                                      or []):
+                                somite_by_idx[int(s.get('index', -1))] = s
+                    somite_dict = somite_by_idx.get(ann.somite_index)
+                    if somite_dict is None:
+                        stats['no_bbox_no_fallback'] += 1
+                        continue
+                    bbox_used = list(somite_dict.get('bbox') or [])
+                    if not bbox_used:
+                        stats['no_bbox_no_fallback'] += 1
+                        continue
+
+                if ann.bbox_edited:
+                    stats['bbox_edited_used'] += 1
+                img, _ = crop_tile(straight, {'bbox': bbox_used},
+                                    centre_marker=False)
                 if img is None:
                     stats['bad_bbox'] += 1
                     continue
@@ -231,7 +238,8 @@ class Command(BaseCommand):
                     'tile_path':    os.path.relpath(tile_path, out_dir),
                     'severity':     ann.severity,
                     'lr_offset':    ann.lr_offset,
-                    'bbox_corrected': ann.corrected_bbox is not None,
+                    'bbox_edited':  ann.bbox_edited,
+                    'bbox':         bbox_used,
                     'annotator':    ann.annotator,
                     'experiment':   exp_name,
                     'plate':        plate_n,
