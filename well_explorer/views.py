@@ -6064,6 +6064,7 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
         # in each class, using the chosen severity source so the view
         # stays consistent with the strip plot above.
         # First, group dest_wells by drug.
+        from collections import defaultdict
         wells_by_drug = defaultdict(list)
         for r in rows_by_drug:
             wells_by_drug[r['drug_label']].append(r['dest_id'])
