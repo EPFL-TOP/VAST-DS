@@ -70,6 +70,46 @@ def _well_yfp_path(localpath, exp_name, plate_n, row, col):
     return files[0] if files else None
 
 
+def _iou(b1, b2):
+    """IoU between two [x0,y0,x1,y1] axis-aligned bboxes. Returns 0 if
+    either rectangle has zero area or they don't overlap."""
+    x0 = max(b1[0], b2[0]); y0 = max(b1[1], b2[1])
+    x1 = min(b1[2], b2[2]); y1 = min(b1[3], b2[3])
+    if x1 <= x0 or y1 <= y0:
+        return 0.0
+    inter = (x1 - x0) * (y1 - y0)
+    a1 = max(1, b1[2] - b1[0]) * max(1, b1[3] - b1[1])
+    a2 = max(1, b2[2] - b2[0]) * max(1, b2[3] - b2[1])
+    return inter / max(a1 + a2 - inter, 1e-9)
+
+
+def _nms(kept_somites, iou_threshold=0.4):
+    """Greedy non-maximum suppression. The bbox-regression head can
+    collapse two nearby profile_v1 candidates to nearly the same
+    refined position (model agrees with itself for an adjacent pair),
+    producing visible duplicates. Sort by confidence desc, keep the
+    top, drop later ones whose bbox overlaps the kept ones above the
+    threshold. Returns (kept_after_nms, suppressed_indices)."""
+    if not kept_somites:
+        return [], []
+    by_conf = sorted(kept_somites,
+                     key=lambda s: -float(s.get('confidence', 0.0)))
+    kept_out = []
+    suppressed = []
+    for s in by_conf:
+        bb = s.get('bbox') or []
+        if len(bb) != 4:
+            continue
+        dup = any(_iou(bb, k['bbox']) > iou_threshold for k in kept_out)
+        if dup:
+            suppressed.append(int(s.get('index', -1)))
+        else:
+            kept_out.append(s)
+    # Re-sort by original index so downstream AP-order code still works.
+    kept_out.sort(key=lambda s: int(s.get('index', 0)))
+    return kept_out, suppressed
+
+
 def _extract_patch(straight, center_x, center_y, patch_size):
     """Same patch geometry as export_training_set_v2 — clamped, not padded."""
     sh, sw = straight.shape
@@ -100,6 +140,15 @@ class Command(BaseCommand):
                             help="Optional version tag (empty = overwrite same row).")
         parser.add_argument("--limit", type=int, default=None,
                             help="Stop after this many wells (smoke testing).")
+        parser.add_argument("--bbox_dilate", type=float, default=1.0,
+                            help="Multiplicatively expand the predicted bbox "
+                                 "width AND height by this factor before "
+                                 "saving. 1.0 = no change (default). 1.5 = "
+                                 "50%% larger. Useful to make boxes cover "
+                                 "the full chevron, not just the bright "
+                                 "spine strip — but won't change what the "
+                                 "classifier was trained on, so use for "
+                                 "viz only.")
         parser.add_argument("--dry_run", action="store_true", default=False)
 
     # ------------------------------------------------------------------
@@ -245,8 +294,13 @@ class Command(BaseCommand):
                 bb = bbox_pred[batch_i]   # [cx, cy, w, h] in patch fraction
                 rcx = bb[0] * patch_size + px
                 rcy = bb[1] * patch_size + py
-                rw  = bb[2] * patch_size
-                rh  = bb[3] * patch_size
+                # Apply the dilation knob (1.0 = identity). Useful to
+                # see the bbox cover the full chevron instead of just
+                # the bright spine strip — viz-only, the model was
+                # trained on tight boxes.
+                dilate = float(opts.get('bbox_dilate', 1.0) or 1.0)
+                rw  = bb[2] * patch_size * dilate
+                rh  = bb[3] * patch_size * dilate
                 x0 = max(0, int(round(rcx - rw / 2)))
                 x1 = min(sw, int(round(rcx + rw / 2)))
                 y0 = max(0, int(round(rcy - rh / 2)))
@@ -283,9 +337,22 @@ class Command(BaseCommand):
                     'algo_centroid_x': float(orig.get('centroid_x', -1)),
                 })
 
+            # Non-maximum suppression: drop duplicates where the bbox
+            # head collapsed two adjacent profile_v1 candidates to nearly
+            # identical refined positions. Suppressed candidates are
+            # tagged 'nms_duplicate' in the rejected list so the audit
+            # trail still records that profile_v1 had a candidate there.
+            kept, nms_suppressed_idx = _nms(kept, iou_threshold=0.4)
+            for dup_idx in nms_suppressed_idx:
+                rejected.append({
+                    'index':       dup_idx,
+                    'reason':      'nms_duplicate',
+                })
+
             n_kept   = len(kept)
             n_bad    = sum(1 for s in kept if s['severity'] > 0)
             n_reject = len(rejected)
+            stats['nms_suppressed'] += len(nms_suppressed_idx)
 
             if not dry:
                 DestWellPropertiesPredicted.objects.update_or_create(

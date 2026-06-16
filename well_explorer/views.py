@@ -5710,12 +5710,14 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
         x=[], y=[], color=[],
         well=[], drug=[], total=[], bad=[], dest_id=[]))
     strip_fig = bokeh.plotting.figure(
-        title='Per-fish AP severity pattern — tap a row to drill in',
+        title='Per-fish AP severity pattern — pixels from anterior '
+              '(x=0 = first somite of each fish, x extends to body length)',
         width=1100, height=600,
-        x_range=(-0.02, 1.02), y_range=(0, 1),
+        x_range=(0, 100), y_range=(0, 1),   # x_range set dynamically on Load
         tools='tap,reset,save,pan,wheel_zoom',
         toolbar_location='right',
-        x_axis_label='AP position (0 = head, 1 = tail)',
+        x_axis_label='Pixels from anterior (first somite at 0; '
+                     'longer fish reach further right)',
         y_axis_label='fish (row index)')
     strip_fig.circle(
         x='x', y='y', color='color', size=9, alpha=0.85,
@@ -5726,7 +5728,7 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
             ('well',  '@well'),
             ('drug',  '@drug'),
             ('counts (total / bad)', '@total / @bad'),
-            ('ap',    '@x{0.00}'),
+            ('px from anterior', '@x{0}'),
         ]))
 
     # Row-axis ticks: each row's label = "well · drug @ conc". We
@@ -5818,11 +5820,13 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
     ap_src = bokeh.models.ColumnDataSource(
         dict(x=[], y=[], color=[], idx=[]))
     ap_fig = bokeh.plotting.figure(
-        title='AP severity profile — y = severity (0=healthy, 3=severe)',
+        title='AP severity profile — y = severity (0=healthy, 3=severe), '
+              'x = pixels from this fish\'s first somite',
         width=700, height=240,
-        x_range=(-0.02, 1.02), y_range=(-0.5, 3.5),
+        x_range=(0, 100), y_range=(-0.5, 3.5),  # x_range set on render
         tools='reset,save', toolbar_location='right',
-        x_axis_label='AP position', y_axis_label='severity')
+        x_axis_label='Pixels from anterior (0 = first somite)',
+        y_axis_label='severity')
     ap_fig.line(x='x', y='y', source=ap_src,
                  line_color='#888', line_dash='dashed', alpha=0.5)
     ap_fig.scatter(x='x', y='y', color='color', size=11, alpha=0.9,
@@ -6070,6 +6074,7 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
         wells, drug_labels, totals, bads, dest_ids_out = [], [], [], [], []
         y_label_overrides = {}
         rows = []
+        max_x = 0.0    # for x_range — longest fish drives it
 
         for row_i, p in enumerate(preds):
             dest = p.dest_well
@@ -6089,15 +6094,25 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
                 'n_total':  p.n_total_somites,
                 'n_bad':    p.n_bad_somites,
             })
+            # Anterior offset for this fish — first-somite centroid_x.
+            # Each somite is then plotted at (centroid_x - offset), so
+            # x=0 is the anterior tip and longer fish reach further
+            # right. Reveals body-length differences in the overview.
+            xs_in_fish = [float(s.get('centroid_x', -1)) for s in somites
+                          if float(s.get('centroid_x', -1)) >= 0]
+            if not xs_in_fish:
+                continue
+            x_offset = min(xs_in_fish)
             for s in somites:
-                ap = float(s.get('ap_position', -1))
-                if ap < 0 or ap > 1.05:
+                cx = float(s.get('centroid_x', -1))
+                if cx < 0:
                     continue
+                x_rel = cx - x_offset
                 si = int(s.get('index', -1))
                 prior = manual_lookup.get((dest.id, si))
                 _, col, _has = _severity_for_somite(
                     s, prior, source, v2_by_dest.get(dest.id))
-                xs.append(ap)
+                xs.append(x_rel)
                 ys.append(row_i)
                 colors.append(col)
                 wells.append(well_label)
@@ -6105,11 +6120,21 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
                 totals.append(p.n_total_somites)
                 bads.append(p.n_bad_somites)
                 dest_ids_out.append(dest.id)
+                if x_rel > max_x:
+                    max_x = x_rel
 
         state['rows'] = rows
         strip_src.data = dict(x=xs, y=ys, color=colors,
                                well=wells, drug=drug_labels,
                                total=totals, bad=bads, dest_id=dest_ids_out)
+        # Pad x-range slightly so the rightmost dot isn't on the axis.
+        strip_fig.x_range.start = -0.02 * max_x if max_x > 0 else 0
+        strip_fig.x_range.end = max_x * 1.05 if max_x > 0 else 100
+        try:
+            strip_fig.x_range.reset_start = strip_fig.x_range.start
+            strip_fig.x_range.reset_end = strip_fig.x_range.end
+        except AttributeError:
+            pass
         strip_fig.y_range.start = -0.5
         strip_fig.y_range.end = max(len(rows) - 0.5, 0.5)
         strip_fig.yaxis.major_label_overrides = {
@@ -6371,6 +6396,26 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
         else:
             kept_v2_by_idx, rejected_set = {}, set()
 
+        # Anterior offset: x=0 will be the leftmost detected somite of
+        # this fish (the first one along AP). Same logic as the strip
+        # plot — keeps the two views consistent and exposes body length
+        # visually (longer fish reach a larger max x).
+        cx_candidates = []
+        for s in somites:
+            if use_v2_positions:
+                si_tmp = int(s.get('index', -1))
+                if si_tmp in rejected_set:
+                    continue
+                if si_tmp in kept_v2_by_idx:
+                    cc = float(kept_v2_by_idx[si_tmp].get('centroid_x', -1))
+                else:
+                    cc = float(s.get('centroid_x', -1))
+            else:
+                cc = float(s.get('centroid_x', -1))
+            if cc >= 0:
+                cx_candidates.append(cc)
+        anterior_offset = min(cx_candidates) if cx_candidates else 0.0
+
         lefts, rights, tops, bottoms, colors = [], [], [], [], []
         line_xs, line_ys, line_colors = [], [], []
         ap_x, ap_y, ap_col, ap_idx = [], [], [], []
@@ -6397,12 +6442,10 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
             x0, y0, x1, y1 = (int(v) for v in bb)
             if cx_use < 0:
                 cx_use = (x0 + x1) / 2.0
-            # Re-compute ap_position from centroid + body_length so it
-            # has a consistent meaning ('fraction along the spine') across
-            # fish of different sizes. Stored v2/v1 ap_position fields
-            # used the image width as the denominator, which is wrong
-            # when the fish doesn't span the full frame.
-            ap_use = cx_use / ap_denom if ap_denom > 0 else -1.0
+            # Pixels-from-anterior — x=0 is the first somite of this
+            # fish, max x is roughly body_length. Lets the user see when
+            # fish are shorter than typical at a glance.
+            ap_use = max(0.0, cx_use - anterior_offset)
 
             sev_int, col, has_label = _severity_for_somite(
                 s, manual_lookup.get(si), source, v2_lookup)
@@ -6416,7 +6459,7 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
                                        (y0 + y1) / 2.0))
             if cy_for_zoom > 0:
                 centroid_ys.append(cy_for_zoom)
-            if has_label and sev_int >= 0 and 0.0 <= ap_use <= 1.05:
+            if has_label and sev_int >= 0:
                 ap_x.append(ap_use)
                 ap_y.append(int(sev_int))
                 ap_col.append(col)
@@ -6449,6 +6492,14 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
             color=[ap_col[i] for i in order],
             idx=[ap_idx[i] for i in order],
         )
+        # Lock x-axis to this fish's extent so the AP curve shows the
+        # whole spine and nothing beyond. body_length is a tight upper
+        # bound; pad 5% on each side for breathing room.
+        if ap_x:
+            max_ap = max(ap_x) if ap_x else float(body_len or 100)
+            x_lo = -0.02 * max_ap
+            x_hi = max(max_ap, float(body_len or 0)) * 1.05
+            _set_fig_range_with_reset(ap_fig, x_lo, x_hi, -0.5, 3.5)
 
         # Header
         drug_html = _drug_str_for_dest(dest)
