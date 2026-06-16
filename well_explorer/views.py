@@ -5504,7 +5504,7 @@ the previous fish in that case.
             _render_current()
     enhance_select.on_change('value', _enhance_changed)
 
-    def _save_fish_flag(*_):
+    def _save_fish_flag(attr, old, new):
         """Persist the current fish's completeness flag immediately on
         change. Keyed by (dest_well, annotator) so each rater has their
         own flag for the same fish — useful for inter-rater audits."""
