@@ -5662,6 +5662,14 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
         title='Drug filter (substring, empty = all)',
         value='', width=260)
 
+    # Only fish with manual valid=True annotation — same convention as
+    # the annotate_somites dashboard. Default ON because the morphology
+    # plots are most meaningful when the underlying fish has a
+    # ground-truth count to anchor against.
+    valid_only_cb = bokeh.models.CheckboxGroup(
+        labels=['Only fish with manual valid=True'],
+        active=[0], width=320)
+
     sort_select = bokeh.models.Select(
         title='Sort fish by',
         value='drug',
@@ -5907,14 +5915,21 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
         annotator_sel = annotator_select.value
         annotator_filter = (None if annotator_sel == '(any annotator)'
                             else annotator_sel)
+        valid_only = (0 in valid_only_cb.active)
 
         # Pull profile_v1 predictions for the experiment.
-        preds = (DestWellPropertiesPredicted.objects
-                 .filter(model_name='profile_v1',
-                         per_somite_data__isnull=False,
-                         dest_well__well_plate__experiment__name=exp)
-                 .select_related('dest_well__well_plate__experiment'))
-        preds = list(preds)
+        preds_qs = (DestWellPropertiesPredicted.objects
+                    .filter(model_name='profile_v1',
+                            per_somite_data__isnull=False,
+                            dest_well__well_plate__experiment__name=exp)
+                    .select_related('dest_well__well_plate__experiment'))
+        if valid_only:
+            # Same filter convention as annotate_somites: keeps only wells
+            # whose manual DestWellProperties.valid == True. Wells without
+            # a manual annotation row, or with valid=False/NULL, drop out.
+            preds_qs = preds_qs.filter(
+                dest_well__dest_well_properties__valid=True)
+        preds = list(preds_qs)
         if not preds:
             summary_div.text = (
                 f'<b>No <code>profile_v1</code> predictions for {exp}.</b> '
@@ -6261,27 +6276,52 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
 
         source = src_select.value
         somites = (pred.per_somite_data or {}).get('somites') or []
+        v2_lookup = state.get('v2_by_dest', {}).get(dest.id)
+        # When source='model_only' and we have a profile_v2 prediction,
+        # the overlay should reflect the MODEL's refined bboxes (and
+        # rejected candidates dropped from the AP curve). This is the
+        # only place where the position story differs across sources —
+        # the strip-plot overview keeps positions anchored to profile_v1
+        # so visual scanning across many fish stays stable.
+        use_v2_positions = (source == 'model_only' and v2_lookup is not None)
+        if use_v2_positions:
+            kept_v2_by_idx = v2_lookup[0]
+        else:
+            kept_v2_by_idx = {}
+
         lefts, rights, tops, bottoms, colors = [], [], [], [], []
         line_xs, line_ys, line_colors = [], [], []
         ap_x, ap_y, ap_col, ap_idx = [], [], [], []
         for s in somites:
-            bb = s.get('bbox') or []
+            si = int(s.get('index', -1))
+            # Pick bbox + centroid source. If we're in model_only and the
+            # model kept this somite, use its refined values. Otherwise
+            # fall back to profile_v1's.
+            if use_v2_positions and si in kept_v2_by_idx:
+                v2_s = kept_v2_by_idx[si]
+                bb = v2_s.get('bbox') or []
+                cx_use = float(v2_s.get('centroid_x', -1))
+                ap_use = float(v2_s.get('ap_position',
+                                         s.get('ap_position', -1)))
+            else:
+                bb = s.get('bbox') or []
+                cx_use = float(s.get('centroid_x', -1))
+                ap_use = float(s.get('ap_position', -1))
             if len(bb) != 4:
                 continue
             x0, y0, x1, y1 = (int(v) for v in bb)
-            si = int(s.get('index', -1))
+            if cx_use < 0:
+                cx_use = (x0 + x1) / 2.0
             sev_int, col, has_label = _severity_for_somite(
-                s, manual_lookup.get(si), source,
-                state.get('v2_by_dest', {}).get(dest.id))
+                s, manual_lookup.get(si), source, v2_lookup)
             lefts.append(x0); rights.append(x1)
             tops.append(sh_local - y0); bottoms.append(sh_local - y1)
             colors.append(col)
-            cx = float(s.get('centroid_x', (x0 + x1) / 2))
-            line_xs.append([cx, cx])
+            line_xs.append([cx_use, cx_use])
             line_ys.append([0, sh_local])
             line_colors.append(col)
-            if has_label and sev_int >= 0:
-                ap_x.append(float(s.get('ap_position', -1)))
+            if has_label and sev_int >= 0 and ap_use >= 0:
+                ap_x.append(ap_use)
                 ap_y.append(int(sev_int))
                 ap_col.append(col)
                 ap_idx.append(si)
@@ -6373,7 +6413,7 @@ def morphology_eval_handler(doc: bokeh.document.Document) -> None:
     controls = bokeh.layouts.column(
         bokeh.layouts.row(exp_select, src_select,
                            annotator_select, drug_input, sort_select),
-        bokeh.layouts.row(load_button))
+        bokeh.layouts.row(valid_only_cb, load_button))
     aggregate_header = bokeh.models.Div(
         text='<div style="font-size:14px; font-weight:600; color:#1a2340; '
              'border-top:2px solid #5b8dee; margin-top:20px; padding-top:10px;">'
